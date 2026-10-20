@@ -1,0 +1,2651 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  useAssignableProfiles,
+  useClients,
+  useColumns,
+  useProfiles,
+  useTaskStatuses,
+  useTaskTags,
+  useTaskObjectives,
+  type Task,
+  type Subtask as CachedSubtask,
+} from "@/hooks/use-data";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  Trash2,
+  Paperclip,
+  MessageSquare,
+  Download,
+  ExternalLink,
+  X,
+  Plus,
+  Link2,
+  ChevronDown,
+  ChevronRight,
+  Clock3,
+  FileText,
+  ImageIcon,
+  Pencil,
+} from "lucide-react";
+import { format } from "date-fns";
+import { AttachmentPreviewDialog } from "@/components/AttachmentPreviewDialog";
+import { TaskConversationPanel } from "@/components/TaskConversationPanel";
+import { FileDropZone } from "@/components/FileDropZone";
+import { isTaskAttachmentTooLarge, MAX_TASK_ATTACHMENT_LABEL } from "@/lib/attachment-limits";
+import {
+  removeTaskAttachmentAndClientCopy,
+  syncTaskAttachmentToClient,
+} from "@/lib/sync-task-attachment-to-client";
+import { RichTextEditor, type PastedEditorImage } from "@/components/RichTextEditor";
+import { FieldLinks, LinkedText } from "@/components/LinkedText";
+import { SubtaskDialog, type EditableSubtask, type EditableSubtaskAttachment } from "@/components/SubtaskDialog";
+import {
+  createSubtaskWithOfflineSupport,
+  createTaskWithOfflineSupport,
+  deleteTaskWithOfflineSupport,
+  updateTaskWithOfflineSupport,
+} from "@/lib/offline-task-mutations";
+import { enqueueOfflineOperation, isNetworkFailure, isOffline, listOfflineOperations } from "@/lib/offline-sync";
+import { persistTaskEdit, taskEditError, taskEditPatch } from "@/lib/task-edit";
+import { taskCollaboratorChanges } from "@/lib/task-collaborator-changes";
+import { useRecordTaskCardOpen } from "@/hooks/use-task-card-activity";
+import { TaskCardOpenings, TaskPinButton } from "@/components/TaskCardActivity";
+import { groupSubtaskAttachments } from "@/lib/subtask-attachment-groups";
+
+interface Props {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  task?: Task | null;
+  defaultColumnId?: string | null;
+  recurringMeetingAgendaItemId?: string | null;
+  defaults?: {
+    clientId?: string;
+    title?: string;
+    description?: string;
+    dueDate?: string;
+    dueTime?: string;
+    assigneeId?: string | null;
+    priority?: Task["priority"];
+  };
+}
+
+interface Subtask extends EditableSubtask {
+  id: string;
+  title: string;
+  done: boolean;
+  position: number;
+  due_date: string | null;
+  assignee_id: string | null;
+  notes: string | null;
+  completed_at: string | null;
+}
+interface SubtaskAttachment {
+  id: string;
+  subtask_id: string;
+  file_name: string;
+  storage_path: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+}
+
+const isSubtaskImage = (attachment: SubtaskAttachment) =>
+  Boolean(attachment.mime_type?.startsWith("image/") || /\.(?:png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(attachment.file_name));
+
+function SubtaskFileThumbnail({
+  attachment,
+  userId,
+}: {
+  attachment: SubtaskAttachment;
+  userId?: string;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  const isImage = isSubtaskImage(attachment);
+
+  useEffect(() => {
+    if (!isImage) return;
+    let active = true;
+    let localUrl: string | null = null;
+    setSrc(null);
+    void (async () => {
+      if (userId) {
+        const pending = (await listOfflineOperations(userId)).find(
+          (operation) => operation.entity === "attachment" && operation.entityId === attachment.id,
+        );
+        const blob = pending?.payload.blob;
+        if (blob instanceof Blob) {
+          localUrl = URL.createObjectURL(blob);
+          if (active) setSrc(localUrl);
+          else URL.revokeObjectURL(localUrl);
+          return;
+        }
+      }
+      if (!navigator.onLine) return;
+      const { data } = await supabase.storage
+        .from("task-attachments")
+        .createSignedUrl(attachment.storage_path, 3600);
+      if (active && data?.signedUrl) setSrc(data.signedUrl);
+    })().catch(() => {
+      if (active) setSrc(null);
+    });
+    return () => {
+      active = false;
+      if (localUrl) URL.revokeObjectURL(localUrl);
+    };
+  }, [attachment.id, attachment.storage_path, isImage, userId]);
+
+  return isImage && src ? (
+    <img
+      src={src}
+      alt={`Miniatura de ${attachment.file_name}`}
+      className="h-9 w-9 shrink-0 rounded object-cover"
+      onError={() => setSrc(null)}
+    />
+  ) : (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+      {isImage ? <ImageIcon className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+    </span>
+  );
+}
+interface SubtaskDueChange {
+  id: string;
+  subtask_id: string;
+  old_due_date: string | null;
+  new_due_date: string | null;
+  reason: string | null;
+  created_at: string;
+}
+interface Comment {
+  id: string;
+  title: string | null;
+  body: string;
+  author_id: string;
+  created_at: string;
+}
+
+const DEFAULT_DEADLINE_TIME = "12:00";
+const deadlineToIso = (date: string) =>
+  date ? new Date(`${date}T${DEFAULT_DEADLINE_TIME}:00`).toISOString() : null;
+const completionDateToIso = (date: string) =>
+  date ? new Date(`${date}T${DEFAULT_DEADLINE_TIME}:00`).toISOString() : new Date().toISOString();
+const hasDueDateChanged = (previousDueDate: string | null | undefined, nextDueDate: string) =>
+  previousDueDate
+    ? format(new Date(previousDueDate), "yyyy-MM-dd") !== nextDueDate
+    : Boolean(nextDueDate);
+const normalizeDueTime = (time: string | null) => time?.slice(0, 5) ?? "";
+interface Attachment {
+  id: string;
+  file_name: string;
+  storage_path: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+}
+const LINK_MIME = "text/uri-list";
+const COMPLETED_STATUS_VALUE = "__completed__";
+const storageObjectName = () => `arquivo-${Date.now()}-${crypto.randomUUID()}`;
+const isImageAttachment = (file: File) => file.type.startsWith("image/");
+const stripDescriptionPrintImages = (html: string) =>
+  html.replace(/<img\b[^>]*(?:data-taskflow-pending-id|data-task-attachment-id|src="taskflow-attachment:\/\/)[^>]*>/gi, "");
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Nome da pessoa nos seletores de atribuição. A lista já vem filtrada pelo
+ * ambiente escolhido, então marcar a origem de cada nome seria repetir a mesma
+ * informação em todas as linhas.
+ */
+function AssigneeOption({
+  profile,
+}: {
+  profile: { full_name: string | null; email: string | null };
+}) {
+  return (
+    <span className="min-w-0 truncate">
+      {profile.full_name || profile.email || "Usuário sem nome"}
+    </span>
+  );
+}
+
+export function TaskDialog({
+  open,
+  onOpenChange,
+  task,
+  defaultColumnId,
+  recurringMeetingAgendaItemId,
+  defaults,
+}: Props) {
+  const qc = useQueryClient();
+  const { user, profile, isAdmin, activeWorkspace, workspaces } = useAuth();
+  const { data: cols } = useColumns();
+  const { data: clients } = useClients();
+  const { data: profiles } = useProfiles();
+  const [targetWorkspaceId, setTargetWorkspaceId] = useState<string>("");
+  // Ao lançar a tarefa em outro ambiente, só as pessoas de lá podem assumi-la.
+  const { data: assignableProfiles = [] } = useAssignableProfiles(
+    targetWorkspaceId || activeWorkspace?.id,
+  );
+  const { data: statuses = [] } = useTaskStatuses();
+  const { data: marketingCategories = [] } = useTaskTags(
+    targetWorkspaceId || activeWorkspace?.id,
+  );
+  const { data: marketingObjectives = [] } = useTaskObjectives();
+  const targetWorkspace = useMemo(
+    () =>
+      workspaces.find((workspace) => workspace.id === (targetWorkspaceId || activeWorkspace?.id)) ??
+      activeWorkspace ??
+      null,
+    [activeWorkspace, targetWorkspaceId, workspaces],
+  );
+  const isMarketingTask = targetWorkspace?.slug === "marketing";
+  // Conclusão é uma situação da tarefa, não uma coluna adicional. Há uma
+  // coluna antiga chamada “Concluído” no quadro; sem este filtro ela aparece
+  // junto da opção real de concluir e duplica o seletor do formulário.
+  const selectableColumns = useMemo(() => {
+    const completedNames = new Set(
+      statuses
+        .filter((status) => status.is_completed)
+        .map((status) => status.name.trim().toLocaleLowerCase("pt-BR")),
+    );
+    return (cols ?? []).filter(
+      (column) => !completedNames.has(column.name.trim().toLocaleLowerCase("pt-BR")),
+    );
+  }, [cols, statuses]);
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState<Task["status"]>("todo");
+  const [priority, setPriority] = useState<Task["priority"]>("medium");
+  const [categoryId, setCategoryId] = useState("");
+  const [objectiveId, setObjectiveId] = useState("");
+  const [columnId, setColumnId] = useState<string>("");
+  const [clientId, setClientId] = useState<string>("");
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
+  const [assigneeId, setAssigneeId] = useState<string>("");
+  const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
+  const [collaboratorLoad, setCollaboratorLoad] = useState<{
+    taskId: string;
+    status: "loading" | "ready" | "error";
+    loadedIds?: string[];
+  } | null>(null);
+  const [collaboratorLoadAttempt, setCollaboratorLoadAttempt] = useState(0);
+  const [collaboratorPickerOpen, setCollaboratorPickerOpen] = useState(false);
+  const [collaboratorSearch, setCollaboratorSearch] = useState("");
+  const [dueDate, setDueDate] = useState<string>("");
+  const [dueTime, setDueTime] = useState<string>("");
+  const [completionDate, setCompletionDate] = useState<string>("");
+  const [dueDateChangeReason, setDueDateChangeReason] = useState("");
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const currentTaskIdRef = useRef<string | null>(null);
+  const editBaseRef = useRef<Task | null>(null);
+  const initializedFormRef = useRef<string | null>(null);
+  const [isDraft, setIsDraft] = useState(false);
+  useRecordTaskCardOpen(open, task?.id);
+  const [activeTab, setActiveTab] = useState("subtasks");
+  const conversationSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [newSubtask, setNewSubtask] = useState("");
+  const [newSubtaskDue, setNewSubtaskDue] = useState("");
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<string>("");
+  const [subtaskDialogOpen, setSubtaskDialogOpen] = useState(false);
+  const [subtaskInDialog, setSubtaskInDialog] = useState<Subtask | null>(null);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [subtaskTitleDraft, setSubtaskTitleDraft] = useState("");
+
+  const [subDueChanges, setSubDueChanges] = useState<Record<string, SubtaskDueChange[]>>({});
+  const [subDueOpen, setSubDueOpen] = useState<Record<string, boolean>>({});
+  const [subDueReason, setSubDueReason] = useState<{
+    open: boolean;
+    subtask: Subtask | null;
+    next: string | null;
+    reason: string;
+  }>({ open: false, subtask: null, next: null, reason: "" });
+  const [subDueSaving, setSubDueSaving] = useState(false);
+  const [subExpanded, setSubExpanded] = useState<Record<string, boolean>>({});
+  const [subAttachments, setSubAttachments] = useState<Record<string, SubtaskAttachment[]>>({});
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [pendingDescriptionImages, setPendingDescriptionImages] = useState<PastedEditorImage[]>([]);
+  const [descriptionImagesUploading, setDescriptionImagesUploading] = useState(false);
+  const [fileUploadProgress, setFileUploadProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
+  const canDeleteTask = !!currentTaskId && (!!isAdmin || !task || task.created_by === user?.id);
+  // A participant can update a task, but only its creator, responsible person
+  // or an administrator may change the list of other participants.
+  const canManageCollaborators =
+    !task || !!isAdmin || task.created_by === user?.id || task.assignee_id === user?.id;
+  const collaboratorsReady =
+    !task || (collaboratorLoad?.taskId === task.id && collaboratorLoad.status === "ready");
+  const canDeleteSubtask = (subtask: Subtask) =>
+    !!isAdmin || subtask.assignee_id !== user?.id || task?.created_by === user?.id;
+
+  const filteredClients = useMemo(() => {
+    const term = clientSearch.trim().toLocaleLowerCase("pt-BR");
+    const activeClients = (clients ?? []).filter((client) => client.is_active);
+    return term
+      ? activeClients.filter((client) => client.name.toLocaleLowerCase("pt-BR").includes(term))
+      : activeClients;
+  }, [clients, clientSearch]);
+  const selectedClient = clients?.find((client) => client.id === clientId);
+  const filteredAssignees = useMemo(() => {
+    const term = assigneeSearch.trim().toLocaleLowerCase("pt-BR");
+    return term
+      ? assignableProfiles.filter((candidate) =>
+          `${candidate.full_name ?? ""} ${candidate.email ?? ""}`
+            .toLocaleLowerCase("pt-BR")
+            .includes(term),
+        )
+      : assignableProfiles;
+  }, [assignableProfiles, assigneeSearch]);
+  const selectedAssignee = assignableProfiles.find((candidate) => candidate.id === assigneeId);
+  const filteredCollaborators = useMemo(() => {
+    const term = collaboratorSearch.trim().toLocaleLowerCase("pt-BR");
+    return term
+      ? assignableProfiles.filter((candidate) =>
+          `${candidate.full_name ?? ""} ${candidate.email ?? ""}`
+            .toLocaleLowerCase("pt-BR")
+            .includes(term),
+        )
+      : assignableProfiles;
+  }, [assignableProfiles, collaboratorSearch]);
+  const mentionableProfiles = useMemo(
+    () => (profiles ?? []).filter((candidate) => candidate.is_active !== false),
+    [profiles],
+  );
+  const mentionQuery = useMemo(() => {
+    const match = newComment.match(/(?:^|\s)@([^\n@]*)$/);
+    return match ? match[1].trim().toLocaleLowerCase("pt-BR") : null;
+  }, [newComment]);
+  const mentionCandidates = useMemo(() => {
+    if (mentionQuery === null) return [];
+    return mentionableProfiles
+      .filter((candidate) => {
+        const label = (candidate.full_name || candidate.email || "").toLocaleLowerCase("pt-BR");
+        return label.includes(mentionQuery);
+      })
+      .slice(0, 5);
+  }, [mentionQuery, mentionableProfiles]);
+  const taskCreator = useMemo(
+    () => profiles?.find((profile) => profile.id === task?.created_by) ?? null,
+    [profiles, task?.created_by],
+  );
+  const taskCreatorName =
+    taskCreator?.full_name ||
+    taskCreator?.email ||
+    (task?.created_by === user?.id ? profile?.full_name || user?.email : null) ||
+    "Usuário não identificado";
+
+  useEffect(() => {
+    if (!open) {
+      initializedFormRef.current = null;
+      return;
+    }
+    const formKey = task?.id ?? "new";
+    if (initializedFormRef.current === formKey) return;
+    initializedFormRef.current = formKey;
+    editBaseRef.current = task ?? null;
+    setActiveTab("subtasks");
+    setClientPickerOpen(false);
+    setClientSearch("");
+    setEditingSubtaskId(null);
+    setSubtaskTitleDraft("");
+    if (task) {
+      setIsDraft(Boolean(task.is_draft));
+      setTitle(task.title);
+      setDescription(stripDescriptionPrintImages(task.description ?? ""));
+      setStatus(task.status === "done" || task.completed_at ? "done" : (task.status ?? "todo"));
+      setPriority(task.priority);
+      setCategoryId(task.tag_id ?? "");
+      setObjectiveId(task.objective_id ?? "");
+      setColumnId(task.column_id ?? "");
+      setTargetWorkspaceId(task.workspace_id ?? activeWorkspace?.id ?? "");
+      setClientId(task.client_id ?? "");
+      setAssigneeId(task.assignee_id ?? "");
+      setDueDate(task.due_date ? format(new Date(task.due_date), "yyyy-MM-dd") : "");
+      setDueTime(normalizeDueTime(task.due_time));
+      setCompletionDate(task.completed_at ? format(new Date(task.completed_at), "yyyy-MM-dd") : "");
+      setDueDateChangeReason("");
+      currentTaskIdRef.current = task.id;
+      setCurrentTaskId(task.id);
+      setNewSubtask("");
+      setNewSubtaskDue("");
+      setNewSubtaskAssignee("");
+      setPendingDescriptionImages([]);
+      loadRelated(task.id);
+    } else {
+      setIsDraft(false);
+      setTitle(defaults?.title ?? "");
+      setDescription(defaults?.description ?? "");
+      setStatus("todo");
+      setPriority(defaults?.priority ?? "medium");
+      setCategoryId("");
+      setColumnId(defaultColumnId ?? "");
+      setTargetWorkspaceId(activeWorkspace?.id ?? "");
+      setClientId(defaults?.clientId ?? "");
+      setAssigneeId(defaults?.assigneeId ?? user?.id ?? "");
+      setCollaboratorIds([]);
+      setDueDate(defaults?.dueDate ?? "");
+      setDueTime(defaults?.dueTime ?? "");
+      setCompletionDate("");
+      setDueDateChangeReason("");
+      currentTaskIdRef.current = null;
+      setCurrentTaskId(null);
+      setSubtasks([]);
+      setComments([]);
+      setAttachments([]);
+      setPendingDescriptionImages([]);
+      setNewComment("");
+      setNewSubtask("");
+      setNewSubtaskDue("");
+      setNewSubtaskAssignee("");
+    }
+  }, [
+    open,
+    task,
+    defaultColumnId,
+    user?.id,
+    activeWorkspace?.id,
+    defaults?.title,
+    defaults?.clientId,
+    defaults?.description,
+    defaults?.priority,
+    defaults?.assigneeId,
+    defaults?.dueDate,
+    defaults?.dueTime,
+  ]);
+
+  useEffect(() => {
+    if (!open || !task?.id) {
+      setCollaboratorLoad(null);
+      return;
+    }
+    let cancelled = false;
+    const taskId = task.id;
+    setCollaboratorIds([]);
+    setCollaboratorLoad({ taskId, status: "loading" });
+    void (async () => {
+      const { data, error } = await (supabase.from("task_collaborators") as any)
+        .select("collaborator_id")
+        .eq("task_id", taskId);
+      if (cancelled) return;
+      if (error) {
+        setCollaboratorLoad({ taskId, status: "error" });
+        toast.error(taskEditError(error, "Não foi possível carregar os participantes da tarefa."));
+        return;
+      }
+      const loadedIds = (data ?? []).map(
+        (collaborator: { collaborator_id: string }) => collaborator.collaborator_id,
+      );
+      setCollaboratorIds(loadedIds);
+      setCollaboratorLoad({ taskId, status: "ready", loadedIds });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, task?.id, collaboratorLoadAttempt]);
+
+  useEffect(() => {
+    if (!open || activeTab !== "comments" || !currentTaskId) return;
+    const frame = requestAnimationFrame(() =>
+      conversationSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [open, activeTab, currentTaskId]);
+
+  const loadRelated = async (taskId: string) => {
+    const [s, c, a, subFiles] = await Promise.all([
+      supabase.from("subtasks").select("*").eq("task_id", taskId).order("position"),
+      supabase.from("comments").select("*").eq("task_id", taskId).order("created_at"),
+      supabase.from("attachments").select("*").eq("task_id", taskId).order("created_at"),
+      supabase.from("subtask_attachments").select("*").eq("task_id", taskId).order("created_at"),
+    ]);
+    const loadedSubtasks = (s.data ?? []) as Subtask[];
+    setSubtasks(loadedSubtasks);
+    let pendingAttachments: Awaited<ReturnType<typeof listOfflineOperations>> = [];
+    if (user?.id) {
+      try {
+        pendingAttachments = await listOfflineOperations(user.id);
+      } catch {
+        // The server list remains usable when the local offline store is unavailable.
+      }
+    }
+    const groupedSubFiles = groupSubtaskAttachments(
+      loadedSubtasks.map((subtask) => subtask.id),
+      (subFiles.data ?? []) as SubtaskAttachment[],
+      pendingAttachments,
+    );
+    if (subFiles.error) {
+      for (const subtaskId of Object.keys(groupedSubFiles)) {
+        if (groupedSubFiles[subtaskId].length === 0) delete groupedSubFiles[subtaskId];
+      }
+    }
+    setSubAttachments(groupedSubFiles);
+    const nextComments = (c.data ?? []) as Comment[];
+    setComments(nextComments);
+    setAttachments((a.data ?? []) as Attachment[]);
+  };
+
+  useEffect(() => {
+    if (!open || !currentTaskId) return;
+    const channel = supabase
+      .channel(`task-comments-${currentTaskId}-${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "comments",
+          filter: `task_id=eq.${currentTaskId}`,
+        },
+        ({ new: comment }: { new: Record<string, unknown> }) => {
+          setComments((existing) =>
+            existing.some((item) => item.id === comment.id)
+              ? existing
+              : [...existing, comment as unknown as Comment],
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "comments",
+          filter: `task_id=eq.${currentTaskId}`,
+        },
+        ({ old: comment }: { old: { id: string } }) =>
+          setComments((existing) => existing.filter((item) => item.id !== comment.id)),
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [open, currentTaskId]);
+
+  // Um anexo sobe via upload direto no Storage, sem passar pelo cache do
+  // react-query — a sessão que fez o upload já atualiza o próprio estado local.
+  // Sem isto, quem está com a tarefa aberta em outra sessão (outro ambiente,
+  // outra aba) só vê o anexo novo ao recarregar a página.
+  useEffect(() => {
+    if (!open || !currentTaskId) return;
+    const channel = supabase
+      .channel(`task-attachments-${currentTaskId}-${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "attachments",
+          filter: `task_id=eq.${currentTaskId}`,
+        },
+        ({ new: attachment }: { new: Record<string, unknown> }) => {
+          setAttachments((existing) =>
+            existing.some((item) => item.id === attachment.id)
+              ? existing
+              : [...existing, attachment as unknown as Attachment],
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "attachments",
+          filter: `task_id=eq.${currentTaskId}`,
+        },
+        ({ old: attachment }: { old: { id: string } }) =>
+          setAttachments((existing) => existing.filter((item) => item.id !== attachment.id)),
+      )
+      .subscribe((status: string, err?: Error) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || err) {
+          console.warn("[attachments realtime] canal não conectou:", status, err);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [open, currentTaskId]);
+
+  const syncCollaborators = async (taskId: string, client: typeof supabase = supabase) => {
+    if (!canManageCollaborators) return;
+    if (task && (!collaboratorsReady || task.id !== taskId)) {
+      throw new Error("Aguarde carregar os colaboradores desta tarefa antes de salvar.");
+    }
+    const { data, error: loadError } = await (client.from("task_collaborators") as any)
+      .select("collaborator_id")
+      .eq("task_id", taskId);
+    if (loadError) throw loadError;
+
+    const existingIds = (data ?? []).map(
+      (collaborator: { collaborator_id: string }) => collaborator.collaborator_id,
+    );
+    const { removedIds, addedIds } = taskCollaboratorChanges(
+      task ? collaboratorLoad?.loadedIds ?? [] : existingIds,
+      existingIds,
+      collaboratorIds,
+    );
+
+    if (removedIds.length > 0) {
+      const { error: deleteError } = await (client.from("task_collaborators") as any)
+        .delete()
+        .eq("task_id", taskId)
+        .in("collaborator_id", removedIds);
+      if (deleteError) throw deleteError;
+    }
+    if (addedIds.length > 0) {
+      const { error: insertError } = await (client.from("task_collaborators") as any).insert(
+        addedIds.map((collaboratorId) => ({
+          task_id: taskId,
+          collaborator_id: collaboratorId,
+          added_by: user?.id ?? null,
+        })),
+      );
+      if (insertError) throw insertError;
+    }
+    if (removedIds.length > 0 || addedIds.length > 0) {
+      await qc.invalidateQueries({ queryKey: ["task_collaborators"] });
+    }
+  };
+
+  const toggleCollaborator = (collaboratorId: string) => {
+    setCollaboratorIds((current) =>
+      current.includes(collaboratorId)
+        ? current.filter((id) => id !== collaboratorId)
+        : [...current, collaboratorId],
+    );
+  };
+
+  // Trocar o ambiente troca o elenco disponível. Em vez de limpar tudo na hora,
+  // espera a lista do novo ambiente chegar e descarta apenas quem não existe
+  // lá — assim você não perde a si mesmo como responsável ao lançar numa
+  // equipe da qual também faz parte. Só vale na criação: numa tarefa que já
+  // existe, um responsável fora da lista (inativo, por exemplo) é preservado.
+  useEffect(() => {
+    if (task || !open || assignableProfiles.length === 0) return;
+    const disponiveis = new Set(assignableProfiles.map((profile) => profile.id));
+    setAssigneeId((atual) => (atual && !disponiveis.has(atual) ? "" : atual));
+    setCollaboratorIds((atuais) => atuais.filter((id) => disponiveis.has(id)));
+  }, [assignableProfiles, task, open]);
+
+  const buildPayload = () => {
+    const matchingStatus = statuses.find((item) =>
+      status === "done" ? item.is_completed : !item.is_completed,
+    );
+    return {
+      title: title.trim() || "Sem título",
+      // Prints colados ficam no Storage como anexos. URLs blob do navegador não
+      // podem ser persistidas na descrição, então o texto salvo não recebe URLs temporárias.
+      description: stripDescriptionPrintImages(description) || null,
+      status,
+      status_id: matchingStatus?.id ?? null,
+      priority,
+      column_id: columnId || null,
+      client_id: clientId || null,
+      assignee_id: assigneeId || null,
+      due_date: deadlineToIso(dueDate),
+      due_time: dueDate ? dueTime || null : null,
+      completed_at: status === "done" ? completionDateToIso(completionDate) : null,
+      // Marketing uses one category per task. Other environments keep their
+      // current primary label untouched when a task is edited.
+      tag_id: isMarketingTask ? categoryId || null : task?.tag_id ?? null,
+      objective_id: isMarketingTask ? objectiveId || null : task?.objective_id ?? null,
+    };
+  };
+
+  // React can retain the previous user while Supabase refreshes or clears an
+  // expired token. Database writes must use the live session so they are sent
+  // as `authenticated`, not `anon` (which RLS correctly rejects).
+  const getAuthenticatedUser = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.user) {
+      toast.error("Sua sessão expirou. Entre novamente para criar uma tarefa.");
+      return null;
+    }
+    const {
+      data: { user: authenticatedUser },
+      error,
+    } = await supabase.auth.getUser();
+    if (error && isNetworkFailure(error)) throw error;
+    if (error || !authenticatedUser) {
+      toast.error("Não foi possível validar sua sessão. Entre novamente para criar uma tarefa.");
+      return null;
+    }
+    const url = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const publishableKey =
+      import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+    if (!url || !publishableKey) {
+      toast.error("A conexão com o Supabase não está configurada.");
+      return null;
+    }
+
+    // Use the verified access token explicitly for task creation. This avoids a
+    // stale internal auth state causing PostgREST to receive the request as anon.
+    const authenticatedClient = createClient<Database>(url, publishableKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${session.access_token}` } },
+    });
+    return { user: authenticatedUser, client: authenticatedClient };
+  };
+
+  // Ensures a task row exists so sub-features (subtasks/comments/files) can attach.
+  // Auto-creates a draft when the dialog is in "new task" mode.
+  const ensureTask = async (): Promise<string | null> => {
+    const existingId = currentTaskIdRef.current ?? currentTaskId;
+    if (existingId) return existingId;
+    const authenticated = await getAuthenticatedUser();
+    if (!authenticated) return null;
+    if (!title.trim()) {
+      toast.error("Defina um título antes de adicionar itens");
+      return null;
+    }
+    if (!dueDate) {
+      toast.error("Defina um prazo antes de criar a tarefa");
+      return null;
+    }
+    // Do not use INSERT ... RETURNING here. The tasks SELECT policy checks
+    // visibility through can_view_task(), which cannot see a just-inserted row
+    // from inside the same RETURNING statement. A client UUID lets us continue
+    // with the new task without that second RLS evaluation.
+    const taskId = crypto.randomUUID();
+    const { error } = await authenticated.client.from("tasks").insert({
+      id: taskId,
+      ...buildPayload(),
+      status: "todo",
+      status_id: statuses.find((item) => !item.is_completed)?.id ?? null,
+      completed_at: null,
+      is_draft: true,
+      recurring_meeting_agenda_item_id: recurringMeetingAgendaItemId ?? null,
+      workspace_id: targetWorkspaceId || null,
+      created_by: authenticated.user.id,
+    });
+    if (error) {
+      toast.error(error.message);
+      return null;
+    }
+    currentTaskIdRef.current = taskId;
+    setCurrentTaskId(taskId);
+    setIsDraft(true);
+    await syncCollaborators(taskId, authenticated.client);
+    await supabase
+      .from("task_history")
+      .insert({ task_id: taskId, user_id: authenticated.user.id, action: "created" });
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+    return taskId;
+  };
+
+  const saveDraft = async (showConversation = false): Promise<boolean> => {
+    if (task && !collaboratorsReady) {
+      toast.error("Aguarde carregar os colaboradores desta tarefa antes de salvar.");
+      return false;
+    }
+    if (!title.trim() || !dueDate) {
+      toast.error("Informe o título e o prazo para salvar a tarefa em elaboração.");
+      return false;
+    }
+    if (isOffline()) {
+      toast.error("Conecte-se à internet para salvar a tarefa em elaboração.");
+      return false;
+    }
+    setSaving(true);
+    try {
+      const existingId = currentTaskIdRef.current ?? currentTaskId;
+      const taskId = existingId ?? (await ensureTask());
+      if (!taskId) return false;
+      if (existingId && isDraft) {
+        const authenticated = await getAuthenticatedUser();
+        if (!authenticated) return false;
+        const { error } = await authenticated.client.from("tasks").update({
+          ...buildPayload(),
+          status: "todo",
+          status_id: statuses.find((item) => !item.is_completed)?.id ?? null,
+          completed_at: null,
+          is_draft: true,
+        }).eq("id", taskId);
+        if (error) throw error;
+        await syncCollaborators(taskId, authenticated.client);
+      }
+      if (!(await commitPendingSubtask(taskId))) return false;
+      const printResult = await uploadDescriptionImages(taskId);
+      if (!printResult.allUploaded) {
+        toast.error("O rascunho foi salvo, mas um print não foi enviado. Tente novamente.");
+        return false;
+      }
+      await qc.invalidateQueries({ queryKey: ["tasks"] });
+      if (showConversation) setActiveTab("comments");
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o rascunho.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const commitPendingSubtask = async (taskId: string): Promise<boolean> => {
+    const title = newSubtask.trim();
+    if (!title) return true;
+
+    const due = newSubtaskDue;
+    const assignee = newSubtaskAssignee;
+    const position = subtasks.length;
+    const { data, error } = await supabase
+      .from("subtasks")
+      .insert({
+        task_id: taskId,
+        title,
+        position,
+        due_date: deadlineToIso(due),
+        assignee_id: assignee || null,
+      } as any)
+      .select("id, title, done, position, due_date, assignee_id, notes, completed_at")
+      .single();
+
+    if (error) {
+      toast.error(error.message);
+      return false;
+    }
+
+    setSubtasks((prev) => [...prev, data as Subtask]);
+    setNewSubtask("");
+    setNewSubtaskDue("");
+    setNewSubtaskAssignee("");
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["tasks"] }),
+      qc.invalidateQueries({ queryKey: ["subtasks"] }),
+    ]);
+    return true;
+  };
+
+  const queueTaskLocally = async (existingTaskId: string | null, createTaskId?: string) => {
+    if (!user) throw new Error("Sua sessão local não está disponível.");
+    const payload = buildPayload();
+    const now = new Date().toISOString();
+    let taskId = existingTaskId;
+
+    if (taskId) {
+      const localTask =
+        editBaseRef.current ?? task ?? qc.getQueryData<Task[]>(["tasks"])?.find((item) => item.id === taskId);
+      if (!localTask) throw new Error("Não foi possível localizar a tarefa neste aparelho.");
+      await updateTaskWithOfflineSupport({
+        userId: user.id,
+        task: localTask,
+        patch: { ...taskEditPatch(localTask, payload), is_draft: false },
+        queryClient: qc,
+        forceQueue: true,
+      });
+    } else {
+      taskId = createTaskId ?? crypto.randomUUID();
+      const localTask: Task = {
+        id: taskId,
+        ...payload,
+        is_draft: false,
+        due_time: payload.due_time ?? null,
+        assigned_by: null,
+        assigned_at: null,
+        position: 0,
+        color: null,
+        created_by: user.id,
+        tag_id: payload.tag_id ?? null,
+        deleted_at: null,
+        deleted_by: null,
+        archived_at: null,
+        archived_reason: null,
+        created_at: now,
+        updated_at: now,
+        card_width: null,
+        recurring_meeting_agenda_item_id: recurringMeetingAgendaItemId ?? null,
+        workspace_id: targetWorkspaceId || activeWorkspace?.id || null,
+      };
+      await createTaskWithOfflineSupport({ userId: user.id, task: localTask, queryClient: qc });
+      currentTaskIdRef.current = taskId;
+      setCurrentTaskId(taskId);
+    }
+
+    if (newSubtask.trim()) {
+      const localSubtask = {
+        id: crypto.randomUUID(),
+        task_id: taskId,
+        title: newSubtask.trim(),
+        done: false,
+        position: subtasks.length,
+        due_date: deadlineToIso(newSubtaskDue),
+        assignee_id: newSubtaskAssignee || null,
+        notes: null,
+        completed_at: null,
+      };
+      await createSubtaskWithOfflineSupport({
+        userId: user.id,
+        subtask: localSubtask,
+        queryClient: qc,
+      });
+      setSubtasks((current) => [...current, localSubtask as Subtask]);
+      setNewSubtask("");
+      setNewSubtaskDue("");
+      setNewSubtaskAssignee("");
+    }
+
+    await uploadDescriptionImages(taskId);
+    toast.success("Tarefa salva neste aparelho. Será sincronizada ao reconectar.");
+    onOpenChange(false);
+  };
+
+  const save = async () => {
+    if (task && !collaboratorsReady && !isOffline()) {
+      toast.error("Aguarde carregar os colaboradores desta tarefa antes de salvar.");
+      return;
+    }
+    if (!title.trim()) {
+      toast.error("Título é obrigatório");
+      return;
+    }
+    if (
+      status === "done" &&
+      (subtasks.some((subtask) => !subtask.done) || Boolean(newSubtask.trim()))
+    ) {
+      toast.error("Conclua todas as subtarefas antes de concluir a tarefa.");
+      return;
+    }
+    const existingTaskId = currentTaskIdRef.current ?? currentTaskId;
+    if (isOffline()) {
+      if (!existingTaskId && !dueDate) {
+        toast.error("Prazo é obrigatório para criar uma tarefa");
+        return;
+      }
+      setSaving(true);
+      try {
+        await queueTaskLocally(existingTaskId);
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível salvar a tarefa neste aparelho.",
+        );
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    if (!existingTaskId && !dueDate) {
+      toast.error("Prazo é obrigatório para criar uma tarefa");
+      return;
+    }
+    let authenticated: Awaited<ReturnType<typeof getAuthenticatedUser>>;
+    try {
+      authenticated = await getAuthenticatedUser();
+    } catch (error) {
+      if (!isNetworkFailure(error)) {
+        toast.error(
+          error instanceof Error ? error.message : "Não foi possível validar sua sessão.",
+        );
+        return;
+      }
+      setSaving(true);
+      try {
+        await queueTaskLocally(existingTaskId);
+      } catch (localError) {
+        toast.error(
+          localError instanceof Error
+            ? localError.message
+            : "Não foi possível salvar a tarefa neste aparelho.",
+        );
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    if (!authenticated) return;
+    let attemptedCreateTaskId: string | undefined;
+    setSaving(true);
+    try {
+      const payload = buildPayload();
+      let savedTaskId = existingTaskId;
+      if (existingTaskId) {
+        const original = editBaseRef.current;
+        const previousDueDate = original?.due_date ?? null;
+        const dueDateChanged = hasDueDateChanged(previousDueDate, dueDate);
+        // Definir o primeiro prazo não é uma alteração. A justificativa só é
+        // obrigatória a partir da segunda definição/alteração do prazo.
+        const dueChangeReason =
+          dueDateChanged && previousDueDate ? dueDateChangeReason.trim() : null;
+        if (dueDateChanged && previousDueDate && !dueChangeReason) {
+          toast.error("Informe a justificativa para alterar o prazo da tarefa.");
+          return;
+        }
+        const patch = original ? taskEditPatch(original, payload) : payload;
+        await persistTaskEdit(
+          authenticated.client, existingTaskId, { ...patch, is_draft: false }, qc,
+        );
+        if (dueDateChanged && previousDueDate) {
+          const { error: historyError } = await authenticated.client.from("task_due_date_changes").insert({
+            task_id: existingTaskId,
+            user_id: authenticated.user.id,
+            old_due_date: previousDueDate,
+            new_due_date: payload.due_date,
+            reason: dueChangeReason,
+          });
+          if (historyError) throw historyError;
+        }
+        await syncCollaborators(existingTaskId, authenticated.client);
+        await authenticated.client
+          .from("task_history")
+          .insert({ task_id: existingTaskId, user_id: authenticated.user.id, action: "updated" });
+        if (!(await commitPendingSubtask(existingTaskId))) return;
+      } else {
+        const taskId = crypto.randomUUID();
+        attemptedCreateTaskId = taskId;
+        const { error } = await authenticated.client.from("tasks").insert({
+          id: taskId,
+          ...payload,
+          is_draft: false,
+          recurring_meeting_agenda_item_id: recurringMeetingAgendaItemId ?? null,
+          workspace_id: targetWorkspaceId || activeWorkspace?.id || null,
+          created_by: authenticated.user.id,
+        });
+        if (error) throw error;
+        await supabase
+          .from("task_history")
+          .insert({ task_id: taskId, user_id: authenticated.user.id, action: "created" });
+        currentTaskIdRef.current = taskId;
+        setCurrentTaskId(taskId);
+        savedTaskId = taskId;
+        await syncCollaborators(taskId, authenticated.client);
+        if (!(await commitPendingSubtask(taskId))) return;
+      }
+      if (savedTaskId) {
+        const printResult = await uploadDescriptionImages(savedTaskId);
+        if (!printResult.allUploaded) {
+          toast.error("A tarefa foi salva, mas um ou mais prints não foram enviados. Tente salvar novamente.");
+          return;
+        }
+      }
+      toast.success(currentTaskId || task ? "Tarefa atualizada" : "Tarefa criada");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["tasks"] }),
+        qc.invalidateQueries({ queryKey: ["subtasks"] }),
+        qc.invalidateQueries({ queryKey: ["task_collaborators"] }),
+      ]);
+      onOpenChange(false);
+    } catch (error) {
+      if (isNetworkFailure(error)) {
+        try {
+          await queueTaskLocally(existingTaskId, attemptedCreateTaskId);
+        } catch (localError) {
+          toast.error(
+            localError instanceof Error
+              ? localError.message
+              : "Não foi possível salvar a tarefa neste aparelho.",
+          );
+        }
+      } else {
+        toast.error(taskEditError(error));
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!currentTaskId) return;
+    if (!confirm("Mover esta tarefa para a lixeira? Você pode restaurá-la depois.")) return;
+    if (!user) return toast.error("Sua sessão local não está disponível.");
+    const localTask =
+      task ?? qc.getQueryData<Task[]>(["tasks"])?.find((item) => item.id === currentTaskId);
+    if (!localTask) return toast.error("Não foi possível localizar a tarefa neste aparelho.");
+    try {
+      await deleteTaskWithOfflineSupport({ userId: user.id, task: localTask, queryClient: qc });
+    } catch (error) {
+      return toast.error(
+        error instanceof Error ? error.message : "Não foi possível excluir a tarefa.",
+      );
+    }
+    toast.success("Tarefa movida para a lixeira");
+    onOpenChange(false);
+  };
+
+  // Subtasks
+  const addSubtask = async () => {
+    if (!newSubtask.trim()) return;
+    const tid = await ensureTask();
+    if (!tid) return;
+    await commitPendingSubtask(tid);
+  };
+
+  const openNewSubtaskDialog = async () => {
+    const tid = await ensureTask();
+    if (!tid) return;
+    setSubtaskInDialog(null);
+    setSubtaskDialogOpen(true);
+  };
+
+  const openSubtaskDialog = (subtask: Subtask) => {
+    setSubtaskInDialog(subtask);
+    setSubtaskDialogOpen(true);
+  };
+
+  const handleSubtaskDialogSaved = (savedSubtask: EditableSubtask) => {
+    setSubtasks((current) => {
+      const exists = current.some((subtask) => subtask.id === savedSubtask.id);
+      return exists
+        ? current.map((subtask) => (subtask.id === savedSubtask.id ? savedSubtask : subtask))
+        : [...current, savedSubtask];
+    });
+    setNewSubtask("");
+    setNewSubtaskDue("");
+    setNewSubtaskAssignee("");
+  };
+
+  const handleSubtaskAttachmentSaved = (attachment: EditableSubtaskAttachment) => {
+    setSubAttachments((current) => {
+      const existing = current[attachment.subtask_id] ?? [];
+      if (existing.some((item) => item.id === attachment.id)) return current;
+      return { ...current, [attachment.subtask_id]: [...existing, attachment] };
+    });
+  };
+
+  const toggleSubtask = async (st: Subtask) => {
+    const nextDone = !st.done;
+    const nextCompletedAt = nextDone ? new Date().toISOString() : null;
+    const offline = Boolean(user && isOffline());
+    if (user && offline) {
+      await enqueueOfflineOperation({
+        userId: user.id,
+        entity: "subtask",
+        action: "update",
+        entityId: st.id,
+        payload: { patch: { done: nextDone } },
+      });
+    } else {
+      const { error } = await supabase.from("subtasks").update({ done: nextDone }).eq("id", st.id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+    }
+    setSubtasks((current) =>
+      current.map((item) =>
+        item.id === st.id ? { ...item, done: nextDone, completed_at: nextCompletedAt } : item,
+      ),
+    );
+    qc.setQueryData<CachedSubtask[]>(["subtasks"], (current) =>
+      current?.map((item) =>
+        item.id === st.id ? { ...item, done: nextDone, completed_at: nextCompletedAt } : item,
+      ),
+    );
+    if (offline) {
+      toast.success("Alteração salva neste aparelho. Será sincronizada ao reconectar.");
+    } else {
+      void qc.invalidateQueries({ queryKey: ["subtasks"] });
+    }
+  };
+  const deleteSubtask = async (id: string) => {
+    if (user && isOffline()) {
+      await enqueueOfflineOperation({
+        userId: user.id,
+        entity: "subtask",
+        action: "delete",
+        entityId: id,
+        payload: {},
+      });
+      setSubtasks((current) => current.filter((item) => item.id !== id));
+      toast.success("ExclusÃ£o salva neste aparelho. SerÃ¡ sincronizada ao reconectar.");
+      return;
+    }
+    await supabase.from("subtasks").delete().eq("id", id);
+    setSubtasks(subtasks.filter((s) => s.id !== id));
+  };
+  const startEditingSubtaskTitle = (subtask: Subtask) => {
+    setEditingSubtaskId(subtask.id);
+    setSubtaskTitleDraft(subtask.title);
+  };
+  const saveSubtaskTitle = async (subtask: Subtask) => {
+    const nextTitle = subtaskTitleDraft.trim();
+    if (!nextTitle) {
+      toast.error("O título da subtarefa não pode ficar vazio.");
+      return;
+    }
+    if (nextTitle === subtask.title) {
+      setEditingSubtaskId((current) => (current === subtask.id ? null : current));
+      return;
+    }
+    if (user && isOffline()) {
+      await enqueueOfflineOperation({
+        userId: user.id,
+        entity: "subtask",
+        action: "update",
+        entityId: subtask.id,
+        payload: { patch: { title: nextTitle } },
+      });
+      setSubtasks((current) =>
+        current.map((item) => (item.id === subtask.id ? { ...item, title: nextTitle } : item)),
+      );
+      setEditingSubtaskId((current) => (current === subtask.id ? null : current));
+      toast.success("AlteraÃ§Ã£o salva neste aparelho. SerÃ¡ sincronizada ao reconectar.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("subtasks")
+      .update({ title: nextTitle })
+      .eq("id", subtask.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    setSubtasks((current) =>
+      current.map((item) => (item.id === subtask.id ? { ...item, title: nextTitle } : item)),
+    );
+    setEditingSubtaskId((current) => (current === subtask.id ? null : current));
+  };
+  const applySubtaskDue = async (st: Subtask, next: string | null, reason?: string) => {
+    const prev = st.due_date;
+    setSubDueSaving(true);
+    if (user && isOffline()) {
+      await enqueueOfflineOperation({
+        userId: user.id,
+        entity: "subtask",
+        action: "update",
+        entityId: st.id,
+        payload: { patch: { due_date: next } },
+      });
+      setSubtasks((current) =>
+        current.map((item) => (item.id === st.id ? { ...item, due_date: next } : item)),
+      );
+      setSubDueSaving(false);
+      toast.success("Prazo salvo neste aparelho. SerÃ¡ sincronizado ao reconectar.");
+      return true;
+    }
+    const { error } = await supabase.from("subtasks").update({ due_date: next }).eq("id", st.id);
+    if (error) {
+      setSubDueSaving(false);
+      toast.error(`Não foi possível salvar o prazo: ${error.message}`);
+      return false;
+    }
+
+    setSubtasks((current) =>
+      current.map((subtask) => (subtask.id === st.id ? { ...subtask, due_date: next } : subtask)),
+    );
+    if (user) {
+      const { error: historyError } = await supabase.from("subtask_due_date_changes").insert({
+        subtask_id: st.id,
+        old_due_date: prev,
+        new_due_date: next,
+        reason: reason?.trim() || null,
+        user_id: user.id,
+      });
+      if (historyError) {
+        toast.warning("Prazo atualizado, mas não foi possível registrar a justificativa.");
+      }
+      if (subDueOpen[st.id]) void loadSubDueChanges(st.id);
+    }
+    setSubDueSaving(false);
+    void qc.invalidateQueries({ queryKey: ["subtasks"] });
+    toast.success("Prazo da subtarefa atualizado");
+    return true;
+  };
+
+  const updateSubtaskDue = async (st: Subtask, isoOrEmpty: string) => {
+    const next = deadlineToIso(isoOrEmpty);
+    const prev = st.due_date;
+    if (next === prev) return;
+    if (!prev) {
+      await applySubtaskDue(st, next);
+      return;
+    }
+    setSubDueReason({ open: true, subtask: st, next, reason: "" });
+  };
+  const loadSubDueChanges = async (subtaskId: string) => {
+    const { data } = await supabase
+      .from("subtask_due_date_changes")
+      .select("*")
+      .eq("subtask_id", subtaskId)
+      .order("created_at", { ascending: false });
+    setSubDueChanges((prev) => ({ ...prev, [subtaskId]: (data ?? []) as SubtaskDueChange[] }));
+  };
+  const toggleSubDueHistory = async (subtaskId: string) => {
+    const willOpen = !subDueOpen[subtaskId];
+    setSubDueOpen((prev) => ({ ...prev, [subtaskId]: willOpen }));
+    if (willOpen && !subDueChanges[subtaskId]) await loadSubDueChanges(subtaskId);
+  };
+  const updateSubtaskAssignee = async (st: Subtask, value: string) => {
+    const next = value === "none" ? null : value;
+    const { error } = await (supabase.from("subtasks") as any)
+      .update({ assignee_id: next })
+      .eq("id", st.id);
+    if (error) return toast.error(error.message);
+    setSubtasks(subtasks.map((s) => (s.id === st.id ? { ...s, assignee_id: next } : s)));
+  };
+  const updateSubtaskNotes = async (st: Subtask, notes: string) => {
+    const { error } = await (supabase.from("subtasks") as any)
+      .update({ notes: notes || null })
+      .eq("id", st.id);
+    if (error) return toast.error(error.message);
+    setSubtasks(subtasks.map((s) => (s.id === st.id ? { ...s, notes: notes || null } : s)));
+  };
+  const loadSubAttachments = async (subtaskId: string) => {
+    const { data } = await (supabase.from("subtask_attachments") as any)
+      .select("*")
+      .eq("subtask_id", subtaskId)
+      .order("created_at");
+    setSubAttachments((prev) => ({ ...prev, [subtaskId]: (data ?? []) as SubtaskAttachment[] }));
+  };
+  const toggleSubExpanded = async (id: string) => {
+    const willOpen = !subExpanded[id];
+    setSubExpanded((prev) => ({ ...prev, [id]: willOpen }));
+    if (willOpen && !subAttachments[id]) await loadSubAttachments(id);
+  };
+  const uploadSubFile = async (st: Subtask, file: File) => {
+    if (!user) return;
+    const tid = currentTaskId ?? (await ensureTask());
+    if (!tid) return;
+    const path = `${tid}/subtasks/${st.id}/${storageObjectName()}`;
+    if (isOffline()) {
+      const attachment = {
+        id: crypto.randomUUID(),
+        subtask_id: st.id,
+        task_id: tid,
+        file_name: file.name,
+        storage_path: path,
+        mime_type: file.type || null,
+        size_bytes: file.size,
+        uploaded_by: user.id,
+        created_at: new Date().toISOString(),
+      };
+      await enqueueOfflineOperation({
+        userId: user.id,
+        entity: "attachment",
+        action: "create",
+        entityId: attachment.id,
+        payload: {
+          table: "subtask_attachments",
+          bucket: "task-attachments",
+          blob: file,
+          attachment,
+        },
+      });
+      setSubAttachments((prev) => ({
+        ...prev,
+        [st.id]: [...(prev[st.id] ?? []), attachment as SubtaskAttachment],
+      }));
+      toast.success("Arquivo salvo neste aparelho. SerÃ¡ enviado ao reconectar.");
+      return;
+    }
+    const { error: upErr } = await supabase.storage.from("task-attachments").upload(path, file);
+    if (upErr) return toast.error(upErr.message);
+    const { data, error } = await (supabase.from("subtask_attachments") as any)
+      .insert({
+        subtask_id: st.id,
+        task_id: tid,
+        file_name: file.name,
+        storage_path: path,
+        mime_type: file.type,
+        size_bytes: file.size,
+        uploaded_by: user.id,
+      })
+      .select()
+      .single();
+    if (error) return toast.error(error.message);
+    setSubAttachments((prev) => ({
+      ...prev,
+      [st.id]: [...(prev[st.id] ?? []), data as SubtaskAttachment],
+    }));
+    toast.success("Arquivo enviado");
+  };
+
+  const downloadSubFile = async (att: SubtaskAttachment) => {
+    const { data, error } = await supabase.storage
+      .from("task-attachments")
+      .download(att.storage_path);
+    if (error) return toast.error(error.message);
+    const url = URL.createObjectURL(data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = att.file_name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  };
+  const deleteSubFile = async (att: SubtaskAttachment) => {
+    if (user && isOffline()) {
+      await enqueueOfflineOperation({
+        userId: user.id,
+        entity: "record",
+        action: "delete",
+        entityId: att.id,
+        payload: { table: "subtask_attachments" },
+      });
+      setSubAttachments((prev) => ({
+        ...prev,
+        [att.subtask_id]: (prev[att.subtask_id] ?? []).filter((item) => item.id !== att.id),
+      }));
+      return;
+    }
+    await supabase.storage.from("task-attachments").remove([att.storage_path]);
+    await (supabase.from("subtask_attachments") as any).delete().eq("id", att.id);
+    setSubAttachments((prev) => ({
+      ...prev,
+      [att.subtask_id]: (prev[att.subtask_id] ?? []).filter((x) => x.id !== att.id),
+    }));
+  };
+
+  // Comments
+  const insertMention = (mentionedProfile: { full_name: string | null; email: string | null }) => {
+    const name = mentionedProfile.full_name || mentionedProfile.email;
+    if (!name) return;
+    setNewComment((current) => current.replace(/(^|\s)@[^\n@]*$/, `$1@${name} `));
+  };
+
+  const mentionedProfileIds = (body: string) =>
+    mentionableProfiles
+      .filter((candidate) => {
+        const name = candidate.full_name || candidate.email;
+        if (!name) return false;
+        return new RegExp(`(^|\\s)@${escapeRegExp(name)}(?=$|[\\s.,!?:;])`, "i").test(body);
+      })
+      .map((candidate) => candidate.id);
+
+  const deleteComment = async (id: string) => {
+    const { error } = await supabase.from("comments").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    setComments(comments.filter((c) => c.id !== id));
+  };
+
+  const addDescriptionImages = (images: PastedEditorImage[]) => {
+    const accepted = images.filter((image) => isImageAttachment(image.file) && !isTaskAttachmentTooLarge(image.file));
+    if (accepted.length !== images.length) {
+      toast.error(`Alguns prints ultrapassam o limite de ${MAX_TASK_ATTACHMENT_LABEL} por arquivo.`);
+    }
+    if (!accepted.length) return;
+    setPendingDescriptionImages((current) => {
+      const known = new Set(current.map((image) => image.id));
+      return [...current, ...accepted.filter((image) => !known.has(image.id))];
+    });
+  };
+
+  const uploadDescriptionImages = async (taskId: string) => {
+    if (!pendingDescriptionImages.length) return { allUploaded: true };
+    setDescriptionImagesUploading(true);
+    let allUploaded = true;
+    try {
+      for (const image of pendingDescriptionImages) {
+        const uploaded = await uploadFile(image.file, taskId);
+        if (uploaded) {
+          setPendingDescriptionImages((current) => current.filter((candidate) => candidate.id !== image.id));
+        } else {
+          allUploaded = false;
+        }
+      }
+    } finally {
+      setDescriptionImagesUploading(false);
+    }
+    return { allUploaded };
+  };
+
+  // Attachments
+  const uploadFile = async (file: File, taskId?: string): Promise<Attachment | null> => {
+    if (!user) return null;
+    if (isTaskAttachmentTooLarge(file)) {
+      toast.error(`${file.name} ultrapassa o limite de ${MAX_TASK_ATTACHMENT_LABEL} por arquivo.`);
+      return null;
+    }
+    const tid = taskId ?? (await ensureTask());
+    if (!tid) return null;
+    const path = `${tid}/${storageObjectName()}`;
+    if (isOffline()) {
+      const attachment = {
+        id: crypto.randomUUID(),
+        task_id: tid,
+        file_name: file.name,
+        storage_path: path,
+        mime_type: file.type || null,
+        size_bytes: file.size,
+        uploaded_by: user.id,
+        created_at: new Date().toISOString(),
+      };
+      await enqueueOfflineOperation({
+        userId: user.id,
+        entity: "attachment",
+        action: "create",
+        entityId: attachment.id,
+        payload: { table: "attachments", bucket: "task-attachments", blob: file, attachment },
+      });
+      setAttachments((current) => [...current, attachment as Attachment]);
+      toast.success("Arquivo salvo neste aparelho. SerÃ¡ enviado ao reconectar.");
+      return attachment as Attachment;
+    }
+    const { error: upErr } = await supabase.storage.from("task-attachments").upload(path, file);
+    if (upErr) {
+      toast.error(`${file.name}: ${upErr.message}`);
+      return null;
+    }
+    const { data, error } = await supabase
+      .from("attachments")
+      .insert({
+        task_id: tid,
+        file_name: file.name,
+        storage_path: path,
+        mime_type: file.type,
+        size_bytes: file.size,
+        uploaded_by: user.id,
+      })
+      .select()
+      .single();
+    if (error) {
+      await supabase.storage.from("task-attachments").remove([path]);
+      toast.error(`${file.name}: ${error.message}`);
+      return null;
+    }
+    const attachment = data as Attachment;
+    try {
+      await syncTaskAttachmentToClient({
+        file,
+        taskId: tid,
+        sourceAttachmentId: attachment.id,
+        sourceStoragePath: path,
+        uploadedBy: user.id,
+      });
+    } catch (syncError) {
+      await supabase.from("attachments").delete().eq("id", attachment.id);
+      await supabase.storage.from("task-attachments").remove([path]);
+      toast.error(`${file.name}: não foi possível salvar o arquivo do cliente.`);
+      console.error("Could not sync task attachment to client files", syncError);
+      return null;
+    }
+    // A subscription realtime já pode ter inserido este anexo (o INSERT no
+    // banco dispara o evento antes deste await terminar); sem checar, os dois
+    // caminhos somam a mesma linha duas vezes.
+    setAttachments((current) =>
+      current.some((item) => item.id === attachment.id) ? current : [...current, attachment],
+    );
+    return attachment;
+  };
+
+  const uploadFiles = async (files: FileList) => {
+    const selectedFiles = Array.from(files);
+    if (!selectedFiles.length || fileUploadProgress) return;
+    const oversizedFiles = selectedFiles.filter(isTaskAttachmentTooLarge);
+    if (oversizedFiles.length) {
+      toast.error(
+        `${oversizedFiles.length} ${oversizedFiles.length === 1 ? "arquivo ultrapassa" : "arquivos ultrapassam"} o limite de ${MAX_TASK_ATTACHMENT_LABEL} por arquivo.`,
+      );
+      return;
+    }
+    const taskId = await ensureTask();
+    if (!taskId) return;
+    let uploaded = 0;
+    setFileUploadProgress({ current: 0, total: selectedFiles.length });
+    try {
+      for (const [index, file] of selectedFiles.entries()) {
+        setFileUploadProgress({ current: index + 1, total: selectedFiles.length });
+        if (await uploadFile(file, taskId)) uploaded += 1;
+      }
+      if (uploaded === selectedFiles.length) {
+        toast.success(`${uploaded} ${uploaded === 1 ? "arquivo enviado" : "arquivos enviados"}`);
+      } else {
+        toast.error(
+          `${uploaded} de ${selectedFiles.length} arquivos foram enviados. Tente novamente os restantes.`,
+        );
+      }
+    } finally {
+      setFileUploadProgress(null);
+    }
+  };
+
+  const openAttachment = async (att: Attachment) => {
+    if (att.mime_type === LINK_MIME) {
+      window.open(att.storage_path, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    setPreviewAttachment(att);
+  };
+  const downloadAttachment = async (att: Attachment) => {
+    if (att.mime_type === LINK_MIME) return openAttachment(att);
+    const { data, error } = await supabase.storage
+      .from("task-attachments")
+      .download(att.storage_path);
+    if (error) return toast.error(error.message);
+
+    const blobUrl = URL.createObjectURL(data);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = att.file_name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+  };
+  const deleteAttachment = async (att: Attachment) => {
+    if (user && isOffline()) {
+      await enqueueOfflineOperation({
+        userId: user.id,
+        entity: "record",
+        action: "delete",
+        entityId: att.id,
+        payload: { table: "attachments" },
+      });
+      setAttachments((current) => current.filter((item) => item.id !== att.id));
+      return;
+    }
+    try {
+      await removeTaskAttachmentAndClientCopy(att.id);
+      setAttachments(attachments.filter((a) => a.id !== att.id));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível excluir o arquivo.");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100dvh-1rem)] max-w-4xl gap-0 overflow-y-auto rounded-lg p-0 shadow-2xl sm:max-h-[90vh]">
+        <DialogHeader className="border-b bg-muted/20 px-4 py-4 sm:px-6 sm:py-5">
+          <DialogTitle className="text-xl">
+            {isDraft ? "Tarefa em elaboração" : task ? "Editar tarefa" : "Nova tarefa"}
+          </DialogTitle>
+          {task && <div className="flex flex-wrap gap-1"><TaskPinButton task={task} /><TaskCardOpenings task={task} /></div>}
+        </DialogHeader>
+
+        <div className="space-y-5 px-4 py-5 sm:px-6">
+          <div className="space-y-2">
+            <Label>Título *</Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="O que precisa ser feito?"
+              className="h-11 text-base"
+            />
+            <FieldLinks value={title} />
+          </div>
+
+          {!task && isAdmin && workspaces.length > 1 ? (
+            <div className="space-y-2 rounded-md border border-amber-300/70 bg-amber-50/60 p-3 dark:border-amber-800/60 dark:bg-amber-950/25">
+              <Label className="text-xs">Ambiente</Label>
+              <Select value={targetWorkspaceId} onValueChange={setTargetWorkspaceId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o ambiente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {workspaces.map((workspace) => (
+                    <SelectItem key={workspace.id} value={workspace.id}>
+                      {workspace.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                A tarefa é lançada neste ambiente. Ao trocar, a lista passa a mostrar apenas as
+                pessoas de lá, e quem já estava escolhido só é removido se não existir no destino.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-3 rounded-md border bg-muted/15 p-4 sm:grid-cols-2 md:grid-cols-3">
+            <div className="order-1 space-y-2">
+              <Label className="text-xs">Prioridade</Label>
+              <Select
+                value={priority ?? "none"}
+                onValueChange={(v) => setPriority(v === "none" ? null : (v as Task["priority"]))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem prioridade</SelectItem>
+                  <SelectItem value="low">Baixa</SelectItem>
+                  <SelectItem value="medium">Média</SelectItem>
+                  <SelectItem value="high">Alta</SelectItem>
+                  <SelectItem value="urgent">Urgente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {isMarketingTask ? (
+              <div className="order-2 space-y-2">
+                <Label className="text-xs">Formato</Label>
+                <Select
+                  value={categoryId || "__no_marketing_category__"}
+                  onValueChange={(value) =>
+                    setCategoryId(value === "__no_marketing_category__" ? "" : value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um formato" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__no_marketing_category__">Sem formato</SelectItem>
+                    {marketingCategories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {marketingCategories.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Crie formatos no botão Formatos para classificá-la.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {isMarketingTask ? (
+              <div className="order-3 space-y-2">
+                <Label className="text-xs">Objetivo da tarefa</Label>
+                <Select value={objectiveId || "__no_marketing_objective__"} onValueChange={(value) => setObjectiveId(value === "__no_marketing_objective__" ? "" : value)}>
+                  <SelectTrigger><SelectValue placeholder="Selecione um objetivo" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__no_marketing_objective__">Sem objetivo</SelectItem>
+                    {marketingObjectives.map((objective) => <SelectItem key={objective.id} value={objective.id}>{objective.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            <div className="order-6 space-y-2">
+              <Label className="text-xs">
+                Prazo {!task ? <span className="text-destructive">*</span> : null}
+              </Label>
+              <div className="rounded-md border bg-muted/30 p-1.5 shadow-sm">
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="task-deadline-date h-9 flex-1 border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
+                    required={!task}
+                  />
+                  {dueDate && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0"
+                      onClick={() => {
+                        setDueDate("");
+                        setDueTime("");
+                      }}
+                      title="Sem prazo"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <div className="mt-1 flex items-center gap-2 border-t px-1.5 pt-1.5">
+                  <Clock3 className="h-3.5 w-3.5 text-primary" />
+                  <Input
+                    type="time"
+                    value={dueTime}
+                    onChange={(e) => setDueTime(e.target.value)}
+                    className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
+                    step="300"
+                    disabled={!dueDate}
+                    aria-label="Hora do prazo (opcional)"
+                  />
+                  <span className="whitespace-nowrap text-[10px] text-muted-foreground">
+                    Opcional
+                  </span>
+                </div>
+              </div>
+              {task && hasDueDateChanged(task.due_date, dueDate) && (
+                <div className="space-y-1">
+                  <Label htmlFor="due-date-change-reason" className="text-xs">
+                    Justificativa da alteração de prazo <span className="text-destructive">*</span>
+                  </Label>
+                  <Textarea
+                    id="due-date-change-reason"
+                    value={dueDateChangeReason}
+                    onChange={(event) => setDueDateChangeReason(event.target.value)}
+                    placeholder="Explique o motivo da alteração"
+                    className="min-h-16 text-xs"
+                  />
+                  <FieldLinks value={dueDateChangeReason} />
+                </div>
+              )}
+            </div>
+            <div className="order-5 space-y-2">
+              <Label className="text-xs">Colaboradores</Label>
+              <Popover open={collaboratorPickerOpen} onOpenChange={setCollaboratorPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between font-normal"
+                    disabled={!canManageCollaborators || !collaboratorsReady}
+                    title={
+                      canManageCollaborators
+                        ? undefined
+                        : "Somente o criador ou responsável pode alterar colaboradores"
+                    }
+                  >
+                    <span className="truncate">
+                      {!collaboratorsReady
+                        ? collaboratorLoad?.status === "error"
+                          ? "Não foi possível carregar"
+                          : "Carregando colaboradores..."
+                        : collaboratorIds.length === 0
+                          ? "Selecionar nomes"
+                          : `${collaboratorIds.length} selecionado${collaboratorIds.length === 1 ? "" : "s"}`}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-2">
+                  <Input
+                    autoFocus
+                    value={collaboratorSearch}
+                    onChange={(event) => setCollaboratorSearch(event.target.value)}
+                    placeholder="Pesquisar pessoa..."
+                    className="mb-2 h-8 text-xs"
+                  />
+                  <div className="max-h-56 space-y-0.5 overflow-y-auto overscroll-contain pr-1">
+                    {filteredCollaborators.map((profile) => {
+                      const selected = collaboratorIds.includes(profile.id);
+                      return (
+                        <label
+                          key={profile.id}
+                          className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted"
+                        >
+                          <Checkbox
+                            checked={selected}
+                            onCheckedChange={() => toggleCollaborator(profile.id)}
+                          />
+                          <AssigneeOption profile={profile} />
+                        </label>
+                      );
+                    })}
+                    {filteredCollaborators.length === 0 && (
+                      <p className="px-2 py-2 text-xs text-muted-foreground">
+                        Nenhuma pessoa encontrada.
+                      </p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {task && collaboratorLoad?.taskId === task.id && collaboratorLoad.status === "error" && (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto px-0 text-xs"
+                  onClick={() => setCollaboratorLoadAttempt((attempt) => attempt + 1)}
+                >
+                  Tentar carregar colaboradores novamente
+                </Button>
+              )}
+            </div>
+            <div className="order-2 space-y-2">
+              <Label className="text-xs">Status</Label>
+              <Select
+                value={status === "done" ? COMPLETED_STATUS_VALUE : columnId || "none"}
+                onValueChange={(value) => {
+                  if (value === COMPLETED_STATUS_VALUE) {
+                    setStatus("done");
+                    setCompletionDate((current) => current || format(new Date(), "yyyy-MM-dd"));
+                    return;
+                  }
+                  setStatus("todo");
+                  setColumnId(value === "none" ? "" : value);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Nenhuma" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhuma</SelectItem>
+                  {selectableColumns.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={COMPLETED_STATUS_VALUE}>Concluído</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {status === "done" ? (
+              <div className="order-4 space-y-2">
+                <Label htmlFor="completion-date" className="text-xs">
+                  Data de conclusão
+                </Label>
+                <Input
+                  id="completion-date"
+                  type="date"
+                  value={completionDate}
+                  max={format(new Date(), "yyyy-MM-dd")}
+                  onChange={(event) => setCompletionDate(event.target.value)}
+                  required
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Esta data define se a entrega foi feita dentro do prazo. O sistema também mantém o
+                  momento em que este lançamento foi salvo.
+                </p>
+              </div>
+            ) : null}
+            <div className="order-3 space-y-2">
+              <Label className="text-xs">Cliente</Label>
+              <Popover open={clientPickerOpen} onOpenChange={setClientPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between font-normal">
+                    <span className="truncate">{selectedClient?.name ?? "Nenhum"}</span>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-[var(--radix-popover-trigger-width)] p-2"
+                >
+                  <Input
+                    autoFocus
+                    value={clientSearch}
+                    onChange={(event) => setClientSearch(event.target.value)}
+                    placeholder="Pesquisar cliente..."
+                    className="mb-2 h-8 text-xs"
+                  />
+                  <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClientId("");
+                        setClientPickerOpen(false);
+                      }}
+                      className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted ${!clientId ? "bg-muted font-medium" : ""}`}
+                    >
+                      Nenhum
+                    </button>
+                    {filteredClients.map((client) => (
+                      <button
+                        key={client.id}
+                        type="button"
+                        onClick={() => {
+                          setClientId(client.id);
+                          setClientPickerOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted ${clientId === client.id ? "bg-muted font-medium" : ""}`}
+                      >
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: client.color ?? "#94a3b8" }}
+                        />
+                        <span className="truncate">{client.name}</span>
+                      </button>
+                    ))}
+                    {filteredClients.length === 0 && (
+                      <p className="px-2 py-2 text-xs text-muted-foreground">
+                        Nenhum cliente encontrado.
+                      </p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="order-4 space-y-2">
+              <Label className="text-xs">Responsável</Label>
+              <Popover open={assigneePickerOpen} onOpenChange={setAssigneePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between font-normal">
+                    <span className="truncate">
+                      {selectedAssignee?.full_name || selectedAssignee?.email || "Ninguém"}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-[var(--radix-popover-trigger-width)] p-2"
+                >
+                  <Input
+                    autoFocus
+                    value={assigneeSearch}
+                    onChange={(event) => setAssigneeSearch(event.target.value)}
+                    placeholder="Pesquisar pessoa..."
+                    className="mb-2 h-8 text-xs"
+                  />
+                  <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAssigneeId("");
+                        setAssigneePickerOpen(false);
+                      }}
+                      className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted ${!assigneeId ? "bg-muted font-medium" : ""}`}
+                    >
+                      Ninguém
+                    </button>
+                    {filteredAssignees.map((candidate) => (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        onClick={() => {
+                          setAssigneeId(candidate.id);
+                          setAssigneePickerOpen(false);
+                        }}
+                        className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted ${assigneeId === candidate.id ? "bg-muted font-medium" : ""}`}
+                      >
+                        <AssigneeOption profile={candidate} />
+                      </button>
+                    ))}
+                    {filteredAssignees.length === 0 && (
+                      <p className="px-2 py-2 text-xs text-muted-foreground">
+                        Nenhuma pessoa encontrada.
+                      </p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {task && (
+                <div className="pt-1">
+                  <Label className="text-xs text-muted-foreground">Criada por</Label>
+                  <p className="mt-1 text-sm font-medium">{taskCreatorName}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {(!task || isDraft) && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/15 px-3 py-2">
+              <p className="text-xs text-muted-foreground">
+                Informe título e prazo, escolha os participantes e converse antes de finalizar.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void saveDraft(true)}
+                disabled={saving || descriptionImagesUploading || !collaboratorsReady}
+              >
+                <MessageSquare className="mr-1.5 h-4 w-4" /> Abrir conversa
+              </Button>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Descrição</Label>
+            <RichTextEditor
+              value={description}
+              onChange={setDescription}
+              onImagePaste={addDescriptionImages}
+              placeholder="Descreva a tarefa... Cole um print com ⌘V / Ctrl+V."
+              minHeight={100}
+              copyable
+            />
+          </div>
+
+          {
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList>
+                <TabsTrigger value="subtasks">Subtarefas ({subtasks.length})</TabsTrigger>
+                <TabsTrigger value="comments">Conversa ({comments.length})</TabsTrigger>
+                <TabsTrigger value="files">Arquivos ({attachments.length})</TabsTrigger>
+              </TabsList>
+              <TabsContent value="subtasks" className="space-y-2">
+                {subtasks.map((s) => {
+                  const dueStr = s.due_date ? format(new Date(s.due_date), "yyyy-MM-dd") : "";
+                  const historyOpen = subDueOpen[s.id];
+                  const history = subDueChanges[s.id] ?? [];
+                  const expanded = subExpanded[s.id];
+                  const files = subAttachments[s.id] ?? [];
+                  const assignee = profiles?.find((p) => p.id === s.assignee_id);
+                  return (
+                    <div key={s.id} className="space-y-1.5 rounded-md border bg-muted/30 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={s.done} onCheckedChange={() => toggleSubtask(s)} />
+                        {editingSubtaskId === s.id ? (
+                          <Input
+                            value={subtaskTitleDraft}
+                            onChange={(event) => setSubtaskTitleDraft(event.target.value)}
+                            onBlur={() => void saveSubtaskTitle(s)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") event.currentTarget.blur();
+                              if (event.key === "Escape") {
+                                setEditingSubtaskId(null);
+                                setSubtaskTitleDraft(s.title);
+                              }
+                            }}
+                            autoFocus
+                            aria-label="Título da subtarefa"
+                            className="h-7 flex-1 text-sm"
+                          />
+                        ) : (
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => startEditingSubtaskTitle(s)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                startEditingSubtaskTitle(s);
+                              }
+                            }}
+                            className={`min-w-0 flex-1 truncate text-left text-sm hover:text-primary ${s.done ? "line-through text-muted-foreground" : ""}`}
+                            title={`${s.title} — clique para editar`}
+                          >
+                            <LinkedText text={s.title} />
+                          </div>
+                        )}
+                        {editingSubtaskId !== s.id && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => startEditingSubtaskTitle(s)}
+                            title="Editar título"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {assignee && (
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                            {assignee.full_name || assignee.email}
+                          </span>
+                        )}
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => toggleSubExpanded(s.id)}
+                          title="Detalhes"
+                        >
+                          {expanded ? (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                        {canDeleteSubtask(s) && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => deleteSubtask(s.id)}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 pl-6">
+                        <Label className="text-[10px] text-muted-foreground">Prazo</Label>
+                        <Input
+                          type="date"
+                          value={dueStr}
+                          onChange={(e) => updateSubtaskDue(s, e.target.value)}
+                          className="h-7 w-52 text-xs"
+                        />
+                        {s.due_date && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs text-muted-foreground"
+                            onClick={() => void updateSubtaskDue(s, "")}
+                          >
+                            Indefinido
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => toggleSubDueHistory(s.id)}
+                        >
+                          {historyOpen ? (
+                            <ChevronDown className="mr-1 h-3 w-3" />
+                          ) : (
+                            <ChevronRight className="mr-1 h-3 w-3" />
+                          )}
+                          Alterações
+                        </Button>
+                        {!expanded && files.length > 0 && (
+                          <span
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary"
+                            title={`${files.length} arquivo(s) anexado(s)`}
+                            aria-label={`${files.length} arquivo(s) anexado(s) à subtarefa`}
+                          >
+                            <Paperclip className="h-3 w-3" />
+                            {files.length} {files.length === 1 ? "arquivo" : "arquivos"}
+                          </span>
+                        )}
+                      </div>
+                      {historyOpen && (
+                        <div className="ml-6 space-y-1 border-l pl-2">
+                          {history.length === 0 ? (
+                            <p className="text-[11px] text-muted-foreground">
+                              Sem alterações registradas.
+                            </p>
+                          ) : (
+                            history.map((h) => (
+                              <div key={h.id} className="text-[11px] text-muted-foreground">
+                                <span className="font-medium text-foreground">
+                                  {h.old_due_date
+                                    ? format(new Date(h.old_due_date), "dd/MM/yyyy")
+                                    : "sem prazo"}
+                                </span>
+                                {" → "}
+                                <span className="font-medium text-foreground">
+                                  {h.new_due_date
+                                    ? format(new Date(h.new_due_date), "dd/MM/yyyy")
+                                    : "sem prazo"}
+                                </span>
+                                {h.reason ? <> — <LinkedText text={h.reason} /></> : null}
+                                <span className="ml-2 opacity-60">
+                                  {format(new Date(h.created_at), "dd/MM/yyyy")}
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                      {expanded && (
+                        <div className="ml-6 space-y-2 border-l pl-3">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Responsável</Label>
+                            <div className="flex gap-1.5">
+                              <Select
+                                value={s.assignee_id || "none"}
+                                onValueChange={(v) => updateSubtaskAssignee(s, v)}
+                              >
+                                <SelectTrigger className="h-8">
+                                  <SelectValue placeholder="Ninguém" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Ninguém</SelectItem>
+                                  {assignableProfiles.map((p) => (
+                                    <SelectItem key={p.id} value={p.id}>
+                                      <AssigneeOption profile={p} />
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 shrink-0"
+                                title="Abrir subtarefa"
+                                onClick={() => openSubtaskDialog(s)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span className="sr-only">Abrir subtarefa</span>
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Anotações</Label>
+                            <Textarea
+                              rows={2}
+                              defaultValue={s.notes ?? ""}
+                              onBlur={(e) => {
+                                if ((e.target.value || "") !== (s.notes ?? ""))
+                                  void updateSubtaskNotes(s, e.target.value);
+                              }}
+                              placeholder="Notas desta subtarefa"
+                              className="text-xs"
+                            />
+                            <FieldLinks value={s.notes} />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Arquivos</Label>
+                            {files.map((a) => (
+                              <div
+                                key={a.id}
+                                className="flex items-center gap-2 rounded border bg-background px-2 py-1 text-xs"
+                              >
+                                <SubtaskFileThumbnail attachment={a} userId={user?.id} />
+                                <span className="min-w-0 flex-1 truncate" title={a.file_name}>{a.file_name}</span>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6"
+                                  onClick={() => downloadSubFile(a)}
+                                >
+                                  <Download className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6"
+                                  onClick={() => deleteSubFile(a)}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                            <FileDropZone
+                              onFiles={async (files) => {
+                                for (const file of Array.from(files)) await uploadSubFile(s, file);
+                              }}
+                            >
+                              <label className="flex cursor-pointer items-center justify-center gap-2 rounded border border-dashed py-1.5 text-[11px] text-muted-foreground hover:bg-muted/40">
+                                <Paperclip className="h-3 w-3" /> Anexar arquivo
+                                <input
+                                  type="file"
+                                  multiple
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const files = e.target.files;
+                                    if (files)
+                                      void (async () => {
+                                        for (const file of Array.from(files))
+                                          await uploadSubFile(s, file);
+                                      })();
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                            </FileDropZone>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    placeholder="Nova subtarefa"
+                    value={newSubtask}
+                    onChange={(e) => setNewSubtask(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addSubtask()}
+                    className="min-w-[180px] flex-1"
+                  />
+                  <Input
+                    type="date"
+                    value={newSubtaskDue}
+                    onChange={(e) => setNewSubtaskDue(e.target.value)}
+                    className="w-52"
+                    title="Prazo (opcional)"
+                  />
+                  <div className="flex gap-1.5">
+                    <Select
+                      value={newSubtaskAssignee || "none"}
+                      onValueChange={(v) => setNewSubtaskAssignee(v === "none" ? "" : v)}
+                    >
+                      <SelectTrigger className="w-44" title="Responsável (opcional)">
+                        <SelectValue placeholder="Responsável" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem responsável</SelectItem>
+                        {assignableProfiles.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            <AssigneeOption profile={p} />
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      title="Abrir editor completo da subtarefa"
+                      onClick={() => void openNewSubtaskDialog()}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      <span className="sr-only">Abrir editor completo da subtarefa</span>
+                    </Button>
+                  </div>
+                  <Button onClick={addSubtask} size="icon">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Defina responsável e prazo já ao criar. Use a seta para editar anotações e anexar
+                  arquivos.
+                </p>
+              </TabsContent>
+
+              <TabsContent value="comments" className="space-y-3">
+                <div ref={conversationSectionRef}>
+                  {currentTaskId ? (
+                    <TaskConversationPanel
+                      taskId={currentTaskId}
+                      readOnly={Boolean(task?.completed_at || task?.status === "done" || task?.conversation_closed_at)}
+                      className="h-[360px] overflow-hidden rounded-md border"
+                      onActivity={() => void loadRelated(currentTaskId)}
+                    />
+                  ) : (
+                    <p className="rounded-md border bg-muted/10 p-6 text-center text-sm text-muted-foreground">
+                      Informe título e prazo e clique em Abrir conversa.
+                    </p>
+                  )}
+                </div>
+              </TabsContent>
+              <TabsContent value="files" className="space-y-2">
+                {attachments.map((a) => (
+                  <div
+                    key={a.id}
+                    className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2"
+                  >
+                    {a.mime_type === LINK_MIME ? (
+                      <Link2 className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Paperclip className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <span className="flex-1 truncate text-sm">{a.file_name}</span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => openAttachment(a)}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Button>
+                    {a.mime_type !== LINK_MIME && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => downloadAttachment(a)}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => deleteAttachment(a)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                <FileDropZone onFiles={uploadFiles} disabled={!!fileUploadProgress}>
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed py-3 text-sm text-muted-foreground hover:bg-muted/40">
+                    <Paperclip className="h-4 w-4" />{" "}
+                    {fileUploadProgress
+                      ? `Enviando ${fileUploadProgress.current}/${fileUploadProgress.total}…`
+                      : `Anexar arquivos (até ${MAX_TASK_ATTACHMENT_LABEL} cada)`}
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      disabled={!!fileUploadProgress}
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (files) void uploadFiles(files);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </FileDropZone>
+              </TabsContent>
+            </Tabs>
+          }
+
+          <div className="flex justify-between gap-2 pt-2">
+            <div>
+              {currentTaskId && canDeleteTask && (
+                <Button
+                  variant="ghost"
+                  onClick={remove}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancelar
+              </Button>
+              {(!task || isDraft) && (
+                <Button
+                  variant="outline"
+                  disabled={saving || descriptionImagesUploading || !collaboratorsReady}
+                  onClick={() => void saveDraft().then((saved) => {
+                    if (saved) onOpenChange(false);
+                  })}
+                >
+                  Salvar rascunho
+                </Button>
+              )}
+              <Button
+                onClick={save}
+                disabled={saving || descriptionImagesUploading || (!collaboratorsReady && !isOffline())}
+              >
+                {saving || descriptionImagesUploading
+                  ? "Salvando…"
+                  : isDraft
+                    ? "Finalizar tarefa"
+                    : "Salvar"}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <AttachmentPreviewDialog
+          open={!!previewAttachment}
+          onOpenChange={(open) => {
+            if (!open) setPreviewAttachment(null);
+          }}
+          attachment={previewAttachment}
+        />
+        <SubtaskDialog
+          open={subtaskDialogOpen}
+          onOpenChange={setSubtaskDialogOpen}
+          taskId={currentTaskId}
+          workspaceId={targetWorkspaceId || activeWorkspace?.id}
+          subtask={subtaskInDialog}
+          position={subtasks.length}
+          defaults={{
+            title: newSubtask,
+            dueDate: newSubtaskDue,
+            assigneeId: newSubtaskAssignee,
+          }}
+          onSaved={handleSubtaskDialogSaved}
+          onAttachmentSaved={handleSubtaskAttachmentSaved}
+          onAttachmentsComplete={(subtaskId) => void loadSubAttachments(subtaskId)}
+        />
+        <Dialog
+          open={subDueReason.open}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen && !subDueSaving) {
+              setSubDueReason({ open: false, subtask: null, next: null, reason: "" });
+            }
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Justificar alteração do prazo</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="rounded-md border bg-muted/40 p-3 text-sm">
+                <p>
+                  <strong>Prazo anterior:</strong>{" "}
+                  {subDueReason.subtask?.due_date
+                    ? format(new Date(subDueReason.subtask.due_date), "dd/MM/yyyy")
+                    : "sem prazo"}
+                </p>
+                <p>
+                  <strong>Novo prazo:</strong>{" "}
+                  {subDueReason.next
+                    ? format(new Date(subDueReason.next), "dd/MM/yyyy")
+                    : "sem prazo"}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subtask-due-reason">Justificativa *</Label>
+                <Textarea
+                  id="subtask-due-reason"
+                  value={subDueReason.reason}
+                  onChange={(event) =>
+                    setSubDueReason((current) => ({ ...current, reason: event.target.value }))
+                  }
+                  placeholder="Explique o motivo da alteração"
+                  rows={3}
+                  autoFocus
+                />
+                <FieldLinks value={subDueReason.reason} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={subDueSaving}
+                onClick={() =>
+                  setSubDueReason({ open: false, subtask: null, next: null, reason: "" })
+                }
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={subDueSaving || !subDueReason.reason.trim()}
+                onClick={async () => {
+                  const subtask = subDueReason.subtask;
+                  if (!subtask) return;
+                  const saved = await applySubtaskDue(
+                    subtask,
+                    subDueReason.next,
+                    subDueReason.reason,
+                  );
+                  if (saved) {
+                    setSubDueReason({ open: false, subtask: null, next: null, reason: "" });
+                  }
+                }}
+              >
+                {subDueSaving ? "Salvando..." : "Salvar alteração"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -1,0 +1,710 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { CheckCircle2, ChevronDown, History, RefreshCw, Sparkles } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { AppUpdatePreview } from "@/components/UpdatePreviews";
+import { advancePendingAppUpdate, type PendingAppUpdate } from "@/lib/app-update-progress";
+import { canAutoInstallAppUpdate } from "@/lib/app-update-auto";
+import { listOfflineOperations } from "@/lib/offline-sync";
+import {
+  activateAppUpdate,
+  checkAppWorkerUpdate,
+  waitForAppWorkerControl,
+} from "@/lib/app-update-install";
+import {
+  newerPublishedAppUpdate,
+  readPublishedAppUpdates,
+  type PublishedAppUpdate,
+} from "@/lib/published-app-updates";
+import {
+  formatAppUpdateDate,
+  getVisibleAppUpdates,
+  type AppUpdate,
+} from "@/lib/app-updates";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+const AUTO_UPDATE_IDLE_MS = 30_000;
+let lastUserInputAt = Date.now();
+let updateInstallationRunning = false;
+
+function hasOpenEditor() {
+  const visible = (element: Element) => element.getClientRects().length > 0;
+  return [...document.querySelectorAll('[role="dialog"], [role="alertdialog"], textarea, [contenteditable="true"], [contenteditable=""]')].some(visible) ||
+    Boolean(document.activeElement?.matches("input, textarea, select, [contenteditable]"));
+}
+
+async function automaticReloadIsSafe(userId: string | undefined) {
+  if (!userId) return false;
+  let hasPendingWrites: boolean;
+  try {
+    hasPendingWrites = (await listOfflineOperations(userId)).length > 0;
+  } catch {
+    return false;
+  }
+  return canAutoInstallAppUpdate({
+    online: navigator.onLine,
+    visible: document.visibilityState === "visible",
+    hasOpenEditor: hasOpenEditor(),
+    hasPendingWrites,
+    hasRecentInput: Date.now() - lastUserInputAt < AUTO_UPDATE_IDLE_MS,
+  });
+}
+
+function ReleaseSection({
+  title,
+  date,
+  status,
+  updated = false,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  date: string;
+  status: ReactNode;
+  updated?: boolean;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="rounded-xl border bg-background">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/35"
+        >
+          <span
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${updated ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/[0.09] text-primary"}`}
+          >
+            {status}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">{title}</span>
+            <span className="block text-xs text-muted-foreground">{date}</span>
+          </span>
+          {updated ? (
+            <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+              Versão atual
+            </span>
+          ) : null}
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="border-t data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
+        <div className="space-y-4 p-4">{children}</div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+export function UpdateCenter() {
+  const { user, isAdmin, activeWorkspace } = useAuth();
+  const updates = useMemo(
+    () => getVisibleAppUpdates(isAdmin, activeWorkspace?.slug),
+    [isAdmin, activeWorkspace?.slug],
+  );
+  const latestUpdate = updates[0];
+  const UPDATE_VERSION = latestUpdate?.id ?? "";
+  const [open, setOpen] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(true);
+  const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
+  const [serviceWorkerUpdateReady, setServiceWorkerUpdateReady] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [checkMessage, setCheckMessage] = useState<string | null>(null);
+  const [published, setPublished] = useState<{
+    scope: string;
+    release: PublishedAppUpdate | null;
+    checked: boolean;
+  } | null>(null);
+  const checkForUpdateRef = useRef<(() => Promise<void>) | null>(null);
+  const watchedRegistrationsRef = useRef(new Set<ServiceWorkerRegistration>());
+  const initialWorkerRef = useRef<ServiceWorker | null>(null);
+  const autoResumeRef = useRef<string | null>(null);
+  const scope = `${user?.id}:${activeWorkspace?.slug}:${isAdmin}`;
+  const remoteRelease = published?.scope === scope ? published.release : null;
+  const versionVerified = published?.scope === scope && published.checked;
+  const noticeVersion = remoteRelease?.id ?? UPDATE_VERSION;
+
+  const isSupportedWorkspace = Boolean(latestUpdate);
+  const storageKey = useMemo(
+    () => (user?.id ? `taskflow:update:${UPDATE_VERSION}:${user.id}` : null),
+    [UPDATE_VERSION, user?.id],
+  );
+  const promptKey = useMemo(
+    () =>
+      user?.id && activeWorkspace?.id
+        ? `taskflow:update-prompt:${noticeVersion}:${user.id}:${activeWorkspace.id}`
+        : null,
+    [noticeVersion, activeWorkspace?.id, user?.id],
+  );
+  const pendingUpdateKey = user?.id ? `taskflow:update-pending:${user.id}` : null;
+  // O catálogo seleciona as novidades permitidas no ambiente e para o público.
+  const canSeeUpdates = isSupportedWorkspace && Boolean(storageKey);
+
+  useEffect(() => {
+    const recordInput = () => { lastUserInputAt = Date.now(); };
+    document.addEventListener("input", recordInput, true);
+    document.addEventListener("change", recordInput, true);
+    return () => {
+      document.removeEventListener("input", recordInput, true);
+      document.removeEventListener("change", recordInput, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canSeeUpdates || !storageKey) return;
+    try {
+      setAcknowledged(window.localStorage.getItem(storageKey) === UPDATE_VERSION);
+    } catch {
+      setAcknowledged(false);
+    }
+  }, [UPDATE_VERSION, canSeeUpdates, storageKey]);
+
+  // The click authorizes the complete jump to the newest published version.
+  // Confirm the compiled catalogue after reload; if an older shell was served,
+  // continue a bounded update automatically instead of requiring another click.
+  useEffect(() => {
+    if (!canSeeUpdates || !storageKey || !pendingUpdateKey) return;
+    let pending: PendingAppUpdate | null = null;
+    try {
+      const raw = window.sessionStorage.getItem(pendingUpdateKey);
+      if (raw) pending = JSON.parse(raw) as PendingAppUpdate;
+    } catch {
+      return;
+    }
+    if (!pending || typeof pending.id !== "string" || !Number.isInteger(pending.attempts)) return;
+    const progress = advancePendingAppUpdate(pending, UPDATE_VERSION);
+    if (progress.status === "confirmed") {
+      try {
+        window.localStorage.setItem(storageKey, UPDATE_VERSION);
+        window.sessionStorage.removeItem(pendingUpdateKey);
+      } catch {
+        /* Storage may be blocked; the installed code is still current. */
+      }
+      setAcknowledged(true);
+      return;
+    }
+    if (progress.status === "exhausted") {
+      window.sessionStorage.removeItem(pendingUpdateKey);
+      return;
+    }
+    const resume = () => void (async () => {
+      if (autoResumeRef.current === pending.id || updateInstallationRunning) return;
+      updateInstallationRunning = true;
+      try {
+        if (pending.automatic && !(await automaticReloadIsSafe(user?.id))) return;
+        autoResumeRef.current = pending.id;
+        window.sessionStorage.setItem(pendingUpdateKey, JSON.stringify(progress.pending));
+        if ("serviceWorker" in navigator) {
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (registration) {
+            await activateAppUpdate(registration);
+            if (registration.active && navigator.serviceWorker.controller !== registration.active)
+              await waitForAppWorkerControl(registration.active, navigator.serviceWorker);
+          }
+        }
+        if (pending.automatic && !(await automaticReloadIsSafe(user?.id))) {
+          autoResumeRef.current = null;
+          return;
+        }
+        window.location.reload();
+      } finally {
+        updateInstallationRunning = false;
+      }
+    })().catch(() => {
+      window.sessionStorage.removeItem(pendingUpdateKey);
+      autoResumeRef.current = null;
+    });
+    resume();
+    if (!pending.automatic) return;
+    const interval = window.setInterval(resume, 15_000);
+    return () => window.clearInterval(interval);
+  }, [UPDATE_VERSION, canSeeUpdates, pendingUpdateKey, storageKey, user?.id]);
+
+  const hasReleaseUpdate = !acknowledged;
+  const hasNewVersion = Boolean(remoteRelease) || serviceWorkerUpdateReady;
+  const hasUpdate = hasReleaseUpdate || hasNewVersion;
+  const isCurrent = !hasUpdate && versionVerified;
+
+  useEffect(() => {
+    if (!canSeeUpdates) return;
+
+    let active = true;
+    const cleanup: Array<() => void> = [];
+    const watchedRegistrations = watchedRegistrationsRef.current;
+    const watchRegistration = (registration: ServiceWorkerRegistration) => {
+      if (watchedRegistrations.has(registration)) return;
+      watchedRegistrations.add(registration);
+
+      const watchInstallingWorker = () => {
+        const worker = registration.installing;
+        if (!worker) return;
+        const onStateChange = () => {
+          if (active && worker.state === "installed" && navigator.serviceWorker.controller) {
+            setServiceWorkerUpdateReady(true);
+          }
+        };
+        worker.addEventListener("statechange", onStateChange);
+        cleanup.push(() => worker.removeEventListener("statechange", onStateChange));
+      };
+      registration.addEventListener("updatefound", watchInstallingWorker);
+      cleanup.push(() => registration.removeEventListener("updatefound", watchInstallingWorker));
+      watchInstallingWorker();
+    };
+
+    let running: Promise<void> | null = null;
+    const checkForUpdate = (): Promise<void> => {
+      if (running) return running;
+      running = (async () => {
+        if (!navigator.onLine)
+          throw new Error(
+            "Conecte-se à internet para verificar novas atualizações. Seus dados offline estão preservados.",
+          );
+        const workerCheck = async () => {
+          if (!("serviceWorker" in navigator)) return;
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (!active || !registration) return;
+          if (!initialWorkerRef.current) initialWorkerRef.current = registration.active;
+          watchRegistration(registration);
+          if (registration.waiting) setServiceWorkerUpdateReady(true);
+          await checkAppWorkerUpdate(registration);
+          if (active && registration.waiting) setServiceWorkerUpdateReady(true);
+        };
+        // Keep detecting installed workers even if the independent server check fails.
+        const versionCheck = async () => {
+          const response = await fetch(`${import.meta.env.BASE_URL}app-release.json?check=${Date.now()}`, {
+            cache: "no-store",
+            signal: AbortSignal.timeout(8_000),
+          });
+          if (!response.ok)
+            throw new Error("Não foi possível verificar a versão publicada. Tente novamente.");
+          const releases = readPublishedAppUpdates(await response.json());
+          if (active)
+            setPublished({
+              scope,
+              release: newerPublishedAppUpdate(releases, updates, isAdmin, activeWorkspace?.slug),
+              checked: true,
+            });
+        };
+        const results = await Promise.allSettled([workerCheck(), versionCheck()]);
+        if (results[1].status === "rejected") {
+          if (active)
+            setPublished((previous) =>
+              previous?.scope === scope ? { ...previous, checked: false } : null,
+            );
+          throw results[1].reason;
+        }
+      })().finally(() => {
+        running = null;
+      });
+      return running;
+    };
+    checkForUpdateRef.current = checkForUpdate;
+    const backgroundCheck = () =>
+      void checkForUpdate().catch(() => {
+        if (active)
+          setPublished((previous) =>
+            previous?.scope === scope ? { ...previous, checked: false } : null,
+          );
+      });
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") backgroundCheck();
+    };
+    backgroundCheck();
+    const interval = window.setInterval(backgroundCheck, 60_000);
+    window.addEventListener("focus", onVisibilityChange);
+    window.addEventListener("online", backgroundCheck);
+    window.addEventListener("offline", backgroundCheck);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onVisibilityChange);
+      window.removeEventListener("online", backgroundCheck);
+      window.removeEventListener("offline", backgroundCheck);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      cleanup.forEach((remove) => remove());
+      watchedRegistrations.clear();
+      if (checkForUpdateRef.current === checkForUpdate) checkForUpdateRef.current = null;
+    };
+  }, [canSeeUpdates, scope, updates, isAdmin, activeWorkspace?.slug]);
+
+  useEffect(() => {
+    if (!canSeeUpdates || !hasUpdate || !promptKey) {
+      setShowUpdatePrompt(false);
+      return;
+    }
+    if (hasNewVersion) {
+      setShowUpdatePrompt(true);
+      return;
+    }
+    try {
+      setShowUpdatePrompt(window.sessionStorage.getItem(promptKey) !== noticeVersion);
+    } catch {
+      setShowUpdatePrompt(true);
+    }
+  }, [noticeVersion, canSeeUpdates, hasUpdate, promptKey, hasNewVersion]);
+
+  // Opening the centre performs the check; no additional verification click.
+  // It never activates the worker or reloads without the user's update click.
+  useEffect(() => {
+    if (!open || !canSeeUpdates) return;
+    let active = true;
+    setChecking(true);
+    setCheckMessage(null);
+    setUpdateError(null);
+    void (async () => {
+      try {
+        await checkForUpdateRef.current?.();
+      } catch {
+        if (active)
+          setCheckMessage(
+            navigator.onLine
+              ? "Não foi possível verificar a versão publicada. Você pode tentar novamente em Atualizar agora."
+              : "Conecte-se à internet para verificar novas atualizações. Seus dados offline estão preservados.",
+          );
+      } finally {
+        if (active) setChecking(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [open, canSeeUpdates, scope]);
+
+  const openPendingUpdate = () => {
+    try {
+      if (promptKey) window.sessionStorage.setItem(promptKey, noticeVersion);
+    } catch {
+      /* Storage can be blocked. */
+    }
+    setShowUpdatePrompt(false);
+    setOpen(true);
+  };
+  const updateApplication = useCallback(async (automatic = false) => {
+    if (!storageKey || refreshing || checking || updateInstallationRunning) return;
+    const autoAttemptKey = `taskflow:auto-update-attempt:${remoteRelease?.id ?? UPDATE_VERSION}`;
+    if (automatic) {
+      try {
+        if (window.sessionStorage.getItem(autoAttemptKey)) return;
+      } catch {
+        // Private browsing can disable session storage; the pending update
+        // counter still bounds follow-up reloads.
+      }
+    }
+    updateInstallationRunning = true;
+    if (!automatic) setUpdateError(null);
+    if (!navigator.onLine) {
+      if (!automatic) setUpdateError("Conecte-se à internet para atualizar. Seus dados offline estão preservados.");
+      updateInstallationRunning = false;
+      return;
+    }
+    if (automatic) {
+      try {
+        if (!(await automaticReloadIsSafe(user?.id))) return;
+      } catch {
+        return;
+      } finally {
+        updateInstallationRunning = false;
+      }
+      // The second gate keeps the two responsive UpdateCenter mounts from
+      // installing the same release at the same time.
+      if (updateInstallationRunning) return;
+      updateInstallationRunning = true;
+    }
+    setRefreshing(true);
+
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}app-release.json?check=${Date.now()}`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!response.ok)
+        throw new Error("Não foi possível verificar a versão publicada. Tente novamente.");
+      const releases = readPublishedAppUpdates(await response.json());
+      const latestPublished = newerPublishedAppUpdate(
+        releases,
+        updates,
+        isAdmin,
+        activeWorkspace?.slug,
+      );
+      const targetVersion = latestPublished?.id ?? UPDATE_VERSION;
+      if ("serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration) {
+          const activated = await activateAppUpdate(registration);
+          const activatedInAnotherTab =
+            initialWorkerRef.current &&
+            registration.active !== initialWorkerRef.current &&
+            registration.active?.state === "activated";
+          if ((hasNewVersion || latestPublished) && !activated && !activatedInAnotherTab)
+            throw new Error(
+              "A nova versão ainda não está pronta. Aguarde alguns instantes e tente novamente.",
+            );
+          if (
+            (activated || activatedInAnotherTab) &&
+            registration.active &&
+            navigator.serviceWorker.controller !== registration.active
+          )
+            await waitForAppWorkerControl(registration.active, navigator.serviceWorker);
+        }
+      }
+      if (automatic) {
+        if (!(await automaticReloadIsSafe(user?.id))) return;
+      }
+      // The next page confirms it actually loaded the target compiled version.
+      // Never clear IndexedDB, offline queues, preferences or registrations.
+      try {
+        if (pendingUpdateKey)
+          window.sessionStorage.setItem(
+            pendingUpdateKey,
+            JSON.stringify({ id: targetVersion, attempts: 0, automatic }),
+          );
+        if (automatic) window.sessionStorage.setItem(autoAttemptKey, targetVersion);
+      } catch {
+        /* Still allow the verified reload. */
+      }
+      window.location.reload();
+    } catch (error) {
+      if (!automatic) setUpdateError(
+        error instanceof Error && !(error instanceof TypeError)
+          ? error.message
+          : "Não foi possível baixar a atualização. Verifique sua conexão e tente novamente.",
+      );
+    } finally {
+      setRefreshing(false);
+      updateInstallationRunning = false;
+    }
+  }, [storageKey, refreshing, checking, updates, isAdmin, activeWorkspace?.slug, hasNewVersion, pendingUpdateKey, user?.id, remoteRelease?.id, UPDATE_VERSION]);
+
+  useEffect(() => {
+    if (!canSeeUpdates || !hasNewVersion || open) return;
+    const tryAutomaticUpdate = () => void updateApplication(true);
+    const timer = window.setInterval(tryAutomaticUpdate, 15_000);
+    const start = window.setTimeout(tryAutomaticUpdate, 2_000);
+    window.addEventListener("focus", tryAutomaticUpdate);
+    window.addEventListener("online", tryAutomaticUpdate);
+    return () => {
+      window.clearInterval(timer);
+      window.clearTimeout(start);
+      window.removeEventListener("focus", tryAutomaticUpdate);
+      window.removeEventListener("online", tryAutomaticUpdate);
+    };
+  }, [canSeeUpdates, hasNewVersion, open, updateApplication]);
+
+  if (!canSeeUpdates) return null;
+  const updateButton = (
+    <Button
+      type="button"
+      className="gap-2"
+      onClick={() => void updateApplication()}
+      disabled={refreshing || checking}
+    >
+      <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+      {refreshing ? "Atualizando…" : "Atualizar agora"}
+    </Button>
+  );
+
+  const updateDetails = (update: AppUpdate, pending: boolean) => (
+    <>
+      <AppUpdatePreview kind={update.preview} />
+      <div className="space-y-2 rounded-lg bg-muted/35 p-3 text-sm leading-6 text-muted-foreground">
+        {update.details.map((paragraph) => (
+          <p key={paragraph}>{paragraph}</p>
+        ))}
+      </div>
+      {pending ? (
+        <div className="rounded-xl border border-primary/20 bg-primary/[0.05] p-4">
+          <p className="text-sm font-medium">
+            Atualize para carregar esta versão no seu navegador.
+          </p>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+          <CheckCircle2 className="h-4 w-4 shrink-0" /> Esta versão está instalada neste navegador.
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <>
+      {showUpdatePrompt && !open ? (
+        <div
+          className="fixed inset-x-3 top-14 z-[70] animate-in slide-in-from-top-2 fade-in md:left-auto md:right-4 md:w-[380px]"
+          role="status"
+        >
+          <div className="rounded-2xl border border-primary/25 bg-background p-4 shadow-xl">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">Nova versão disponível</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  O TaskFlow atualizará esta página automaticamente quando não houver edição
+                  em andamento nem dados aguardando sincronização.
+                </p>
+                <Button type="button" size="sm" className="mt-3" onClick={openPendingUpdate}>
+                  Ver atualizações
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <Button
+        type="button"
+        variant={hasUpdate ? "default" : "outline"}
+        size="sm"
+        onClick={openPendingUpdate}
+        className={`relative h-9 gap-2 rounded-full px-3 text-sm ${hasUpdate ? "animate-pulse shadow-[0_0_0_4px_hsl(var(--primary)/0.14)]" : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"}`}
+        title={
+          hasUpdate
+            ? "Há uma atualização disponível"
+            : isCurrent
+              ? "Este navegador está na versão atual"
+              : "Versão instalada; abra para verificar atualizações"
+        }
+      >
+        {hasUpdate ? <Sparkles className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+        <span className="hidden lg:inline">
+          {hasUpdate ? "Novas atualizações" : isCurrent ? "Versão atual" : "Versão instalada"}
+        </span>
+        {hasUpdate && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
+          </span>
+        )}
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto p-0 sm:rounded-3xl">
+          <div className="border-b bg-gradient-to-br from-primary/[0.1] via-background to-cyan-500/[0.08] px-6 pb-5 pt-6">
+            <DialogHeader>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">
+                  <History className="h-3.5 w-3.5" /> Histórico de atualizações
+                </span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {activeWorkspace?.name}
+                </span>
+              </div>
+              <DialogTitle className="pt-3 text-2xl">Novas atualizações</DialogTitle>
+              <DialogDescription className="leading-6">
+                Veja o que mudou no TaskFlow. A nova versão será instalada automaticamente quando
+                for seguro recarregar esta página.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="space-y-6 px-6 py-5">
+            <div className="space-y-2">
+              {updateButton}
+              {checking ? (
+                <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  Verificando novas atualizações…
+                </p>
+              ) : null}
+              {checkMessage ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {checkMessage}
+                </p>
+              ) : null}
+              {updateError ? (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                >
+                  {updateError}
+                </p>
+              ) : null}
+            </div>
+            {hasUpdate ? (
+              <section className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                  Atualizações pendentes
+                </p>
+                <ReleaseSection
+                  title={
+                    hasNewVersion
+                      ? (remoteRelease?.title ?? "Nova versão do TaskFlow")
+                      : latestUpdate.title
+                  }
+                  date={formatAppUpdateDate(remoteRelease?.date ?? latestUpdate.date)}
+                  defaultOpen
+                  status={<Sparkles className="h-4 w-4" />}
+                >
+                  {hasNewVersion ? (
+                    <>
+                      <AppUpdatePreview kind="update-flow" />
+                      <p className="text-sm leading-6 text-muted-foreground">
+                        Uma versão mais recente está disponível. Atualize para carregar as novidades
+                        e suas miniaturas. A página só será recarregada depois que a nova versão
+                        estiver pronta.
+                      </p>
+                    </>
+                  ) : (
+                    updateDetails(latestUpdate, true)
+                  )}
+                </ReleaseSection>
+              </section>
+            ) : null}
+
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Atualizações instaladas neste navegador
+              </p>
+              <div className="space-y-3">
+                {!hasReleaseUpdate || hasNewVersion ? (
+                  <ReleaseSection
+                    title={latestUpdate.title}
+                    date={formatAppUpdateDate(latestUpdate.date)}
+                    defaultOpen
+                    status={<CheckCircle2 className="h-4 w-4" />}
+                    updated={isCurrent}
+                  >
+                    {updateDetails(latestUpdate, false)}
+                  </ReleaseSection>
+                ) : null}
+
+                {updates.slice(1).map((update) => (
+                  <ReleaseSection
+                    key={update.id}
+                    title={update.title}
+                    date={formatAppUpdateDate(update.date)}
+                    status={<CheckCircle2 className="h-4 w-4" />}
+                  >
+                    {updateDetails(update, false)}
+                  </ReleaseSection>
+                ))}
+
+                {hasUpdate && !isAdmin ? (
+                  <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
+                    As atualizações aparecerão aqui em verde depois de instaladas neste navegador.
+                  </p>
+                ) : null}
+              </div>
+            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
