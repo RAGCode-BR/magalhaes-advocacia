@@ -1505,7 +1505,11 @@ function MagalhaesDirectUsersPreview() {
 function MagalhaesTaskNeonPreview() {
   return <PreviewGrid label="Prévia da criação de tarefa atribuída no Neon"><div className="mx-auto w-full max-w-xs rounded-xl border bg-background p-4 text-xs"><strong>Nova tarefa</strong><div className="mt-3 rounded border p-2">Revisar documento</div><div className="mt-2 rounded border p-2">Responsável · Usuário de exemplo</div><div className="mt-2 rounded border p-2">Prazo definido</div><div className="mt-3 flex items-center gap-2 rounded bg-primary/10 p-2 text-primary"><CheckCircle2 className="h-4 w-4" /> Tarefa salva no Neon</div></div></PreviewGrid>;
 }
+function MagalhaesClientSinglePreview() {
+  return <PreviewGrid label="Prévia do cadastro único de cliente"><div className="mx-auto w-full max-w-sm rounded-xl border bg-background p-4 text-xs"><strong>Clientes ativos</strong><div className="mt-3 flex items-center gap-3 rounded-lg border p-3"><span className="h-8 w-8 rounded-full bg-primary" /><div><p className="font-semibold">Cliente de exemplo</p><p className="mt-1 text-muted-foreground">Um único cadastro</p></div><CheckCircle2 className="ml-auto h-5 w-5 text-primary" /></div><p className="mt-3 text-muted-foreground">Criar e editar sem gerar uma segunda cópia.</p></div></PreviewGrid>;
+}
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-client-single": MagalhaesClientSinglePreview,
   "magalhaes-task-neon": MagalhaesTaskNeonPreview,
   "magalhaes-direct-users": MagalhaesDirectUsersPreview,
   "magalhaes-password": MagalhaesPasswordPreview,

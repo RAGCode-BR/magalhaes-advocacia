@@ -18,6 +18,12 @@ Google Calendar/Meet e IA dependem de serviços e credenciais próprias no servi
 - `node scripts/test-neon-http.mjs`: criação de login pelo administrador, login com a senha inicial, CRUD, troca da própria senha, rejeição da senha antiga e de acesso não autorizado. Usa o administrador de ACESSO-ONLINE.local e remove a identidade descartável ao fim.
 - `npm test` e `npm run build:pages`.
 
-`neon/schema.sql` é um dump somente da estrutura pública da instalação local independente, sem dados, permissões ou identidades da consultoria. `access.sql`, `files.sql`, `users.sql`, `identity.sql`, `hardening.sql`, `defaults.sql`, `password-login.sql` e `direct-users.sql` contêm a adaptação Neon aplicada na ordem indicada.
+`neon/schema.sql` é um dump somente da estrutura pública da instalação local independente, sem dados, permissões ou identidades da consultoria. `access.sql`, `files.sql`, `users.sql`, `identity.sql`, `hardening.sql`, `defaults.sql`, `password-login.sql`, `direct-users.sql` e `no-client-mirror.sql` contêm a adaptação Neon aplicada na ordem indicada.
 
 O ambiente local anterior continua disponível com `npm run local`. Para usar Neon ao desenvolver, configure `VITE_NEON_URL` em um arquivo `.local`; essa opção tem prioridade sobre Supabase local.
+
+## Clientes e espelhamento
+
+Esta instalação tem somente o ambiente Consultoria. O trigger herdado `trg_sync_consultoria_client_to_marketing` foi removido: sem o workspace Marketing, a atribuição automática de ambiente fazia a cópia voltar para Consultoria. A migração local equivalente está em `supabase/migrations/20261021140000_magalhaes_disable_client_mirror.sql`.
+
+`node scripts/test-neon-clients.mjs` testa a criação pela API com o cliente real do aplicativo e verifica que criar, editar, arquivar e restaurar mantêm exatamente uma linha. O registro de teste é removido ao final. A correção não impõe unicidade por nome; empresas distintas podem ter nomes iguais.

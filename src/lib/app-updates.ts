@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-client-single"
   | "magalhaes-task-neon"
   | "magalhaes-direct-users"
   | "magalhaes-password"
@@ -68,6 +69,11 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-clientes-unicos-2026-10-21", title: "Clientes sem duplicação automática",
+    date: "2026-10-21", preview: "magalhaes-client-single", audience: "all", workspaces: ["consultoria"],
+    details: ["Removida a regra herdada que gerava uma cópia de cada cliente no mesmo ambiente.", "Criar ou editar um cliente mantém um único cadastro. Cópias automáticas idênticas e sem vínculos foram arquivadas; os originais foram preservados."],
+  },
   {
     id: "magalhaes-tarefas-neon-2026-10-21", title: "Tarefas conectadas ao Neon",
     date: "2026-10-21", preview: "magalhaes-task-neon", audience: "all", workspaces: ["consultoria"],
