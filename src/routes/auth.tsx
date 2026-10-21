@@ -238,7 +238,7 @@ function AuthPage() {
                     <Input
                       id="password"
                       type="password"
-                      autoComplete="current-password"
+                      autoComplete={register ? "new-password" : "current-password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
