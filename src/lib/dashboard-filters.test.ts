@@ -28,6 +28,16 @@ const tasks = [
 describe("dashboard filters", () => {
   afterEach(() => vi.useRealTimers());
 
+  it("includes undated imported processes in the complete inventory", () => {
+    const inventory = [
+      ...tasks,
+      { id: "imported-without-deadline", due_date: null, completed_at: null, status: "todo", assignee_id: null },
+    ];
+    expect(applyDashboardFilters(inventory, {
+      period: "all", customPeriod: null, status: "all", assignee: "all",
+    }).map(task => task.id)).toEqual(inventory.map(task => task.id));
+  });
+
   it("keeps date-only deadlines on the correct day in Brasília", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-15T12:00:00-03:00"));

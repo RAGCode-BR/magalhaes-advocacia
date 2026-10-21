@@ -442,9 +442,9 @@ function Dashboard() {
   const tasks = tasksQuery.data ?? EMPTY_TASKS;
   const clients = clientsQuery.data ?? EMPTY_CLIENTS;
   const assignableProfiles = assignableProfilesQuery.data ?? EMPTY_PROFILES;
-  // O painel sempre começa no mês vigente. A própria opção "Todas" permite
-  // consultar o histórico quando necessário.
-  const [filter, setFilter] = useState<DateFilter>("this_month");
+  // Start with the complete process inventory, including imported work without
+  // deadlines. A month filter is optional and must not hide it on first load.
+  const [filter, setFilter] = useState<DateFilter>("all");
   const [statusFilter, setStatusFilter] = useState<DashboardStatusFilter>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<DashboardAssigneeFilter>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -577,7 +577,7 @@ function Dashboard() {
   const details = useMemo<Record<DashboardMetric, Detail>>(
     () => ({
       total: {
-        label: "Total de tarefas",
+        label: activeWorkspace?.slug === "consultoria" ? "Total de processos" : "Total de tarefas",
         description: customPeriod
           ? `Tarefas com prazo de ${format(parseISO(customPeriod.start), "dd/MM/yyyy", { locale: ptBR })} até ${format(parseISO(customPeriod.end), "dd/MM/yyyy", { locale: ptBR })}.`
           : filter === "this_month"
@@ -638,7 +638,7 @@ function Dashboard() {
         prioritizeOpen: true,
       },
     }),
-    [filtered],
+    [filtered, customPeriod, filter, activeWorkspace?.slug],
   );
 
   const toggleDetail = (metric: DashboardMetric) => {
@@ -1625,7 +1625,7 @@ function Dashboard() {
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat
-          label="Total de tarefas"
+          label={activeWorkspace?.slug === "consultoria" ? "Total de processos" : "Total de tarefas"}
           value={stats.total}
           icon={ListTodo}
           color="#2563eb"
