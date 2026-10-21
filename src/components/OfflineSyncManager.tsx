@@ -1,3 +1,4 @@
+import { syncTaskAttachmentToClient } from "@/lib/sync-task-attachment-to-client";
 import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -269,6 +270,14 @@ async function syncOperation(client: SyncClient, operation: OfflineOperation) {
     const { error: insertError } = await (client.from(String(operation.payload.table) as any) as any)
       .upsert(attachment, { onConflict: "id", ignoreDuplicates: true });
     if (insertError) throw insertError;
+    if (operation.payload.table === "attachments" && attachment.task_id) {
+      await syncTaskAttachmentToClient({
+        client,
+        file: new File([blob], String(attachment.file_name), { type: String(attachment.mime_type || "application/octet-stream") }),
+        taskId: String(attachment.task_id), sourceAttachmentId: String(attachment.id ?? operation.entityId),
+        sourceStoragePath: String(attachment.storage_path), uploadedBy: String(attachment.uploaded_by || operation.userId),
+      });
+    }
     return false;
   }
 

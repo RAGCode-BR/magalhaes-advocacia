@@ -13,6 +13,7 @@ try {
   for (const file of [
     "access",
     "files",
+    "file-download-chunks",
     "users",
     "identity",
     "hardening",

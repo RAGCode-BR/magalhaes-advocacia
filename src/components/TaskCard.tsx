@@ -1,3 +1,4 @@
+import { LazyAttachmentThumbnail } from "@/components/LazyAttachmentThumbnail";
 import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -296,18 +297,7 @@ export function TaskCard({
       const list = (data ?? []) as Attachment[];
       setAttachments(list);
 
-      const next: Record<string, string> = {};
-      await Promise.all(
-        list
-          .filter((a) => a.mime_type !== LINK_MIME && (a.mime_type?.startsWith("image/") ?? false))
-          .map(async (a) => {
-            const { data: signed } = await supabase.storage
-              .from("task-attachments")
-              .createSignedUrl(a.storage_path, 3600);
-            if (signed) next[a.id] = signed.signedUrl;
-          }),
-      );
-      if (!cancelled) setThumbs(next);
+
     })();
     return () => {
       cancelled = true;
@@ -336,12 +326,7 @@ export function TaskCard({
               ? existing
               : [...existing, attachment],
           );
-          if (attachment.mime_type !== LINK_MIME && attachment.mime_type?.startsWith("image/")) {
-            const { data: signed } = await supabase.storage
-              .from("task-attachments")
-              .createSignedUrl(attachment.storage_path, 3600);
-            if (signed) setThumbs((c) => ({ ...c, [attachment.id]: signed.signedUrl }));
-          }
+
         },
       )
       .on(
@@ -1928,7 +1913,7 @@ export function TaskCard({
                           key={a.id}
                           className="group/att relative aspect-square overflow-hidden rounded border bg-muted"
                         >
-                          {isImage && thumbs[a.id] ? (
+                          {isImage ? (
                             <button
                               type="button"
                               onPointerDown={stop}
@@ -1938,11 +1923,7 @@ export function TaskCard({
                               }}
                               className="block h-full w-full"
                             >
-                              <img
-                                src={thumbs[a.id]}
-                                alt={a.file_name}
-                                className="h-full w-full object-cover"
-                              />
+                              <LazyAttachmentThumbnail path={a.storage_path} name={a.file_name} initialSrc={thumbs[a.id]} />
                             </button>
                           ) : (
                             <button

@@ -1,3 +1,4 @@
+import { LazyAttachmentThumbnail } from "@/components/LazyAttachmentThumbnail";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
@@ -54,7 +55,6 @@ export function ClientFilesManager({
   const { data: profiles = [] } = useProfiles();
   const [selectedUploaderIds, setSelectedUploaderIds] = useState<string[]>([]);
   const [files, setFiles] = useState<ClientFile[]>([]);
-  const [urls, setUrls] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<PreviewableAttachment | null>(null);
   const loadRequestRef = useRef(0);
@@ -87,7 +87,6 @@ export function ClientFilesManager({
   const load = async (uploaderIds: string[]) => {
     if (!user?.id) {
       setFiles([]);
-      setUrls({});
       return;
     }
     const requestId = ++loadRequestRef.current;
@@ -111,16 +110,7 @@ export function ClientFilesManager({
     }
     const list = (data ?? []) as ClientFile[];
     setFiles(list);
-    const nextUrls: Record<string, string> = {};
-    await Promise.all(
-      list.map(async (file) => {
-        const { data: signed } = await supabase.storage
-          .from("task-attachments")
-          .createSignedUrl(file.storage_path, 3600);
-        if (signed) nextUrls[file.id] = signed.signedUrl;
-      }),
-    );
-    if (requestId === loadRequestRef.current) setUrls(nextUrls);
+
   };
 
   useEffect(() => {
@@ -220,10 +210,7 @@ export function ClientFilesManager({
         setFiles((current) =>
           current.some((item) => item.id === savedFile.id) ? current : [...current, savedFile],
         );
-        const { data: signed } = await supabase.storage
-          .from("task-attachments")
-          .createSignedUrl(path, 3600);
-        if (signed) setUrls((current) => ({ ...current, [savedFile.id]: signed.signedUrl }));
+
 
         uploadedCount += 1;
         nextPosition += 1;
@@ -254,6 +241,7 @@ export function ClientFilesManager({
 
   const saveTitle = async (file: ClientFile, title: string) => {
     const normalizedTitle = title.trim() || file.file_name;
+    if (normalizedTitle === (file.title || file.file_name)) return;
     setFiles((current) =>
       current.map((item) => (item.id === file.id ? { ...item, title: normalizedTitle } : item)),
     );
@@ -318,16 +306,7 @@ export function ClientFilesManager({
   };
 
   const openFile = (file: ClientFile) => {
-    if (canPreviewAttachment(file.file_name, file.mime_type)) {
-      setPreview({
-        file_name: file.title || file.file_name,
-        storage_path: file.storage_path,
-        mime_type: file.mime_type,
-      });
-      return;
-    }
-    const url = urls[file.id];
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
+    setPreview({ file_name: file.file_name, storage_path: file.storage_path, mime_type: file.mime_type });
   };
 
   return (
@@ -489,12 +468,8 @@ export function ClientFilesManager({
                   className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted text-muted-foreground"
                   title={file.file_name}
                 >
-                  {isImage && urls[file.id] ? (
-                    <img
-                      src={urls[file.id]}
-                      alt={file.file_name}
-                      className="h-full w-full object-cover"
-                    />
+                  {isImage ? (
+                    <LazyAttachmentThumbnail path={file.storage_path} name={file.file_name} />
                   ) : canPreview ? (
                     <FileText className="h-5 w-5" />
                   ) : (

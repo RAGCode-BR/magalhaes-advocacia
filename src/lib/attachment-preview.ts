@@ -12,6 +12,6 @@ export function canPreviewAttachment(fileName: string, mimeType: string | null) 
     mime.startsWith("text/") ||
     mime.includes("pdf") ||
     mime.includes("json") ||
-    ["docx", "xlsx", "xlsm", "csv"].includes(extension)
+    ["pdf", "docx", "xlsx", "xlsm", "csv"].includes(extension)
   );
 }

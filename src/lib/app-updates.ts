@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-client-files-fast"
   | "magalhaes-all-tasks"
   | "magalhaes-active-nav"
   | "magalhaes-client-single"
@@ -71,6 +72,11 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-anexos-clientes-rapidos-2026-10-21", title: "Documentos mais leves e vinculados ao cliente",
+    date: "2026-10-21", preview: "magalhaes-client-files-fast", audience: "all", workspaces: ["consultoria"],
+    details: ["A lista de anexos não baixa todos os documentos: o arquivo é carregado ao abrir e as imagens apenas quando entram na tela.", "Documentos maiores são transferidos por partes para respeitar o limite da API.", "Reabrir o mesmo documento reaproveita o carregamento por um curto período, dentro da mesma sessão.", "Os anexos importados também aparecem no cadastro do cliente. O envio de arquivos nas tarefas mantém esse vínculo, inclusive após a sincronização offline."],
+  },
   {
     id: "magalhaes-minhas-tarefas-clientes-2026-10-21", title: "Cards dos clientes em Minhas Tarefas",
     date: "2026-10-21", preview: "magalhaes-all-tasks", audience: "all", workspaces: ["consultoria"],

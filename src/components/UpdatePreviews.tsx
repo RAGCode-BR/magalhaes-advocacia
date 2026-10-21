@@ -1514,7 +1514,11 @@ function MagalhaesActiveNavPreview() {
 function MagalhaesAllTasksPreview() {
   return <PreviewGrid label="Prévia dos cards dos clientes em Minhas Tarefas"><div className="rounded-xl border bg-background p-4 text-xs"><strong>Minhas Tarefas</strong><p className="mt-2 rounded bg-primary p-2 text-primary-foreground">Todas</p><div className="mt-3 rounded-lg border p-3"><strong>Regularização de imóvel</strong><p className="mt-2 text-muted-foreground">Cliente de exemplo</p><p className="mt-2">Descrição · Subtarefas · Conversa · Arquivos</p></div></div><div className="rounded-xl border bg-background p-4 text-xs"><strong>Documentos dentro do card</strong><p className="mt-3 rounded bg-muted p-2">Documento de exemplo.pdf</p><p className="mt-3 text-muted-foreground">Os cards sem responsável também aparecem para o administrador.</p></div></PreviewGrid>;
 }
+function MagalhaesClientFilesFastPreview() {
+  return <PreviewGrid label="Prévia de documentos vinculados à tarefa e ao cliente"><div className="rounded-xl border bg-background p-4 text-xs"><strong>Tarefa · Revisar documentação</strong><p className="mt-2 text-muted-foreground">Cliente de exemplo</p><p className="mt-3 rounded border p-2">Documento.pdf · Abrir</p><p className="mt-3 text-muted-foreground">Carrega o documento escolhido.</p></div><div className="rounded-xl border bg-background p-4 text-xs"><strong>Cadastro do cliente → Anexos</strong><p className="mt-3 rounded border p-2">Documento.pdf · Abrir</p><p className="mt-3 text-primary">O mesmo arquivo, vinculado ao cliente.</p></div></PreviewGrid>;
+}
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-client-files-fast": MagalhaesClientFilesFastPreview,
   "magalhaes-all-tasks": MagalhaesAllTasksPreview,
   "magalhaes-active-nav": MagalhaesActiveNavPreview,
   "magalhaes-client-single": MagalhaesClientSinglePreview,

@@ -1,3 +1,5 @@
+import { readNeonFile } from "./neon-file-transfer";
+import { createNeonFileLoader } from "./neon-file-loader";
 import { hashPassword } from "@better-auth/utils/password";
 import { createClient, SupabaseAuthAdapter } from "@neondatabase/neon-js";
 
@@ -17,20 +19,20 @@ export function createNeonBrowserClient(url: string, accessToken?: string) {
   const avatarUrls = new Map<string, string>();
   const channels = new Set<{ unsubscribe: () => void }>();
   const failed = (message: string) => ({ data: null, error: new Error(message) });
+  const fileLoader = createNeonFileLoader((bucket, path) =>
+    readNeonFile((name, args) => client.rpc(name, args), bucket, path),
+  );
+  if (!accessToken) {
+    let identity: string | null | undefined;
+    (client as any).auth.onAuthStateChange((event: string, session: any) => {
+      const next = session?.user?.id ?? null;
+      if (event === "SIGNED_OUT" || (identity !== undefined && identity !== next)) fileLoader.clear();
+      identity = next;
+    });
+  }
   const storage = {
     from(bucket: string) {
-      const download = async (path: string) => {
-        const { data, error } = await client.rpc("neon_file_download", { bucket, path });
-        if (error) return { data: null, error };
-        if (!data) return failed("Arquivo não encontrado ou acesso não permitido.");
-        const bytes = Uint8Array.from(atob(data.content.replace(/\s/g, "")), (c) =>
-          c.charCodeAt(0),
-        );
-        return {
-          data: new Blob([bytes], { type: data.mime || "application/octet-stream" }),
-          error: null,
-        };
-      };
+      const download = (path: string) => fileLoader.download(bucket, path);
       const signed = async (path: string, seconds = 3600) => {
         const result = await download(path);
         if (result.error || !result.data) return { data: null, error: result.error };
@@ -58,11 +60,16 @@ export function createNeonBrowserClient(url: string, accessToken?: string) {
             mime: options?.contentType || file.type,
             overwrite: Boolean(options?.upsert),
           });
+          if (!result.error) fileLoader.clear();
           if (!result.error && bucket === "profile-avatars") avatarUrls.set(path, content);
           return result;
         },
         download,
-        remove: (paths: string[]) => client.rpc("neon_file_remove", { bucket, paths }),
+        async remove(paths: string[]) {
+          const result = await client.rpc("neon_file_remove", { bucket, paths });
+          if (!result.error) fileLoader.clear();
+          return result;
+        },
         createSignedUrl: signed,
         async createSignedUrls(paths: string[], seconds: number) {
           const results = await Promise.all(paths.map((path) => signed(path, seconds)));

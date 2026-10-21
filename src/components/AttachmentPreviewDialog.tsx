@@ -100,7 +100,7 @@ export function AttachmentPreviewDialog({
   const isImage = mime.startsWith("image/");
   const isVideo = mime.startsWith("video/");
   const isAudio = mime.startsWith("audio/");
-  const isPdf = mime === "application/pdf" || mime.includes("pdf");
+  const isPdf = extension === "pdf" || mime === "application/pdf" || mime.includes("pdf");
   const isDocx =
     extension === "docx" ||
     mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -123,27 +123,26 @@ export function AttachmentPreviewDialog({
     setSelectedSheetIndex(0);
 
     void (async () => {
-      const { data, error: downloadError } = await supabase.storage
-        .from(bucket)
-        .download(attachment.storage_path);
-      if (!active) return;
-      if (downloadError) {
-        setError(downloadError.message);
-        setLoading(false);
-        return;
+      try {
+        const { data, error: downloadError } = await supabase.storage.from(bucket).download(attachment.storage_path);
+        if (!active) return;
+        if (downloadError || !data) throw downloadError ?? new Error("Arquivo não encontrado.");
+        const blob = isPdf && data.type !== "application/pdf" ? new Blob([data], { type: "application/pdf" }) : data;
+        nextBlobUrl = URL.createObjectURL(blob);
+        setFileBlob(blob);
+        setBlobUrl(nextBlobUrl);
+      } catch (downloadError) {
+        if (active) setError(downloadError instanceof Error ? downloadError.message : "Não foi possível carregar o arquivo.");
+      } finally {
+        if (active) setLoading(false);
       }
-
-      nextBlobUrl = URL.createObjectURL(data);
-      setFileBlob(data);
-      setBlobUrl(nextBlobUrl);
-      setLoading(false);
     })();
 
     return () => {
       active = false;
       if (nextBlobUrl) URL.revokeObjectURL(nextBlobUrl);
     };
-  }, [open, attachment, bucket]);
+  }, [open, attachment, bucket, isPdf]);
 
   useEffect(() => {
     if (!fileBlob || !isDocx) return;

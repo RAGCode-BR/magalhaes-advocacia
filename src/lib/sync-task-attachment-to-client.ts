@@ -19,6 +19,7 @@ export async function syncTaskAttachmentToClient({
   sourceStoragePath,
   uploadedBy,
   contentType = file.type || "application/octet-stream",
+  client = supabase,
 }: {
   file: File;
   taskId: string;
@@ -26,8 +27,9 @@ export async function syncTaskAttachmentToClient({
   sourceStoragePath: string;
   uploadedBy: string;
   contentType?: string;
+  client?: typeof supabase;
 }): Promise<SyncedClientFile | null> {
-  const { data: task, error: taskError } = await supabase
+  const { data: task, error: taskError } = await client
     .from("tasks")
     .select("client_id")
     .eq("id", taskId)
@@ -35,7 +37,12 @@ export async function syncTaskAttachmentToClient({
   if (taskError) throw taskError;
   if (!task.client_id) return null;
 
-  const { data, error: insertError } = await supabase
+  const { data: existing, error: existingError } = await client
+    .from("client_files").select("id").eq("source_attachment_id", sourceAttachmentId).maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) return { id: existing.id, storagePath: sourceStoragePath };
+
+  const { data, error: insertError } = await client
     .from("client_files")
     .insert({
       client_id: task.client_id,
@@ -50,7 +57,13 @@ export async function syncTaskAttachmentToClient({
     .select("id")
     .single();
 
-  if (insertError) throw insertError;
+  if (insertError) {
+    if (insertError.code === "23505") {
+      const { data: saved, error } = await client.from("client_files").select("id").eq("source_attachment_id", sourceAttachmentId).single();
+      if (!error && saved) return { id: saved.id, storagePath: sourceStoragePath };
+    }
+    throw insertError;
+  }
 
   return { id: data.id, storagePath: sourceStoragePath };
 }
