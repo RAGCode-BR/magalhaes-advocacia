@@ -176,7 +176,7 @@ function AccessForm({
         >
           <option value="collaborator">Colaborador</option>
           {!marketingOnly && <option value="client">Cliente</option>}
-          {!marketingOnly && (!isNeonDatabase || value.role === "admin") && (
+          {!marketingOnly && (
             <option value="admin">Administrador</option>
           )}
         </select>

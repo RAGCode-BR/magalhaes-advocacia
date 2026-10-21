@@ -20,6 +20,7 @@ try {
     "defaults",
     "password-login",
     "direct-users",
+    "additional-admins",
     "no-client-mirror",
   ])
     await db.query(readFileSync(`neon/${file}.sql`, "utf8"));

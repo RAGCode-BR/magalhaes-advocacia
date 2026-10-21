@@ -10,7 +10,6 @@ BEGIN
   IF coalesce(data->>'passwordHash','') !~ '^[0-9a-f]{32}:[0-9a-f]{128}$' THEN RAISE EXCEPTION 'Informe uma senha inicial válida.'; END IF;
   IF EXISTS(SELECT 1 FROM neon_auth."user" WHERE lower(email)=email_address) THEN RAISE EXCEPTION 'Este e-mail já possui acesso.'; END IF;
   requested_role:=coalesce(data->>'role','collaborator')::public.app_role;
-  IF requested_role='admin' THEN RAISE EXCEPTION 'O administrador inicial é exclusivo do titular.'; END IF;
   IF requested_role='client' AND NOT EXISTS(SELECT 1 FROM public.clients WHERE id=nullif(data->>'clientId','')::uuid AND workspace_id=w) THEN RAISE EXCEPTION 'Selecione um cliente deste ambiente.'; END IF;
   -- Only the administrator can enter here. Use the existing provisioning triggers,
   -- and never store plaintext passwords or password hashes in pending settings.
@@ -26,7 +25,6 @@ BEGIN
   IF length(coalesce(data->>'password',''))>0 THEN RAISE EXCEPTION 'A senha deve ser alterada pelo próprio usuário usando a recuperação de acesso.'; END IF;
   requested_role:=coalesce(data->>'role','collaborator')::public.app_role;
   IF target=public.neon_uid() AND requested_role<>'admin' THEN RAISE EXCEPTION 'Mantenha seu acesso de administrador.'; END IF;
-  IF target<>public.neon_uid() AND requested_role='admin' THEN RAISE EXCEPTION 'O administrador inicial é exclusivo do titular.'; END IF;
   SELECT coalesce(array_agg(value),ARRAY[]::text[]) INTO perms FROM jsonb_array_elements_text(coalesce(data->'permissions','[]'::jsonb));
   UPDATE public.profiles SET full_name=coalesce(data->>'fullName',full_name) WHERE id=target;
   DELETE FROM public.user_roles WHERE user_id=target; INSERT INTO public.user_roles VALUES(gen_random_uuid(),target,requested_role);
