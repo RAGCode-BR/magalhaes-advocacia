@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-clean-documents"
   | "magalhaes-client-files-fast"
   | "magalhaes-all-tasks"
   | "magalhaes-active-nav"
@@ -72,6 +73,11 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-documentos-sem-backups-2026-10-21", title: "Anexos somente com documentos de trabalho",
+    date: "2026-10-21", preview: "magalhaes-clean-documents", audience: "all", workspaces: ["consultoria"],
+    details: ["As exportações técnicas Trello-original-cartao não aparecem mais nos anexos das tarefas e dos clientes.", "Os documentos originais continuam disponíveis. As cópias técnicas foram preservadas separadamente no backup privado da migração."],
+  },
   {
     id: "magalhaes-anexos-clientes-rapidos-2026-10-21", title: "Documentos mais leves e vinculados ao cliente",
     date: "2026-10-21", preview: "magalhaes-client-files-fast", audience: "all", workspaces: ["consultoria"],
