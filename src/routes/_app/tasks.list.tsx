@@ -50,7 +50,7 @@ function ListPage() {
   const search = Route.useSearch();
   const { user, isAdmin, isCollaborator, activeWorkspace, workspaces, loading: authLoading } = useAuth();
   const [filters, setFilters] = useState<TaskFilterValue>(() =>
-    search.mine
+    search.mine || activeWorkspace?.slug === "consultoria"
       ? { scope: "mine" }
       : defaultsToOwnScope(user?.id)
         ? { scope: "mine" }
@@ -82,8 +82,11 @@ function ListPage() {
 
   useEffect(() => {
     if (authLoading || !user?.id) return;
-    if (isAdmin && activeWorkspace?.slug === "consultoria") {
-      didApplyDefaultAssignee.current = true;
+    if (activeWorkspace?.slug === "consultoria") {
+      if (!didApplyDefaultAssignee.current) {
+        setFilters((current) => ({ ...current, scope: "mine", assignee: undefined }));
+        didApplyDefaultAssignee.current = true;
+      }
       return;
     }
     if (defaultsToOwnScope(user.id)) {

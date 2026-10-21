@@ -20,6 +20,15 @@ const task = (id: string, assignee_id: string | null = null) => ({
 });
 
 describe("applyTaskFilters: tarefas da pessoa", () => {
+  it("separates personal assignments from unassigned imported work", () => {
+    const rows = [
+      { ...task("imported", null), created_by: USER },
+      task("mine", USER), task("other", OTHER),
+    ];
+    expect(applyTaskFilters(rows, { scope: "mine" }, { userId: USER }).map(row => row.id)).toEqual(["mine"]);
+    expect(applyTaskFilters(rows, { assignee: "unassigned" }, { userId: USER }).map(row => row.id)).toEqual(["imported"]);
+  });
+
   it("starts Carol on her own Marketing work, including subtasks, without removing team access", () => {
     const carol = "3a93e438-1f3f-42f9-aea4-d22d227e1ea1";
     const tasks = [

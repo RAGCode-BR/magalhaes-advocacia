@@ -208,9 +208,9 @@ export function TaskFilters({
 
   return (
     <div className="flex w-full min-w-0 flex-wrap items-center gap-3 sm:w-auto">
-      <div className="flex w-full min-w-0 rounded-full border bg-muted/40 p-0.5 sm:inline-flex sm:w-auto sm:flex-wrap">
+      <div className="flex w-full min-w-0 flex-wrap rounded-2xl border bg-muted/40 p-0.5 sm:inline-flex sm:w-auto sm:rounded-full">
         <ScopeBtn
-          active={scope === "all"}
+          active={scope === "all" && !filters.assignee}
           onClick={() => onChange({ ...filters, scope: undefined, assignee: undefined })}
           icon={<Users className="h-4 w-4" />}
         >
@@ -230,6 +230,15 @@ export function TaskFilters({
         >
           Criadas por mim
         </ScopeBtn>
+        {!hideAssignee && (
+          <ScopeBtn
+            active={filters.assignee === UNASSIGNED_FILTER}
+            onClick={() => onChange({ ...filters, scope: undefined, assignee: UNASSIGNED_FILTER })}
+            icon={<Users className="h-4 w-4" />}
+          >
+            Sem responsável
+          </ScopeBtn>
+        )}
       </div>
       <Popover open={panelOpen} onOpenChange={setPanelOpen}>
         <PopoverTrigger asChild>
@@ -355,7 +364,7 @@ export function TaskFilters({
                   <Select
                     value={filters.assignee ?? "all"}
                     onValueChange={(value) =>
-                      onChange({ ...filters, assignee: value === "all" ? undefined : value })
+                      onChange({ ...filters, scope: undefined, assignee: value === "all" ? undefined : value })
                     }
                   >
                     <SelectTrigger className="h-8 w-full">

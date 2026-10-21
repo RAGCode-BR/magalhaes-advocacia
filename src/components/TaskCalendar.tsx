@@ -88,7 +88,7 @@ export function CalendarPage({ clientCalendar = false, clientId }: { clientCalen
   const { user, isCollaborator, isClient, activeWorkspace, workspaces } = useAuth();
   const queryClient = useQueryClient();
   const [viewFilters, setFilters] = useState<TaskFilterValue>(() =>
-    clientCalendar ? {} : defaultsToOwnScope(user?.id)
+    clientCalendar ? {} : activeWorkspace?.slug === "consultoria" || defaultsToOwnScope(user?.id)
       ? { scope: "mine" }
       : defaultsToOwnAssignee(user?.id, teamVisibilityWorkspaceId)
         ? { assignee: user!.id }
@@ -224,6 +224,13 @@ export function CalendarPage({ clientCalendar = false, clientId }: { clientCalen
 
   useEffect(() => {
     if (!user?.id || clientCalendar) return;
+    if (activeWorkspace?.slug === "consultoria") {
+      if (!didApplyDefaultAssignee.current) {
+        setFilters((current) => ({ ...current, scope: "mine", assignee: undefined }));
+        didApplyDefaultAssignee.current = true;
+      }
+      return;
+    }
     if (defaultsToOwnScope(user.id)) {
       if (!didApplyDefaultAssignee.current) {
         setFilters((current) => ({ ...current, scope: current.scope ?? "mine" }));
@@ -241,7 +248,7 @@ export function CalendarPage({ clientCalendar = false, clientId }: { clientCalen
     if (didApplyDefaultAssignee.current) return;
     setFilters((current) => ({ ...current, assignee: current.assignee ?? user.id }));
     didApplyDefaultAssignee.current = true;
-  }, [user?.id, isCollaborator, teamVisibilityWorkspaceId, clientCalendar]);
+  }, [user?.id, isCollaborator, teamVisibilityWorkspaceId, clientCalendar, activeWorkspace?.slug]);
 
   const days = useMemo(() => {
     const start =

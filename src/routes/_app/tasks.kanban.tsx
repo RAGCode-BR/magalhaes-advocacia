@@ -381,7 +381,7 @@ function KanbanPage() {
   const qc = useQueryClient();
   const { user, isAdmin, isCollaborator, activeWorkspace, workspaces, loading: authLoading } = useAuth();
   const [filters, setFilters] = useState<TaskFilterValue>(() =>
-    defaultsToOwnScope(user?.id)
+    activeWorkspace?.slug === "consultoria" || defaultsToOwnScope(user?.id)
       ? { scope: "mine" }
       : defaultsToOwnAssignee(user?.id, teamVisibilityWorkspaceId)
         ? { assignee: user!.id }
@@ -494,8 +494,11 @@ function KanbanPage() {
 
   useEffect(() => {
     if (authLoading || !user?.id) return;
-    if (isAdmin && activeWorkspace?.slug === "consultoria") {
-      didApplyDefaultAssignee.current = true;
+    if (activeWorkspace?.slug === "consultoria") {
+      if (!didApplyDefaultAssignee.current) {
+        setFilters((current) => ({ ...current, scope: "mine", assignee: undefined }));
+        didApplyDefaultAssignee.current = true;
+      }
       return;
     }
     if (defaultsToOwnScope(user.id)) {
