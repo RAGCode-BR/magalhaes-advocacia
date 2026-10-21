@@ -290,29 +290,29 @@ function SortableColumn({
         isH
           ? minimal
             ? "flex w-[clamp(15rem,18vw,19rem)] shrink-0 flex-col"
-            : "flex w-fit min-w-72 shrink-0 flex-col"
+            : "flex w-72 min-w-0 shrink-0 flex-col"
           : "flex w-full flex-col"
       }
     >
-      <div className="mb-2 flex items-center justify-between px-1">
-        <div className="flex items-center gap-1.5">
+      <div className="mb-2 flex min-w-0 items-center justify-between gap-1 px-1">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
           {canManage && (
             <span
               {...attributes}
               {...listeners}
-              className="inline-flex h-6 w-6 cursor-grab items-center justify-center rounded-md text-muted-foreground hover:bg-muted active:cursor-grabbing dark:text-slate-100 dark:hover:bg-white/10"
+              className="inline-flex h-6 w-6 shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground hover:bg-muted active:cursor-grabbing dark:text-slate-100 dark:hover:bg-white/10"
               title="Arrastar coluna"
             >
               <GripVertical className="h-4 w-4" />
             </span>
           )}
           <span
-            className="h-3 w-3 rounded-full dark:ring-2 dark:ring-white/45 dark:shadow-[0_0_12px_rgba(255,255,255,0.32)]"
+            className="h-3 w-3 shrink-0 rounded-full dark:ring-2 dark:ring-white/45 dark:shadow-[0_0_12px_rgba(255,255,255,0.32)]"
             style={{ background: col.color || "#1e3a8a" }}
           />
-          <h3 className="font-semibold">{col.name}</h3>
+          <h3 className="min-w-0 flex-1 truncate font-semibold" title={col.name}>{col.name}</h3>
           <span
-            className="rounded-full px-2 py-0.5 text-xs font-semibold dark:ring-1 dark:ring-white/45 dark:shadow-[0_0_10px_rgba(255,255,255,0.2)]"
+            className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold dark:ring-1 dark:ring-white/45 dark:shadow-[0_0_10px_rgba(255,255,255,0.2)]"
             style={{
               color: "var(--foreground)",
               backgroundColor: `${col.color || "#1e3a8a"}40`,
@@ -321,7 +321,7 @@ function SortableColumn({
             {count}
           </span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <Button
             size="icon"
             variant="ghost"

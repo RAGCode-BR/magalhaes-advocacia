@@ -417,8 +417,8 @@ function ListPage() {
                   </td>
                   <td className="border-r px-2 py-2">
                     {displayStatus ? (
-                      <Badge variant="outline" className="max-w-full truncate" style={{ borderColor: displayStatus.color, color: displayStatus.color }}>
-                        {displayStatus.name}
+                      <Badge variant="outline" className="max-w-full rounded-md align-middle font-medium" title={displayStatus.name} style={{ borderColor: displayStatus.color, color: displayStatus.color }}>
+                        <span className="min-w-0 truncate">{displayStatus.name}</span>
                       </Badge>
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
