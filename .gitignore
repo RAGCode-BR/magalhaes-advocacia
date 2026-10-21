@@ -47,3 +47,5 @@ work-*.sql
 # Estado local da CLI Supabase
 supabase/.temp/
 supabase/.branches/
+
+*.local.mjs

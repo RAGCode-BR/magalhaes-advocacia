@@ -10,7 +10,15 @@ try {
     .replace("CREATE SCHEMA public;", "CREATE SCHEMA IF NOT EXISTS public;")
     .replaceAll("auth.users", 'neon_auth."user"');
   await db.query(schema);
-  for (const file of ["access", "files", "users", "identity", "hardening", "defaults"])
+  for (const file of [
+    "access",
+    "files",
+    "users",
+    "identity",
+    "hardening",
+    "defaults",
+    "password-login",
+  ])
     await db.query(readFileSync(`neon/${file}.sql`, "utf8"));
   const email = readFileSync(".env.neon.local", "utf8").match(
     /^NEON_BOOTSTRAP_ADMIN_EMAIL=(.+)$/m,

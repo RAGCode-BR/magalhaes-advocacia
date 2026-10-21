@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-password"
   | "magalhaes-neon"
   | "magalhaes-local"
   | "magalhaes-brand"
@@ -65,6 +66,11 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-acesso-senha-2026-10-21", title: "Entrada direta com e-mail e senha",
+    date: "2026-10-21", preview: "magalhaes-password", audience: "all", workspaces: ["consultoria"],
+    details: ["Entrada sem código de confirmação por e-mail e correção do carregamento das permissões após o login.", "Novos cadastros continuam restritos ao titular e às pessoas autorizadas pelo administrador."],
+  },
   {
     id: "magalhaes-neon-2026-10-21", title: "Banco online e acesso por convite",
     date: "2026-10-21", preview: "magalhaes-neon", audience: "all", workspaces: ["consultoria"],

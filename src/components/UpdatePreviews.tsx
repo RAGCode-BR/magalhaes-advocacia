@@ -1496,7 +1496,11 @@ function MagalhaesNeonPreview() {
   return <PreviewGrid label="Prévia do acesso restrito ao banco online"><div className="rounded-xl border bg-background p-4 text-xs"><div className="flex items-center gap-2 font-semibold text-primary"><ShieldCheck className="h-5 w-5" /> Banco online Magalhães</div><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-lg bg-primary/10 p-3">Administrador<br /><strong>Gerencia os convites</strong></div><div className="rounded-lg border p-3">Usuário convidado<br /><strong>Confirma o e-mail</strong></div></div><p className="mt-3 text-muted-foreground">Clientes, tarefas e anexos com acesso por usuário.</p></div></PreviewGrid>;
 }
 
+function MagalhaesPasswordPreview() {
+  return <PreviewGrid label="Prévia da entrada com senha e acesso autorizado"><div className="mx-auto w-full max-w-xs rounded-xl border bg-background p-4 text-xs"><strong>Entrar</strong><div className="mt-3 rounded border p-2 text-muted-foreground">E-mail</div><div className="mt-2 rounded border p-2">••••••••</div><div className="mt-3 rounded bg-primary p-2 text-center text-primary-foreground">Entrar</div><p className="mt-3 flex gap-2 text-muted-foreground"><ShieldCheck className="h-4 w-4" /> Somente acessos autorizados</p></div></PreviewGrid>;
+}
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-password": MagalhaesPasswordPreview,
   "magalhaes-neon": MagalhaesNeonPreview,
   "magalhaes-local": MagalhaesLocalPreview,
   "magalhaes-brand": MagalhaesBrandPreview,

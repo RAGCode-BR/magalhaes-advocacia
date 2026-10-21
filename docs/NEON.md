@@ -3,9 +3,9 @@
 Projeto exclusivo `dawn-term-03972586`, banco `magalhaes`, branch `production`.
 O PostgreSQL contém somente a estrutura independente; os cadastros locais não são migrados.
 
-O e-mail do administrador inicial é configurado no arquivo privado. Na página pública, use **Primeiro acesso / aceitar convite**, defina sua senha e confirme o código recebido no e-mail. O banco rejeita qualquer outro cadastro sem convite válido. O administrador cria convites pela tela Usuários; o link é copiado para compartilhamento e vale por 7 dias. O destinatário ativa o e-mail cadastrado. Não há envio automático de convite pelo sistema.
+O e-mail do administrador inicial é configurado no arquivo privado. O acesso é direto com e-mail e senha, sem código por e-mail. Novos usuários autorizados abrem **Ativar acesso autorizado** e definem sua senha. O banco rejeita qualquer outro cadastro sem convite válido. O administrador cria convites pela tela Usuários; o link é copiado para compartilhamento e vale por 7 dias. O destinatário ativa o e-mail cadastrado. Não há envio automático de convite pelo sistema.
 
-A conexão PostgreSQL está apenas em `.env.neon.local`, ignorado pelo Git. Nunca use essa conexão em variável `VITE_*`. O site recebe somente `VITE_NEON_URL`, endereço público das APIs. Contas sem e-mail confirmado ou desativadas não podem acessar as tabelas. Marketing permanece indisponível.
+A conexão PostgreSQL está apenas em `.env.neon.local`, ignorado pelo Git. Nunca use essa conexão em variável `VITE_*`. O site recebe somente `VITE_NEON_URL`, endereço público das APIs. Contas desativadas ou bloqueadas não podem acessar as tabelas. Marketing permanece indisponível.
 
 Arquivos são guardados no PostgreSQL com as políticas de acesso dos anexos, até 50 MB por arquivo; o uso conta na cota de armazenamento Neon. URLs de visualização são temporárias no navegador. Atualizações entre telas usam consulta autorizada a cada 10 segundos (PG17 não tem o serviço Neon Realtime).
 
@@ -18,6 +18,6 @@ Google Calendar/Meet e IA dependem de serviços e credenciais próprias no servi
 - `node scripts/test-neon-http.mjs`: login real no Neon e CRUD pela API com identidade descartável, removida ao fim.
 - `npm test` e `npm run build:pages`.
 
-`neon/schema.sql` é um dump somente da estrutura pública da instalação local independente, sem dados, permissões ou identidades da consultoria. `access.sql`, `files.sql`, `users.sql`, `identity.sql`, `hardening.sql` e `defaults.sql` contêm a adaptação Neon aplicada na ordem indicada.
+`neon/schema.sql` é um dump somente da estrutura pública da instalação local independente, sem dados, permissões ou identidades da consultoria. `access.sql`, `files.sql`, `users.sql`, `identity.sql`, `hardening.sql`, `defaults.sql` e `password-login.sql` contêm a adaptação Neon aplicada na ordem indicada.
 
 O ambiente local anterior continua disponível com `npm run local`. Para usar Neon ao desenvolver, configure `VITE_NEON_URL` em um arquivo `.local`; essa opção tem prioridade sobre Supabase local.

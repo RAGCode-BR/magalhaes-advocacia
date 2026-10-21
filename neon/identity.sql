@@ -1,7 +1,9 @@
--- Neon owns auth's schema. authenticated cannot call it directly on PG17.
--- This bridge reads the identity already validated by the Data API; it never
--- accepts an identity parameter or grants access to the database credential.
-CREATE FUNCTION public.neon_uid() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$ SELECT auth.uid() $$;
+-- PostgREST validates the JWT and sets request.jwt.claims for each transaction.
+-- Read that request identity directly; avoid the session extension's pooled
+-- connection cache, which can return a stale or empty identity. No caller ID argument.
+CREATE FUNCTION public.neon_uid() RETURNS uuid LANGUAGE sql STABLE SECURITY INVOKER AS $$
+ SELECT (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid
+$$;
 REVOKE ALL ON FUNCTION public.neon_uid() FROM PUBLIC,anonymous;
 GRANT EXECUTE ON FUNCTION public.neon_uid() TO authenticated;
 DO $$ DECLARE r record; expression text; checks text; BEGIN

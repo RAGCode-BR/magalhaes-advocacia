@@ -27,8 +27,6 @@ function AuthPage() {
   const [register, setRegister] = useState(
     isNeonDatabase && new URLSearchParams(window.location.search).get("register") === "1",
   );
-  const [verifyEmail, setVerifyEmail] = useState(false);
-  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const invitationFlow = new URLSearchParams(window.location.search).get("invite") === "1";
 
@@ -40,14 +38,6 @@ function AuthPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      if (isNeonDatabase && verifyEmail) {
-        const verification = await supabase.auth.verifyOtp({ email, token: code, type: "signup" });
-        if (verification.error) throw verification.error;
-        setVerifyEmail(false);
-        setRegister(false);
-        toast.success("E-mail confirmado. Entre com sua senha.");
-        return;
-      }
       if (isNeonDatabase && register) {
         const signup = await supabase.auth.signUp({
           email,
@@ -55,8 +45,10 @@ function AuthPage() {
           options: { data: { displayName: email.split("@")[0] } },
         });
         if (signup.error) throw signup.error;
-        setVerifyEmail(true);
-        toast.success("Confirme o código enviado ao seu e-mail.");
+        setRegister(false);
+        const login = await supabase.auth.signInWithPassword({ email, password });
+        if (login.error) throw login.error;
+        toast.success("Acesso ativado. Bem-vindo!");
         return;
       }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -158,13 +150,7 @@ function AuthPage() {
             </div>
           )}
           <h2 className="text-2xl font-bold">
-            {invitationFlow
-              ? "Definir senha"
-              : verifyEmail
-                ? "Confirmar e-mail"
-                : register
-                  ? "Ativar acesso"
-                  : "Entrar"}
+            {invitationFlow ? "Definir senha" : register ? "Ativar acesso autorizado" : "Entrar"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {invitationFlow
@@ -220,39 +206,25 @@ function AuthPage() {
                     required
                   />
                 </div>
-                {verifyEmail ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="code">Código recebido no e-mail</Label>
-                    <Input
-                      id="code"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      value={code}
-                      onChange={(e) => setCode(e.target.value)}
-                      required
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label htmlFor="password">{register ? "Crie sua senha" : "Senha"}</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      autoComplete={register ? "new-password" : "current-password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={8}
-                    />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label htmlFor="password">{register ? "Crie sua senha" : "Senha"}</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    autoComplete={register ? "new-password" : "current-password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                  />
+                </div>
                 <Button
                   type="submit"
                   className="w-full"
                   disabled={loading || !isSupabaseConfigured}
                 >
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {verifyEmail ? "Confirmar código" : register ? "Criar acesso" : "Entrar"}
+                  {register ? "Ativar acesso" : "Entrar"}
                 </Button>
               </form>
               <p className="mt-4 text-center text-sm text-muted-foreground">
@@ -267,41 +239,9 @@ function AuthPage() {
                   className="mt-2 w-full"
                   onClick={() => {
                     setRegister(!register);
-                    setVerifyEmail(false);
                   }}
                 >
-                  {register || verifyEmail
-                    ? "Voltar para entrar"
-                    : "Primeiro acesso / aceitar convite"}
-                </Button>
-              )}
-              {isNeonDatabase && (
-                <Button
-                  type="button"
-                  variant="link"
-                  className="w-full"
-                  disabled={loading}
-                  onClick={async () => {
-                    if (!email.trim()) {
-                      toast.error("Informe seu e-mail acima.");
-                      return;
-                    }
-                    setLoading(true);
-                    try {
-                      const { error } = await supabase.auth.resend({ type: "signup", email });
-                      if (error) throw error;
-                      setVerifyEmail(true);
-                      toast.success(
-                        "Se o acesso estiver cadastrado, você receberá um novo código no e-mail.",
-                      );
-                    } catch (error) {
-                      toast.error((error as Error).message);
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                >
-                  Confirmar e-mail / reenviar código
+                  {register ? "Voltar para entrar" : "Ativar acesso autorizado"}
                 </Button>
               )}
             </>

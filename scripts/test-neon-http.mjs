@@ -43,11 +43,6 @@ try {
   });
   userId = signup.user?.id;
   if (!userId) throw Error("Signup não retornou identidade");
-  // Only the disposable test identity is confirmed here. Real users must enter their email OTP.
-  await db.query('update neon_auth."user" set "emailVerified"=true where id=$1 and email=$2', [
-    userId,
-    email,
-  ]);
   const signin = await request(auth + "/sign-in/email", { email, password });
   if (!signin.token) throw Error("Login não retornou token");
   const tokenResponse = await fetch(auth + "/token", {
@@ -62,6 +57,13 @@ try {
   if (!sessionResponse.ok || !sessionResponse.headers.get("set-auth-jwt"))
     throw Error("Neon não forneceu o JWT de sessão esperado pelo SDK do navegador");
   const token = sessionResponse.headers.get("set-auth-jwt");
+  const identityChecks = await Promise.all(
+    Array.from({ length: 16 }, async () => {
+      const rows = await request(api + "/user_roles?select=user_id,role", null, token);
+      if (rows.length !== 1 || rows[0].user_id !== userId || rows[0].role !== "collaborator")
+        throw Error("Identidade incorreta ou acesso a papéis de outro usuário");
+    }),
+  );
   const memberships = await request(
     api + "/workspace_memberships?select=workspace_id",
     null,
