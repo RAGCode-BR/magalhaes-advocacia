@@ -6,7 +6,7 @@ export function appUpdatesPlugin(): Plugin {
     name: "taskflow-published-app-updates",
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
-        if (request.url?.split("?")[0] !== "/app-release.json") return next();
+        if (request.url?.split("?")[0] !== `${server.config.base}app-release.json`) return next();
         response.setHeader("Content-Type", "application/json; charset=utf-8");
         response.setHeader("Cache-Control", "no-store");
         response.end(JSON.stringify(publishedAppUpdates()));

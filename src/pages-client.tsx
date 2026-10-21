@@ -5,6 +5,17 @@ import { getRouter } from "./router";
 
 import "./styles.css";
 
+// No desenvolvimento, o Vite atualiza a interface. Um worker de um preview anterior
+// não deve manter a versão publicada nem reiniciar uma sessão de edição local.
+if (import.meta.env.DEV && "serviceWorker" in navigator) {
+  void navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      if (new URL(registration.scope).pathname === import.meta.env.BASE_URL)
+        void registration.unregister();
+    }
+  });
+}
+
 const rootElement = document.getElementById("root");
 
 if (!rootElement) {

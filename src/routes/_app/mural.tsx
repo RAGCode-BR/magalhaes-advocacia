@@ -789,7 +789,7 @@ function MuralPage() {
     <div className="mural-la min-h-full bg-background px-4 py-5 text-[#313532] sm:px-7 sm:py-7">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="mural-subtle text-[11px] text-[#8a9089]">Mural LA</p>
+          <p className="mural-subtle text-[11px] text-[#8a9089]">Mural</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">
             Olá, {profileName(profiles, user?.id)} 👋
           </h1>

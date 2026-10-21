@@ -31,6 +31,7 @@ import { UpdateCenter } from "@/components/UpdateCenter";
 import { RecurringMeetingReminderPopup } from "@/components/RecurringMeetingReminderPopup";
 import { AssignmentPopup } from "@/components/AssignmentPopup";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { isLocalDatabase } from "@/integrations/supabase/client";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -66,7 +67,7 @@ function useTheme() {
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; adminOnly?: boolean };
 const allNav: readonly NavItem[] = [
-  { to: "/mural", label: "Mural LA", icon: MessageSquareText },
+  { to: "/mural", label: "Mural", icon: MessageSquareText },
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/tasks", label: "Minhas Tarefas", icon: ListChecks },
   { to: "/conversations", label: "Conversas", icon: MessagesSquare },
@@ -156,7 +157,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         <div className="flex h-32 w-full shrink-0 flex-col items-center justify-center gap-3 overflow-hidden px-2">
           <BrandLogo className={sidebarOpen ? "h-20 w-44" : "h-10 w-14"} />
-          <span className={`text-xs tracking-widest uppercase ${sidebarOpen ? "" : "sr-only"}`}>Gestão do escritório</span>
+          <span className={`text-xs tracking-widest uppercase ${sidebarOpen ? "" : "sr-only"}`}>{isLocalDatabase ? "Ambiente local de testes" : "Gestão do escritório"}</span>
         </div>
 
         <nav className="sidebar-nav min-h-0 w-full flex-1 space-y-1 overflow-y-auto px-3">
@@ -307,7 +308,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="px-5 py-4">
               <div className="flex flex-col items-center gap-3">
                 <BrandLogo className="h-24 w-48" />
-                <span className="text-xs uppercase tracking-widest">Gestão do escritório</span>
+                <span className="text-xs uppercase tracking-widest">{isLocalDatabase ? "Ambiente local de testes" : "Gestão do escritório"}</span>
               </div>
             </div>
             <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3">

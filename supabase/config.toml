@@ -1,5 +1,40 @@
 project_id = "magalhaes-advocacia"
 
+# Portas próprias para não misturar com o Taskfloww da consultoria.
+[api]
+port = 55441
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 55442
+shadow_port = 55440
+major_version = 17
+
+[db.seed]
+enabled = false
+
+[studio]
+enabled = true
+port = 55443
+
+[inbucket]
+enabled = true
+port = 55444
+
+[auth]
+site_url = "http://localhost:5180/magalhaes-advocacia/"
+additional_redirect_urls = ["http://localhost:5180/magalhaes-advocacia/auth", "http://127.0.0.1:5180/magalhaes-advocacia/auth"]
+enable_signup = false
+
+[analytics]
+enabled = false
+
+[edge_runtime]
+enabled = true
+inspector_port = 8084
+
 # Chamada pelo pg_cron/pg_net (ou testada na mão), nunca pelo navegador de um
 # usuário — a própria função valida um segredo (CRON_SECRET), não faz sentido
 # também exigir um JWT da plataforma pra chegar até esse código.

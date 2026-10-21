@@ -273,6 +273,7 @@ export function UpdateCenter() {
             "Conecte-se à internet para verificar novas atualizações. Seus dados offline estão preservados.",
           );
         const workerCheck = async () => {
+          if (import.meta.env.DEV) return;
           if (!("serviceWorker" in navigator)) return;
           const registration = await navigator.serviceWorker.getRegistration();
           if (!active || !registration) return;

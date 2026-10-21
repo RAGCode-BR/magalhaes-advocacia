@@ -1,3 +1,4 @@
+import { isNeonDatabase } from "@/integrations/supabase/client";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useClients, useProfiles } from "@/hooks/use-data";
@@ -36,7 +37,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 export const Route = createFileRoute("/_app/users")({ component: UsersPage });
 
 const ACCESS_OPTIONS = [
-  ["mural", "Mural LA"],
+  ["mural", "Mural"],
   ["dashboard", "Dashboard"],
   ["tasks", "Minhas Tarefas"],
   ["conversations", "Conversas"],
@@ -225,7 +226,7 @@ function UserDetailsForm({
           required
         />
       </div>
-      <div className="space-y-2">
+      {!isNeonDatabase && <div className="space-y-2">
         <Label>Nova senha</Label>
         <Input
           type="password"
@@ -237,7 +238,7 @@ function UserDetailsForm({
         <p className="text-xs text-muted-foreground">
           A nova senha deve ter ao menos 6 caracteres.
         </p>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -349,11 +350,14 @@ function UsersPage() {
         "create",
         inMarketing ? { ...form, role: "collaborator", marketingAccess: true } : form,
       ),
-    onSuccess: () => {
+    onSuccess: (result) => {
       refresh();
       setCreateOpen(false);
       setForm(defaults);
-      toast.success("Convite enviado com sucesso.");
+      if (isNeonDatabase) {
+        const link = `${window.location.origin}${import.meta.env.BASE_URL}auth?register=1`;
+        void navigator.clipboard.writeText(link).then(() => toast.success("Convite autorizado por 7 dias. Link copiado: envie ao usuário para ele ativar o e-mail cadastrado."), () => toast.success(`Convite autorizado. O usuário deve abrir ${link} e ativar seu e-mail.`));
+      } else toast.success("Convite enviado com sucesso.");
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao criar acesso"),
   });

@@ -837,7 +837,7 @@ function PermissionNavOrderPreview() {
       <p className="mb-2 text-[11px] font-semibold">Acessos do sistema</p>
       <div className="grid grid-cols-1 gap-1.5 text-[9px] sm:grid-cols-2">
         {[
-          "Mural LA",
+          "Mural",
           "Dashboard",
           "Minhas Tarefas",
           "Conversas",
@@ -1488,7 +1488,17 @@ function MagalhaesBrandPreview() {
   return <PreviewGrid label="Identidade da Magalhães Advocacia"><div className="rounded-xl bg-[#501618] p-4 text-[#ddbc70]"><BrandLogo className="mx-auto h-24 w-48" /><p className="text-center text-xs">Gestão do escritório</p></div><div className="rounded-xl border p-4 text-xs"><strong>Magalhães Advocacia</strong><div className="mt-3 flex gap-2"><span className="rounded bg-primary px-3 py-2 text-primary-foreground">Tarefas</span><span className="rounded bg-muted px-3 py-2">Clientes</span></div><p className="mt-4 text-muted-foreground">Ambiente exclusivo do escritório</p></div></PreviewGrid>;
 }
 
+function MagalhaesLocalPreview() {
+  return <PreviewGrid label="Ambiente local de testes da Magalhães"><div className="rounded-xl border bg-background p-4 text-xs"><strong>Ambiente local de testes</strong><p className="mt-2 text-muted-foreground">Banco exclusivo neste Mac</p><div className="mt-3 rounded bg-primary px-3 py-2 text-primary-foreground">Administrador local conectado</div></div><div className="rounded-xl border p-4 text-xs"><strong>Cadastros de teste</strong><div className="mt-3 space-y-2"><p className="rounded bg-muted p-2">Cliente de exemplo</p><p className="rounded bg-muted p-2">Tarefa de exemplo · Pendente</p></div><p className="mt-3 text-muted-foreground">Dados preservados ao reabrir</p></div></PreviewGrid>;
+}
+
+function MagalhaesNeonPreview() {
+  return <PreviewGrid label="Prévia do acesso restrito ao banco online"><div className="rounded-xl border bg-background p-4 text-xs"><div className="flex items-center gap-2 font-semibold text-primary"><ShieldCheck className="h-5 w-5" /> Banco online Magalhães</div><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-lg bg-primary/10 p-3">Administrador<br /><strong>Gerencia os convites</strong></div><div className="rounded-lg border p-3">Usuário convidado<br /><strong>Confirma o e-mail</strong></div></div><p className="mt-3 text-muted-foreground">Clientes, tarefas e anexos com acesso por usuário.</p></div></PreviewGrid>;
+}
+
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-neon": MagalhaesNeonPreview,
+  "magalhaes-local": MagalhaesLocalPreview,
   "magalhaes-brand": MagalhaesBrandPreview,
   "subtask-attachment-indicator": SubtaskAttachmentIndicatorPreview,
   "subtask-file-thumbnails": SubtaskFileThumbnailsPreview,

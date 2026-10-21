@@ -9,7 +9,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
-import { isSupabaseConfigured } from "@/integrations/supabase/client";
+import {
+  isSupabaseConfigured,
+  isLocalDatabase,
+  isNeonDatabase,
+} from "@/integrations/supabase/client";
 import { CheckCircle2, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({ component: AuthPage });
@@ -20,6 +24,11 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [register, setRegister] = useState(
+    isNeonDatabase && new URLSearchParams(window.location.search).get("register") === "1",
+  );
+  const [verifyEmail, setVerifyEmail] = useState(false);
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const invitationFlow = new URLSearchParams(window.location.search).get("invite") === "1";
 
@@ -31,6 +40,25 @@ function AuthPage() {
     e.preventDefault();
     setLoading(true);
     try {
+      if (isNeonDatabase && verifyEmail) {
+        const verification = await supabase.auth.verifyOtp({ email, token: code, type: "signup" });
+        if (verification.error) throw verification.error;
+        setVerifyEmail(false);
+        setRegister(false);
+        toast.success("E-mail confirmado. Entre com sua senha.");
+        return;
+      }
+      if (isNeonDatabase && register) {
+        const signup = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { displayName: email.split("@")[0] } },
+        });
+        if (signup.error) throw signup.error;
+        setVerifyEmail(true);
+        toast.success("Confirme o código enviado ao seu e-mail.");
+        return;
+      }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       toast.success("Bem-vindo de volta!");
@@ -105,6 +133,18 @@ function AuthPage() {
           <div className="mb-6 rounded-xl bg-[#501618] p-3 lg:hidden">
             <BrandLogo className="mx-auto h-28 w-full" />
           </div>
+          {isLocalDatabase && (
+            <div
+              role="status"
+              className="mb-5 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm"
+            >
+              <strong>Ambiente local de testes</strong>
+              <p className="mt-1 text-muted-foreground">
+                Seus cadastros e arquivos ficam no banco exclusivo da Magalhães neste Mac. Use o
+                acesso do arquivo ACESSO-LOCAL.local.
+              </p>
+            </div>
+          )}
           {!isSupabaseConfigured && (
             <div
               role="status"
@@ -117,7 +157,15 @@ function AuthPage() {
               </p>
             </div>
           )}
-          <h2 className="text-2xl font-bold">{invitationFlow ? "Definir senha" : "Entrar"}</h2>
+          <h2 className="text-2xl font-bold">
+            {invitationFlow
+              ? "Definir senha"
+              : verifyEmail
+                ? "Confirmar e-mail"
+                : register
+                  ? "Ativar acesso"
+                  : "Entrar"}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {invitationFlow
               ? "Crie sua senha para ativar o acesso convidado."
@@ -172,29 +220,90 @@ function AuthPage() {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Senha</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={8}
-                  />
-                </div>
+                {verifyEmail ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="code">Código recebido no e-mail</Label>
+                    <Input
+                      id="code"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      required
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="password">{register ? "Crie sua senha" : "Senha"}</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={8}
+                    />
+                  </div>
+                )}
                 <Button
                   type="submit"
                   className="w-full"
                   disabled={loading || !isSupabaseConfigured}
                 >
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Entrar
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {verifyEmail ? "Confirmar código" : register ? "Criar acesso" : "Entrar"}
                 </Button>
               </form>
               <p className="mt-4 text-center text-sm text-muted-foreground">
-                Não possui acesso? Solicite um convite ao administrador.
+                {isNeonDatabase
+                  ? "Acesso restrito ao titular e aos usuários convidados pelo administrador."
+                  : "Não possui acesso? Solicite um convite ao administrador."}
               </p>
+              {isNeonDatabase && (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="mt-2 w-full"
+                  onClick={() => {
+                    setRegister(!register);
+                    setVerifyEmail(false);
+                  }}
+                >
+                  {register || verifyEmail
+                    ? "Voltar para entrar"
+                    : "Primeiro acesso / aceitar convite"}
+                </Button>
+              )}
+              {isNeonDatabase && (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="w-full"
+                  disabled={loading}
+                  onClick={async () => {
+                    if (!email.trim()) {
+                      toast.error("Informe seu e-mail acima.");
+                      return;
+                    }
+                    setLoading(true);
+                    try {
+                      const { error } = await supabase.auth.resend({ type: "signup", email });
+                      if (error) throw error;
+                      setVerifyEmail(true);
+                      toast.success(
+                        "Se o acesso estiver cadastrado, você receberá um novo código no e-mail.",
+                      );
+                    } catch (error) {
+                      toast.error((error as Error).message);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                >
+                  Confirmar e-mail / reenviar código
+                </Button>
+              )}
             </>
           )}
         </Card>

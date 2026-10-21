@@ -1,5 +1,7 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-neon"
+  | "magalhaes-local"
   | "magalhaes-brand"
   | "subtask-attachment-indicator"
   | "subtask-file-thumbnails"
@@ -63,6 +65,16 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-neon-2026-10-21", title: "Banco online e acesso por convite",
+    date: "2026-10-21", preview: "magalhaes-neon", audience: "all", workspaces: ["consultoria"],
+    details: ["Banco Neon independente, com confirmação de e-mail, administrador inicial e convites para novos usuários.", "Cadastros e anexos privados online. Atualizações são consultadas a cada 10 segundos; Google e IA dependem de configuração própria."],
+  },
+  {
+    id: "magalhaes-banco-local-2026-10-20", title: "Ambiente local para testes completos",
+    date: "2026-10-20", preview: "magalhaes-local", audience: "all", workspaces: ["consultoria"],
+    details: ["Login administrativo e banco Supabase exclusivo neste Mac para cadastrar e testar clientes, tarefas e arquivos.", "Os cadastros locais são preservados entre sessões. Google e IA continuam dependendo das credenciais próprias dos provedores."],
+  },
   {
     id: "magalhaes-identidade-2026-10-20", title: "Magalhães Advocacia: ambiente exclusivo",
     date: "2026-10-20", preview: "magalhaes-brand", audience: "all",
