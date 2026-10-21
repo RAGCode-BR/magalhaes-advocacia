@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-all-tasks"
   | "magalhaes-active-nav"
   | "magalhaes-client-single"
   | "magalhaes-task-neon"
@@ -70,6 +71,11 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-minhas-tarefas-clientes-2026-10-21", title: "Cards dos clientes em Minhas Tarefas",
+    date: "2026-10-21", preview: "magalhaes-all-tasks", audience: "all", workspaces: ["consultoria"],
+    details: ["O administrador abre Minhas Tarefas mostrando todos os cards, inclusive os que ainda não têm responsável.", "Cada card mantém o cliente vinculado, a descrição, as subtarefas, os comentários históricos e os documentos na aba Arquivos."],
+  },
   {
     id: "magalhaes-menu-clientes-ativos-2026-10-21", title: "Menu de clientes somente com ativos",
     date: "2026-10-21", preview: "magalhaes-active-nav", audience: "all", workspaces: ["consultoria"],

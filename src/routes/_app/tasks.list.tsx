@@ -48,7 +48,7 @@ export const Route = createFileRoute("/_app/tasks/list")({
 function ListPage() {
   const teamVisibilityWorkspaceId = useTeamTaskVisibility();
   const search = Route.useSearch();
-  const { user, isCollaborator, workspaces } = useAuth();
+  const { user, isAdmin, isCollaborator, activeWorkspace, workspaces, loading: authLoading } = useAuth();
   const [filters, setFilters] = useState<TaskFilterValue>(() =>
     search.mine
       ? { scope: "mine" }
@@ -81,7 +81,11 @@ function ListPage() {
   const [completionTaskTarget, setCompletionTaskTarget] = useState<Task | null>(null);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (authLoading || !user?.id) return;
+    if (isAdmin && activeWorkspace?.slug === "consultoria") {
+      didApplyDefaultAssignee.current = true;
+      return;
+    }
     if (defaultsToOwnScope(user.id)) {
       if (!didApplyDefaultAssignee.current) {
         setFilters((current) => ({ ...current, scope: current.scope ?? "mine" }));
@@ -101,7 +105,7 @@ function ListPage() {
     if (didApplyDefaultAssignee.current) return;
     setFilters((current) => ({ ...current, assignee: current.assignee ?? user.id }));
     didApplyDefaultAssignee.current = true;
-  }, [user?.id, isCollaborator, teamVisibilityWorkspaceId]);
+  }, [user?.id, isAdmin, isCollaborator, activeWorkspace?.slug, authLoading, teamVisibilityWorkspaceId]);
 
   // Auto-open a task when arriving with ?task=<id>
   useEffect(() => {

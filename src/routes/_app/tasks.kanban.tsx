@@ -379,7 +379,7 @@ function SortableColumn({
 function KanbanPage() {
   const teamVisibilityWorkspaceId = useTeamTaskVisibility();
   const qc = useQueryClient();
-  const { user, isAdmin, isCollaborator, activeWorkspace, workspaces } = useAuth();
+  const { user, isAdmin, isCollaborator, activeWorkspace, workspaces, loading: authLoading } = useAuth();
   const [filters, setFilters] = useState<TaskFilterValue>(() =>
     defaultsToOwnScope(user?.id)
       ? { scope: "mine" }
@@ -493,7 +493,11 @@ function KanbanPage() {
   });
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (authLoading || !user?.id) return;
+    if (isAdmin && activeWorkspace?.slug === "consultoria") {
+      didApplyDefaultAssignee.current = true;
+      return;
+    }
     if (defaultsToOwnScope(user.id)) {
       if (!didApplyDefaultAssignee.current) {
         setFilters((current) => ({ ...current, scope: current.scope ?? "mine" }));
@@ -511,7 +515,7 @@ function KanbanPage() {
     if (didApplyDefaultAssignee.current) return;
     setFilters((current) => ({ ...current, assignee: current.assignee ?? user.id }));
     didApplyDefaultAssignee.current = true;
-  }, [user?.id, isCollaborator, teamVisibilityWorkspaceId]);
+  }, [user?.id, isAdmin, isCollaborator, activeWorkspace?.slug, authLoading, teamVisibilityWorkspaceId]);
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);

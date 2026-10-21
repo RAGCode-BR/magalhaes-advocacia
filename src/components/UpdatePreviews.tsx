@@ -1511,7 +1511,11 @@ function MagalhaesClientSinglePreview() {
 function MagalhaesActiveNavPreview() {
   return <PreviewGrid label="Prévia do menu lateral com clientes ativos"><div className="rounded-xl bg-primary p-4 text-xs text-primary-foreground"><strong>Clientes⌃</strong><div className="mt-3 space-y-2 border-l border-primary-foreground/30 pl-3"><p className="rounded bg-primary-foreground/10 p-2">Cliente de exemplo</p><p className="rounded bg-primary-foreground/10 p-2">Outro cliente ativo</p></div></div><div className="rounded-xl border bg-background p-4 text-xs"><strong>Clientes → Inativos</strong><p className="mt-3 rounded bg-muted p-2">Cadastros arquivados preservados</p><p className="mt-3 text-muted-foreground">Disponíveis para consulta e reativação.</p></div></PreviewGrid>;
 }
+function MagalhaesAllTasksPreview() {
+  return <PreviewGrid label="Prévia dos cards dos clientes em Minhas Tarefas"><div className="rounded-xl border bg-background p-4 text-xs"><strong>Minhas Tarefas</strong><p className="mt-2 rounded bg-primary p-2 text-primary-foreground">Todas</p><div className="mt-3 rounded-lg border p-3"><strong>Regularização de imóvel</strong><p className="mt-2 text-muted-foreground">Cliente de exemplo</p><p className="mt-2">Descrição · Subtarefas · Conversa · Arquivos</p></div></div><div className="rounded-xl border bg-background p-4 text-xs"><strong>Documentos dentro do card</strong><p className="mt-3 rounded bg-muted p-2">Documento de exemplo.pdf</p><p className="mt-3 text-muted-foreground">Os cards sem responsável também aparecem para o administrador.</p></div></PreviewGrid>;
+}
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-all-tasks": MagalhaesAllTasksPreview,
   "magalhaes-active-nav": MagalhaesActiveNavPreview,
   "magalhaes-client-single": MagalhaesClientSinglePreview,
   "magalhaes-task-neon": MagalhaesTaskNeonPreview,
