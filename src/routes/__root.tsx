@@ -18,13 +18,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Magalhães Advocacia — Gestão do Escritório" },
+      { title: "Magalhães Advocacia — Gestão de processos" },
       {
         name: "description",
         content: "Gerenciador de tarefas moderno com Kanban, Lista e Calendário.",
       },
-      { property: "og:title", content: "Magalhães Advocacia — Gestão do Escritório" },
-      { name: "twitter:title", content: "Magalhães Advocacia — Gestão do Escritório" },
+      { property: "og:title", content: "Magalhães Advocacia — Gestão de processos" },
+      { name: "twitter:title", content: "Magalhães Advocacia — Gestão de processos" },
       {
         property: "og:description",
         content: "Gerenciador de tarefas moderno com Kanban, Lista e Calendário.",

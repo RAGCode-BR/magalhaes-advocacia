@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-process-navigation"
   | "magalhaes-clean-documents"
   | "magalhaes-client-files-fast"
   | "magalhaes-all-tasks"
@@ -73,6 +74,11 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-gestao-processos-logo-2026-10-21", title: "Gestão de processos e marca mais legível",
+    date: "2026-10-21", preview: "magalhaes-process-navigation", audience: "all", workspaces: ["consultoria"],
+    details: ["Minhas Tarefas passa a se chamar Gestão de processos no menu e nas permissões de acesso.", "O texto Gestão do escritório foi retirado debaixo do logo. A marca aparece maior no menu aberto e como brasão no menu recolhido, mantendo o desenho original."],
+  },
   {
     id: "magalhaes-documentos-sem-backups-2026-10-21", title: "Anexos somente com documentos de trabalho",
     date: "2026-10-21", preview: "magalhaes-clean-documents", audience: "all", workspaces: ["consultoria"],

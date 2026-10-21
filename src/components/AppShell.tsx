@@ -69,7 +69,7 @@ type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; adminO
 const allNav: readonly NavItem[] = [
   { to: "/mural", label: "Mural", icon: MessageSquareText },
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/tasks", label: "Minhas Tarefas", icon: ListChecks },
+  { to: "/tasks", label: "Gestão de processos", icon: ListChecks },
   { to: "/conversations", label: "Conversas", icon: MessagesSquare },
   { to: "/obligations", label: "Obrigações", icon: CalendarCog },
   { to: "/meetings", label: "Reuniões", icon: Handshake },
@@ -149,16 +149,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex h-dvh overflow-hidden bg-background">
       <aside
         className={`hidden h-dvh shrink-0 flex-col overflow-hidden text-sidebar-foreground transition-[width] duration-300 ease-in-out motion-reduce:transition-none md:flex ${
-          sidebarOpen ? "w-56" : "w-16 items-center"
+          sidebarOpen ? "w-64" : "w-16 items-center"
         }`}
         style={{
           background: "var(--gradient-sidebar)",
           borderRight: "1px solid var(--sidebar-hairline)",
         }}
       >
-        <div className="flex h-32 w-full shrink-0 flex-col items-center justify-center gap-3 overflow-hidden px-2">
-          <BrandLogo className={sidebarOpen ? "h-20 w-44" : "h-10 w-14"} />
-          <span className={`text-xs tracking-widest uppercase ${sidebarOpen ? "" : "sr-only"}`}>{isLocalDatabase ? "Ambiente local de testes" : "Gestão do escritório"}</span>
+        <div className={`flex w-full shrink-0 flex-col items-center justify-center gap-3 overflow-hidden px-2 ${isLocalDatabase && sidebarOpen ? "h-40" : "h-32"}`}>
+          <BrandLogo compact={!sidebarOpen} className={sidebarOpen ? "h-28 w-60" : "h-12 w-12"} />
+          {isLocalDatabase && <span className={`text-xs tracking-widest uppercase ${sidebarOpen ? "" : "sr-only"}`}>Ambiente local de testes</span>}
         </div>
 
         <nav className="sidebar-nav min-h-0 w-full flex-1 space-y-1 overflow-y-auto px-3">
@@ -308,8 +308,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <div className="px-5 py-4">
               <div className="flex flex-col items-center gap-3">
-                <BrandLogo className="h-24 w-48" />
-                <span className="text-xs uppercase tracking-widest">{isLocalDatabase ? "Ambiente local de testes" : "Gestão do escritório"}</span>
+                <BrandLogo className="h-28 w-full max-w-60" />
+                {isLocalDatabase && <span className="text-xs uppercase tracking-widest">Ambiente local de testes</span>}
               </div>
             </div>
             <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3">

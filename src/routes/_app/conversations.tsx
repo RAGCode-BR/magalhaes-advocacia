@@ -576,7 +576,7 @@ function ConversationsPage() {
                   <button
                     type="button"
                     onClick={() => openTask(selected.id)}
-                    title="Abrir tarefa em Minhas Tarefas"
+                    title="Abrir tarefa em Gestão de processos"
                     className="block max-w-full cursor-pointer truncate text-left font-display text-base font-semibold transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     {selected.title}

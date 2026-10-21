@@ -1520,7 +1520,11 @@ function MagalhaesClientFilesFastPreview() {
 function MagalhaesCleanDocumentsPreview() {
   return <PreviewGrid label="Prévia de anexos de trabalho separados do backup técnico"><div className="rounded-xl border bg-background p-4 text-xs"><strong>Tarefa e cliente · Anexos</strong><p className="mt-3 rounded border p-2">Contrato.pdf</p><p className="mt-2 rounded border p-2">Planta do imóvel.pdf</p><p className="mt-3 text-muted-foreground">Documentos para uso diário.</p></div><div className="rounded-xl border bg-muted p-4 text-xs"><strong>Backup privado da migração</strong><p className="mt-3 rounded border p-2">Exportação técnica do Trello</p><p className="mt-3 text-muted-foreground">Preservada fora da lista de anexos.</p></div></PreviewGrid>;
 }
+function MagalhaesProcessNavigationPreview() {
+  return <PreviewGrid label="Prévia do menu Gestão de processos com o logo maior"><div className="rounded-xl bg-[#501618] p-3 text-[#ddbc70]"><BrandLogo className="mx-auto h-28 w-full max-w-60" /><p className="mt-3 rounded-full border border-current px-3 py-2 text-xs">Gestão de processos</p><p className="mt-2 px-3 text-xs">Clientes</p></div><div className="flex items-center justify-center rounded-xl bg-[#501618] p-4"><BrandLogo compact className="h-16 w-16" /></div></PreviewGrid>;
+}
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-process-navigation": MagalhaesProcessNavigationPreview,
   "magalhaes-clean-documents": MagalhaesCleanDocumentsPreview,
   "magalhaes-client-files-fast": MagalhaesClientFilesFastPreview,
   "magalhaes-all-tasks": MagalhaesAllTasksPreview,
