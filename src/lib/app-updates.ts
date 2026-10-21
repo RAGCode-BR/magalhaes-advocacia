@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-task-neon"
   | "magalhaes-direct-users"
   | "magalhaes-password"
   | "magalhaes-neon"
@@ -67,6 +68,11 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-tarefas-neon-2026-10-21", title: "Tarefas conectadas ao Neon",
+    date: "2026-10-21", preview: "magalhaes-task-neon", audience: "all", workspaces: ["consultoria"],
+    details: ["Corrigida a exigência de Supabase ao criar tarefas e rascunhos com responsável.", "Leitura, edição e sincronização das tarefas agora usam o banco selecionado com a sessão autenticada."],
+  },
   {
     id: "magalhaes-usuarios-senha-2026-10-21", title: "Crie usuários com senha inicial",
     date: "2026-10-21", preview: "magalhaes-direct-users", audience: "all", workspaces: ["consultoria"],

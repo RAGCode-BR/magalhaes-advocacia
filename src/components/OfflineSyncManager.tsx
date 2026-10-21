@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { createClient } from "@supabase/supabase-js";
+import { createAuthenticatedDataClient } from "@/integrations/authenticated-client";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 import { taskCreatePayloadForSync } from "@/lib/offline-task-payload";
 import { syncCalendarTaskReschedule } from "@/lib/calendar-task-reschedule";
 import { syncTaskCardActivity } from "@/lib/task-card-activity";
@@ -17,7 +16,7 @@ import {
   type OfflineOperation,
 } from "@/lib/offline-sync";
 
-type SyncClient = ReturnType<typeof createClient<Database>>;
+type SyncClient = ReturnType<typeof createAuthenticatedDataClient>;
 
 const sameValue = (first: unknown, second: unknown) => JSON.stringify(first) === JSON.stringify(second);
 const isAlreadyStored = (error: { message?: string } | null) =>
@@ -298,17 +297,7 @@ async function createAuthenticatedSyncClient(): Promise<SyncClient> {
     throw new Error("Não foi possível localizar uma sessão para sincronizar os dados offline.");
   }
 
-  const url = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const publishableKey =
-    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !publishableKey) {
-    throw new Error("A conexão com o servidor não está configurada.");
-  }
-
-  return createClient<Database>(url, publishableKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { Authorization: `Bearer ${session.access_token}` } },
-  });
+  return createAuthenticatedDataClient(session.access_token);
 }
 
 export function OfflineSyncManager() {

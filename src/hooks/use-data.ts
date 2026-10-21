@@ -4,9 +4,8 @@ import { get, set } from "idb-keyval";
 import { offlineTaskCacheKey } from "@/lib/offline-user-storage";
 import { listOfflineOperations } from "@/lib/offline-sync";
 import { overlayPendingTaskOperations } from "@/lib/offline-task-overlay";
-import { createClient } from "@supabase/supabase-js";
+import { createAuthenticatedDataClient } from "@/integrations/authenticated-client";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 
 /**
@@ -356,16 +355,9 @@ export function useTasks(targetWorkspaceId?: string | null) {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      const url = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-      const publishableKey =
-        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
-      const taskClient =
-        session && url && publishableKey
-          ? createClient<Database>(url, publishableKey, {
-              auth: { persistSession: false, autoRefreshToken: false },
-              global: { headers: { Authorization: `Bearer ${session.access_token}` } },
-            })
-          : supabase;
+      const taskClient = session?.access_token
+        ? createAuthenticatedDataClient(session.access_token)
+        : supabase;
       // A visualização administrativa de outro ambiente não altera o ambiente
       // ativo. Ela usa uma RPC que só libera leitura para administradores
       // associados ao ambiente escolhido.

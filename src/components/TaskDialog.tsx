@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { createAuthenticatedDataClient } from "@/integrations/authenticated-client";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +22,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 import {
   useAssignableProfiles,
@@ -748,20 +747,7 @@ export function TaskDialog({
       toast.error("Não foi possível validar sua sessão. Entre novamente para criar uma tarefa.");
       return null;
     }
-    const url = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const publishableKey =
-      import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
-    if (!url || !publishableKey) {
-      toast.error("A conexão com o Supabase não está configurada.");
-      return null;
-    }
-
-    // Use the verified access token explicitly for task creation. This avoids a
-    // stale internal auth state causing PostgREST to receive the request as anon.
-    const authenticatedClient = createClient<Database>(url, publishableKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { headers: { Authorization: `Bearer ${session.access_token}` } },
-    });
+    const authenticatedClient = createAuthenticatedDataClient(session.access_token);
     return { user: authenticatedUser, client: authenticatedClient };
   };
 

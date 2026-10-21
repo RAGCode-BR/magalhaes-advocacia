@@ -2,14 +2,18 @@ import { hashPassword } from "@better-auth/utils/password";
 import { createClient, SupabaseAuthAdapter } from "@neondatabase/neon-js";
 
 /** Browser code receives only public service URLs. The PostgreSQL password stays server-side. */
-export function createNeonBrowserClient(url: string) {
+export function createNeonBrowserClient(url: string, accessToken?: string) {
   const base = new URL(url);
   const serviceUrl = (service: string, suffix: string) =>
     `${base.protocol}//${base.hostname.replace(".", `.${service}.`)}${base.pathname}${suffix}`;
-  const client = createClient({
-    auth: { url: serviceUrl("neonauth", "/auth"), adapter: SupabaseAuthAdapter() },
-    dataApi: { url: serviceUrl("apirest", "/rest/v1") },
-  });
+  const client = accessToken
+    ? createClient({
+        dataApi: { url: serviceUrl("apirest", "/rest/v1"), getToken: async () => accessToken },
+      })
+    : createClient({
+        auth: { url: serviceUrl("neonauth", "/auth"), adapter: SupabaseAuthAdapter() },
+        dataApi: { url: serviceUrl("apirest", "/rest/v1") },
+      });
   const avatarUrls = new Map<string, string>();
   const channels = new Set<{ unsubscribe: () => void }>();
   const failed = (message: string) => ({ data: null, error: new Error(message) });

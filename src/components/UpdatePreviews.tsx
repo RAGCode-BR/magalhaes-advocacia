@@ -1502,7 +1502,11 @@ function MagalhaesPasswordPreview() {
 function MagalhaesDirectUsersPreview() {
   return <PreviewGrid label="Prévia da criação de usuários e troca da própria senha"><div className="rounded-xl border bg-background p-4 text-xs"><strong>Novo usuário</strong><div className="mt-3 space-y-2"><div className="rounded border p-2">Nome e e-mail</div><div className="rounded border p-2">Senha inicial · ••••••••</div><div className="rounded border p-2">Permissões selecionadas</div><div className="rounded bg-primary p-2 text-center text-primary-foreground">Criar acesso</div></div></div><div className="rounded-xl border bg-background p-4 text-xs"><strong>Personalizar · Redefinir senha</strong><p className="mt-3 rounded border p-2">Senha atual</p><p className="mt-2 rounded border p-2">Nova senha</p><p className="mt-2 rounded border p-2">Confirmar nova senha</p><div className="mt-3 rounded bg-primary/10 p-2 text-primary">Senha alterada pelo próprio usuário</div></div></PreviewGrid>;
 }
+function MagalhaesTaskNeonPreview() {
+  return <PreviewGrid label="Prévia da criação de tarefa atribuída no Neon"><div className="mx-auto w-full max-w-xs rounded-xl border bg-background p-4 text-xs"><strong>Nova tarefa</strong><div className="mt-3 rounded border p-2">Revisar documento</div><div className="mt-2 rounded border p-2">Responsável · Usuário de exemplo</div><div className="mt-2 rounded border p-2">Prazo definido</div><div className="mt-3 flex items-center gap-2 rounded bg-primary/10 p-2 text-primary"><CheckCircle2 className="h-4 w-4" /> Tarefa salva no Neon</div></div></PreviewGrid>;
+}
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-task-neon": MagalhaesTaskNeonPreview,
   "magalhaes-direct-users": MagalhaesDirectUsersPreview,
   "magalhaes-password": MagalhaesPasswordPreview,
   "magalhaes-neon": MagalhaesNeonPreview,
