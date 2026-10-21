@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-direct-users"
   | "magalhaes-password"
   | "magalhaes-neon"
   | "magalhaes-local"
@@ -66,6 +67,11 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-usuarios-senha-2026-10-21", title: "Crie usuários com senha inicial",
+    date: "2026-10-21", preview: "magalhaes-direct-users", audience: "all", workspaces: ["consultoria"],
+    details: ["O administrador cria nome, e-mail, senha inicial e permissões em Usuários, sem convite por e-mail.", "Cada usuário pode trocar a própria senha em Personalizar informando a senha atual. O cadastro público está desativado."],
+  },
   {
     id: "magalhaes-acesso-senha-2026-10-21", title: "Entrada direta com e-mail e senha",
     date: "2026-10-21", preview: "magalhaes-password", audience: "all", workspaces: ["consultoria"],

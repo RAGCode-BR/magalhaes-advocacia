@@ -131,6 +131,24 @@ function AccessForm({
               required
             />
           </div>
+          {isNeonDatabase && (
+            <div className="space-y-2">
+              <Label htmlFor="initial-password">Senha inicial</Label>
+              <Input
+                id="initial-password"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                maxLength={128}
+                value={value.password}
+                onChange={(e) => onChange({ ...value, password: e.target.value })}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Mínimo de 8 caracteres. O usuário pode trocar em Personalizar.
+              </p>
+            </div>
+          )}
         </>
       )}
       <div className="space-y-2">
@@ -158,7 +176,9 @@ function AccessForm({
         >
           <option value="collaborator">Colaborador</option>
           {!marketingOnly && <option value="client">Cliente</option>}
-          {!marketingOnly && <option value="admin">Administrador</option>}
+          {!marketingOnly && (!isNeonDatabase || value.role === "admin") && (
+            <option value="admin">Administrador</option>
+          )}
         </select>
       </div>
       {value.role === "client" && (
@@ -226,19 +246,21 @@ function UserDetailsForm({
           required
         />
       </div>
-      {!isNeonDatabase && <div className="space-y-2">
-        <Label>Nova senha</Label>
-        <Input
-          type="password"
-          minLength={6}
-          value={value.password}
-          onChange={(event) => onChange({ ...value, password: event.target.value })}
-          placeholder="Deixe em branco para manter a senha atual"
-        />
-        <p className="text-xs text-muted-foreground">
-          A nova senha deve ter ao menos 6 caracteres.
-        </p>
-      </div>}
+      {!isNeonDatabase && (
+        <div className="space-y-2">
+          <Label>Nova senha</Label>
+          <Input
+            type="password"
+            minLength={6}
+            value={value.password}
+            onChange={(event) => onChange({ ...value, password: event.target.value })}
+            placeholder="Deixe em branco para manter a senha atual"
+          />
+          <p className="text-xs text-muted-foreground">
+            A nova senha deve ter ao menos 6 caracteres.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -338,6 +360,7 @@ function UsersPage() {
   };
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["profiles"] });
+    qc.invalidateQueries({ queryKey: ["admin_profile_emails"] });
     qc.invalidateQueries({ queryKey: ["roles"] });
     qc.invalidateQueries({ queryKey: ["user_permissions"] });
     qc.invalidateQueries({ queryKey: ["client_user_links"] });
@@ -354,10 +377,11 @@ function UsersPage() {
       refresh();
       setCreateOpen(false);
       setForm(defaults);
-      if (isNeonDatabase) {
-        const link = `${window.location.origin}${import.meta.env.BASE_URL}auth?register=1`;
-        void navigator.clipboard.writeText(link).then(() => toast.success("Convite autorizado por 7 dias. Link copiado: envie ao usuário para ele ativar o e-mail cadastrado."), () => toast.success(`Convite autorizado. O usuário deve abrir ${link} e ativar seu e-mail.`));
-      } else toast.success("Convite enviado com sucesso.");
+      toast.success(
+        isNeonDatabase
+          ? "Acesso criado. O usuário já pode entrar com o e-mail e a senha inicial."
+          : "Convite enviado com sucesso.",
+      );
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao criar acesso"),
   });
@@ -626,7 +650,13 @@ function UsersPage() {
           </p>
         </div>
         {isAdmin && (
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <Dialog
+            open={createOpen}
+            onOpenChange={(open) => {
+              if (open) setForm(defaults);
+              setCreateOpen(open);
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" /> Novo usuário
@@ -636,8 +666,9 @@ function UsersPage() {
               <DialogHeader>
                 <DialogTitle>Criar acesso</DialogTitle>
                 <DialogDescription>
-                  O usuário receberá um convite por e-mail para criar a própria senha e ativar o
-                  acesso.
+                  {isNeonDatabase
+                    ? "Defina o login e a senha inicial. O usuário poderá entrar imediatamente e trocar a senha em Personalizar."
+                    : "O usuário receberá um convite por e-mail para criar a própria senha e ativar o acesso."}
                 </DialogDescription>
               </DialogHeader>
               <AccessForm
@@ -650,7 +681,11 @@ function UsersPage() {
               />
               <DialogFooter>
                 <Button disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>
-                  {createMutation.isPending ? "Enviando…" : "Enviar convite"}
+                  {createMutation.isPending
+                    ? "Criando…"
+                    : isNeonDatabase
+                      ? "Criar acesso"
+                      : "Enviar convite"}
                 </Button>
               </DialogFooter>
             </DialogContent>

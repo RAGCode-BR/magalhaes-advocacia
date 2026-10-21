@@ -18,6 +18,7 @@ try {
     "hardening",
     "defaults",
     "password-login",
+    "direct-users",
   ])
     await db.query(readFileSync(`neon/${file}.sql`, "utf8"));
   const email = readFileSync(".env.neon.local", "utf8").match(

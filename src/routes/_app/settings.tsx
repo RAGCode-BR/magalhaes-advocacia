@@ -1,4 +1,6 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { changeAccountPassword } from "@/lib/account-password";
+import { isNeonDatabase } from "@/integrations/supabase/client";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -60,6 +62,7 @@ function Settings() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(profile?.avatar_url ?? null);
   const [removeAvatar, setRemoveAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
@@ -143,7 +146,11 @@ function Settings() {
   };
 
   const changePassword = async () => {
-    if (newPassword.length < 8) {
+    if (isNeonDatabase && !currentPassword) {
+      toast.error("Informe sua senha atual.");
+      return;
+    }
+    if (newPassword.length < 8 || newPassword.length > 128) {
       toast.error("A nova senha deve ter pelo menos 8 caracteres.");
       return;
     }
@@ -154,10 +161,9 @@ function Settings() {
 
     setChangingPassword(true);
     try {
-      // This updates the authenticated user's password in Supabase Auth, which
-      // is the credential used on the next login as well as the current session.
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const { error } = await changeAccountPassword(currentPassword, newPassword);
       if (error) throw error;
+      setCurrentPassword("");
       setNewPassword("");
       setPasswordConfirmation("");
       toast.success("Senha redefinida. Use a nova senha nos próximos acessos.");
@@ -305,6 +311,18 @@ function Settings() {
             A nova senha passa a valer no login desta conta imediatamente.
           </p>
         </div>
+        {isNeonDatabase && (
+          <div className="space-y-2">
+            <Label htmlFor="current-password">Senha atual</Label>
+            <Input
+              id="current-password"
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+            />
+          </div>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="new-password">Nova senha</Label>
@@ -334,7 +352,12 @@ function Settings() {
           type="button"
           variant="outline"
           onClick={changePassword}
-          disabled={changingPassword || !newPassword || !passwordConfirmation}
+          disabled={
+            changingPassword ||
+            (isNeonDatabase && !currentPassword) ||
+            !newPassword ||
+            !passwordConfirmation
+          }
         >
           {changingPassword ? "Redefinindo…" : "Redefinir senha"}
         </Button>

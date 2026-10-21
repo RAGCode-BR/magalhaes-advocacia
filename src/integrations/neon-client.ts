@@ -1,3 +1,4 @@
+import { hashPassword } from "@better-auth/utils/password";
 import { createClient, SupabaseAuthAdapter } from "@neondatabase/neon-js";
 
 /** Browser code receives only public service URLs. The PostgreSQL password stays server-side. */
@@ -138,7 +139,25 @@ export function createNeonBrowserClient(url: string) {
   };
   const functions = {
     async invoke(name: string, options: any) {
-      if (name === "admin-user-access") return client.rpc("neon_admin_access", options.body);
+      if (name === "admin-user-access") {
+        const { action, data } = options.body;
+        if (action === "create") {
+          if (!data.fullName?.trim()) return failed("Informe o nome completo.");
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email?.trim() || ""))
+            return failed("Informe um e-mail válido.");
+          if (
+            typeof data.password !== "string" ||
+            data.password.length < 8 ||
+            data.password.length > 128
+          )
+            return failed("A senha inicial deve ter entre 8 e 128 caracteres.");
+          // Compatible with Better Auth; only the salted scrypt hash reaches SQL.
+          const { password, ...account } = data;
+          const passwordHash = await hashPassword(password);
+          return client.rpc("neon_admin_access", { action, data: { ...account, passwordHash } });
+        }
+        return client.rpc("neon_admin_access", { action, data });
+      }
       return failed(
         "Esta integração externa ainda precisa de configuração no servidor da Magalhães.",
       );

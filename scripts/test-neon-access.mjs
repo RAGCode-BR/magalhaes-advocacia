@@ -1,4 +1,5 @@
 import { connectNeon } from "./neon-db.mjs";
+import { hashPassword } from "@better-auth/utils/password";
 import { randomUUID } from "node:crypto";
 const db = await connectNeon();
 const id = randomUUID();
@@ -41,15 +42,18 @@ try {
     "select public.neon_file_download('task-attachments','validation/private.txt') data",
   );
   if (!file.rows[0].data?.content) throw Error("Anexo privado não recuperado");
-  await db.query(
-    "select public.neon_admin_access('create',jsonb_build_object('email','validation-invite@example.invalid','role','collaborator','permissions',jsonb_build_array('tasks')))",
-  );
+  const created = await db.query("select public.neon_admin_access('create',$1::jsonb) result", [
+    JSON.stringify({
+      email: "validation-invite@example.invalid",
+      fullName: "Colaborador descartável",
+      role: "collaborator",
+      permissions: ["tasks"],
+      passwordHash: await hashPassword("Validation-password-2026!"),
+    }),
+  ]);
+  const collaborator = created.rows[0].result.userId;
+  if (!collaborator) throw Error("Conta não criada");
   await db.query("RESET ROLE");
-  const collaborator = randomUUID();
-  await db.query(
-    'insert into neon_auth."user"(id,name,email,"emailVerified","createdAt","updatedAt") values($1,$2,$3,true,now(),now())',
-    [collaborator, "Colaborador descartável", "validation-invite@example.invalid"],
-  );
   await db.query("select set_config('request.jwt.claims',$1,true)", [
     JSON.stringify({ sub: id, role: "authenticated" }),
   ]);
@@ -97,7 +101,7 @@ try {
   }
   if (!denied) throw Error("Cadastro sem convite não foi bloqueado");
   console.log(
-    "PASS: único administrador inicial, identidade JWT, cliente, tarefa, subtarefa, anexo privado e convite. Cadastro sem convite bloqueado.",
+    "PASS: único administrador inicial, identidade JWT, cliente, tarefa, subtarefa, anexo privado e criação direta de login. Cadastro público bloqueado.",
   );
 } catch (error) {
   console.error(error.message, error.where ?? "");

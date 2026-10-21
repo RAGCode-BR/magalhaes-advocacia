@@ -30,6 +30,7 @@ function AppLayout() {
   ];
   const clientCanAccessCurrentRoute =
     pathname.startsWith("/mural") ||
+    pathname.startsWith("/settings") ||
     (pathname.startsWith("/portal/entregas") &&
       (hasPermission("portal_entregas") || hasPermission("portal"))) ||
     (pathname.startsWith("/portal/financeiro") &&

@@ -124,6 +124,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       "/settings": "settings",
     };
     return allNav.filter((item) => {
+      if (item.to === "/settings") return true;
       if (item.to === "/portal") return canAccessDeliveries || canAccessFinance;
       if (item.to === "/meetings" && hasInvitedMeeting) return true;
       return (!item.adminOnly || isAdmin) && hasPermission(accessByPath[item.to]);

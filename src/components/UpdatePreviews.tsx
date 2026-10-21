@@ -1499,7 +1499,11 @@ function MagalhaesNeonPreview() {
 function MagalhaesPasswordPreview() {
   return <PreviewGrid label="Prévia da entrada com senha e acesso autorizado"><div className="mx-auto w-full max-w-xs rounded-xl border bg-background p-4 text-xs"><strong>Entrar</strong><div className="mt-3 rounded border p-2 text-muted-foreground">E-mail</div><div className="mt-2 rounded border p-2">••••••••</div><div className="mt-3 rounded bg-primary p-2 text-center text-primary-foreground">Entrar</div><p className="mt-3 flex gap-2 text-muted-foreground"><ShieldCheck className="h-4 w-4" /> Somente acessos autorizados</p></div></PreviewGrid>;
 }
+function MagalhaesDirectUsersPreview() {
+  return <PreviewGrid label="Prévia da criação de usuários e troca da própria senha"><div className="rounded-xl border bg-background p-4 text-xs"><strong>Novo usuário</strong><div className="mt-3 space-y-2"><div className="rounded border p-2">Nome e e-mail</div><div className="rounded border p-2">Senha inicial · ••••••••</div><div className="rounded border p-2">Permissões selecionadas</div><div className="rounded bg-primary p-2 text-center text-primary-foreground">Criar acesso</div></div></div><div className="rounded-xl border bg-background p-4 text-xs"><strong>Personalizar · Redefinir senha</strong><p className="mt-3 rounded border p-2">Senha atual</p><p className="mt-2 rounded border p-2">Nova senha</p><p className="mt-2 rounded border p-2">Confirmar nova senha</p><div className="mt-3 rounded bg-primary/10 p-2 text-primary">Senha alterada pelo próprio usuário</div></div></PreviewGrid>;
+}
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-direct-users": MagalhaesDirectUsersPreview,
   "magalhaes-password": MagalhaesPasswordPreview,
   "magalhaes-neon": MagalhaesNeonPreview,
   "magalhaes-local": MagalhaesLocalPreview,

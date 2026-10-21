@@ -24,11 +24,9 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
-  const [register, setRegister] = useState(
-    isNeonDatabase && new URLSearchParams(window.location.search).get("register") === "1",
-  );
   const [loading, setLoading] = useState(false);
-  const invitationFlow = new URLSearchParams(window.location.search).get("invite") === "1";
+  const invitationFlow =
+    !isNeonDatabase && new URLSearchParams(window.location.search).get("invite") === "1";
 
   useEffect(() => {
     if (user && !invitationFlow) navigate({ to: "/mural", replace: true });
@@ -38,19 +36,6 @@ function AuthPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      if (isNeonDatabase && register) {
-        const signup = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { displayName: email.split("@")[0] } },
-        });
-        if (signup.error) throw signup.error;
-        setRegister(false);
-        const login = await supabase.auth.signInWithPassword({ email, password });
-        if (login.error) throw login.error;
-        toast.success("Acesso ativado. Bem-vindo!");
-        return;
-      }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       toast.success("Bem-vindo de volta!");
@@ -149,9 +134,7 @@ function AuthPage() {
               </p>
             </div>
           )}
-          <h2 className="text-2xl font-bold">
-            {invitationFlow ? "Definir senha" : register ? "Ativar acesso autorizado" : "Entrar"}
-          </h2>
+          <h2 className="text-2xl font-bold">{invitationFlow ? "Definir senha" : "Entrar"}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {invitationFlow
               ? "Crie sua senha para ativar o acesso convidado."
@@ -207,11 +190,11 @@ function AuthPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">{register ? "Crie sua senha" : "Senha"}</Label>
+                  <Label htmlFor="password">Senha</Label>
                   <Input
                     id="password"
                     type="password"
-                    autoComplete={register ? "new-password" : "current-password"}
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -224,7 +207,7 @@ function AuthPage() {
                   disabled={loading || !isSupabaseConfigured}
                 >
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {register ? "Ativar acesso" : "Entrar"}
+                  Entrar
                 </Button>
               </form>
               <p className="mt-4 text-center text-sm text-muted-foreground">
@@ -232,18 +215,6 @@ function AuthPage() {
                   ? "Acesso restrito ao titular e aos usuários convidados pelo administrador."
                   : "Não possui acesso? Solicite um convite ao administrador."}
               </p>
-              {isNeonDatabase && (
-                <Button
-                  type="button"
-                  variant="link"
-                  className="mt-2 w-full"
-                  onClick={() => {
-                    setRegister(!register);
-                  }}
-                >
-                  {register ? "Voltar para entrar" : "Ativar acesso autorizado"}
-                </Button>
-              )}
             </>
           )}
         </Card>

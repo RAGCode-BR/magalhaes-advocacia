@@ -2,7 +2,7 @@
 
 Acesso público: https://ragcode-br.github.io/magalhaes-advocacia/
 
-O banco online é Neon e começa vazio. O único administrador inicial usa o e-mail do titular configurado no arquivo privado; entre diretamente com e-mail e senha, sem confirmação por e-mail. Novos acessos são autorizados pelo titular na tela Usuários. Consulte [docs/NEON.md](docs/NEON.md) para operação, limites e validação.
+O banco online é Neon e começa vazio. O único administrador inicial usa o e-mail do titular configurado no arquivo privado; entre diretamente com e-mail e senha, sem confirmação por e-mail. O titular cria novos acessos em Usuários com e-mail, senha inicial e permissões. Cada usuário pode trocar a própria senha em Personalizar. Consulte [docs/NEON.md](docs/NEON.md) para operação, limites e validação.
 
 O ambiente local Supabase abaixo continua independente e disponível para testes neste Mac.
 
