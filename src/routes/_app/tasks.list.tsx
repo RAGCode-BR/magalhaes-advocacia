@@ -394,8 +394,8 @@ function ListPage() {
                   <td className="border-r px-2 py-2 font-medium"><div className="flex items-center gap-1"><TaskPinButton task={t} compact /><span className="block truncate"><LinkedText text={t.title} /></span></div>{t.is_draft && <span className="text-[10px] font-semibold text-amber-700">Em elaboração</span>}</td>
                   <td className="border-r px-2 py-2">
                     {client ? (
-                      <Badge variant="outline" style={{ borderColor: client.color ?? undefined }}>
-                        {client.name}
+                      <Badge variant="outline" className="max-w-full rounded-md align-middle font-medium" title={client.name} style={{ borderColor: client.color ?? undefined }}>
+                        <span className="min-w-0 truncate">{client.name}</span>
                       </Badge>
                     ) : (
                       <span className="text-muted-foreground">—</span>
@@ -509,7 +509,7 @@ function ListPage() {
                         </div>
                         <span className="pl-5 text-[10px] text-muted-foreground">Subtarefa de {parent.title}</span>
                       </td>
-                      <td className="border-r px-2 py-2">{client ? <Badge variant="outline" style={{ borderColor: client.color ?? undefined }}>{client.name}</Badge> : "—"}</td>
+                      <td className="border-r px-2 py-2">{client ? <Badge variant="outline" className="max-w-full rounded-md align-middle font-medium" title={client.name} style={{ borderColor: client.color ?? undefined }}><span className="min-w-0 truncate">{client.name}</span></Badge> : "—"}</td>
                       <td className="border-r px-2 py-2 text-muted-foreground">{ownProfile?.full_name || ownProfile?.email || "—"}</td>
                       <td className="border-r px-2 py-2 text-muted-foreground">—</td>
                       <td className="border-r px-2 py-2"><Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-400">Concluída</Badge></td>
