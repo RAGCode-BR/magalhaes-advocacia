@@ -20,11 +20,12 @@ export function ClientsNavGroup({
   onNavigate?: () => void;
 }) {
   const { data: clients = [], isLoading, isError } = useClients();
+  const activeClients = clients.filter((client) => client.is_active !== false);
   const [open, setOpen] = useState(active);
   const selectedId = useRouterState({
     select: (state) => (state.location.search as { client?: string }).client,
   });
-  const links = clients.map((client) => (
+  const links = activeClients.map((client) => (
     <Link
       key={client.id}
       to="/clients"
@@ -35,15 +36,14 @@ export function ClientsNavGroup({
       <span className="block truncate" title={client.name}>
         {client.name}
       </span>
-      {!client.is_active && <span className="text-[10px] text-muted-foreground">Inativo</span>}
     </Link>
   ));
   const status = isLoading
     ? "Carregando clientes…"
     : isError
       ? "Não foi possível carregar os clientes."
-      : !clients.length
-        ? "Nenhum cliente disponível."
+      : !activeClients.length
+        ? "Nenhum cliente ativo."
         : null;
 
   if (!expanded)
@@ -78,7 +78,7 @@ export function ClientsNavGroup({
                 Todos os clientes no calendário
               </Link>
             </DropdownMenuItem>
-            {clients.map((client) => (
+            {activeClients.map((client) => (
               <DropdownMenuItem key={client.id} asChild>
                 <Link
                   to="/clients"

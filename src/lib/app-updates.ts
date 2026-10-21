@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-active-nav"
   | "magalhaes-client-single"
   | "magalhaes-task-neon"
   | "magalhaes-direct-users"
@@ -69,6 +70,11 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-menu-clientes-ativos-2026-10-21", title: "Menu de clientes somente com ativos",
+    date: "2026-10-21", preview: "magalhaes-active-nav", audience: "all", workspaces: ["consultoria"],
+    details: ["Clientes arquivados deixam de aparecer nos atalhos do menu lateral, inclusive no celular e no menu recolhido.", "Os cadastros arquivados continuam disponíveis no filtro de inativos da tela Clientes."],
+  },
   {
     id: "magalhaes-clientes-unicos-2026-10-21", title: "Clientes sem duplicação automática",
     date: "2026-10-21", preview: "magalhaes-client-single", audience: "all", workspaces: ["consultoria"],

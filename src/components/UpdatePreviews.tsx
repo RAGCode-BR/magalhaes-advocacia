@@ -1508,7 +1508,11 @@ function MagalhaesTaskNeonPreview() {
 function MagalhaesClientSinglePreview() {
   return <PreviewGrid label="Prévia do cadastro único de cliente"><div className="mx-auto w-full max-w-sm rounded-xl border bg-background p-4 text-xs"><strong>Clientes ativos</strong><div className="mt-3 flex items-center gap-3 rounded-lg border p-3"><span className="h-8 w-8 rounded-full bg-primary" /><div><p className="font-semibold">Cliente de exemplo</p><p className="mt-1 text-muted-foreground">Um único cadastro</p></div><CheckCircle2 className="ml-auto h-5 w-5 text-primary" /></div><p className="mt-3 text-muted-foreground">Criar e editar sem gerar uma segunda cópia.</p></div></PreviewGrid>;
 }
+function MagalhaesActiveNavPreview() {
+  return <PreviewGrid label="Prévia do menu lateral com clientes ativos"><div className="rounded-xl bg-primary p-4 text-xs text-primary-foreground"><strong>Clientes⌃</strong><div className="mt-3 space-y-2 border-l border-primary-foreground/30 pl-3"><p className="rounded bg-primary-foreground/10 p-2">Cliente de exemplo</p><p className="rounded bg-primary-foreground/10 p-2">Outro cliente ativo</p></div></div><div className="rounded-xl border bg-background p-4 text-xs"><strong>Clientes → Inativos</strong><p className="mt-3 rounded bg-muted p-2">Cadastros arquivados preservados</p><p className="mt-3 text-muted-foreground">Disponíveis para consulta e reativação.</p></div></PreviewGrid>;
+}
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-active-nav": MagalhaesActiveNavPreview,
   "magalhaes-client-single": MagalhaesClientSinglePreview,
   "magalhaes-task-neon": MagalhaesTaskNeonPreview,
   "magalhaes-direct-users": MagalhaesDirectUsersPreview,
