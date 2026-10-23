@@ -20,13 +20,13 @@ function usableToken(session: Session | null) {
 }
 
 /** Use a server-fetched JWT, never the opaque Better Auth cookie/session token. */
-export function createNeonSessionBridge<T extends AuthApi>(original: T) {
+export function createNeonSessionBridge<T extends AuthApi>(original: T, onInvalidate = () => {}) {
   let cached: Session | null = null;
   let fetchedAt = 0;
   let pending: Promise<SessionResult> | null = null;
   let generation = 0;
   let signedOut = false;
-  const invalidate = () => { generation++; cached = null; pending = null; fetchedAt = 0; };
+  const invalidate = () => { generation++; cached = null; pending = null; fetchedAt = 0; onInvalidate(); };
   const getSession = async (options?: { forceFetch?: boolean }): Promise<SessionResult> => {
     if (signedOut) return { data: { session: null }, error: null };
     if (!options?.forceFetch && cached && usableToken(cached) && Date.now() - fetchedAt < 60_000)

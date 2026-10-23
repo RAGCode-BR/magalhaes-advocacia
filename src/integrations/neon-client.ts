@@ -13,7 +13,8 @@ export function createNeonBrowserClient(url: string, accessToken?: string) {
     auth: { url: serviceUrl("neonauth", "/auth"), adapter: SupabaseAuthAdapter() },
     dataApi: { url: serviceUrl("apirest", "/rest/v1") },
   });
-  const sessionBridge = authClient ? createNeonSessionBridge(authClient.auth) : null;
+  let clearFileCache = () => {};
+  const sessionBridge = authClient ? createNeonSessionBridge(authClient.auth, () => clearFileCache()) : null;
   // Every module (including mural, notifications and offline replay) shares the
   // verified JWT path rather than the SDK's independent session-cache path.
   const client = createClient({
@@ -25,6 +26,7 @@ export function createNeonBrowserClient(url: string, accessToken?: string) {
   const fileLoader = createNeonFileLoader((bucket, path) =>
     readNeonFile((name, args) => client.rpc(name, args), bucket, path),
   );
+  clearFileCache = fileLoader.clear;
   if (!accessToken) {
     let identity: string | null | undefined;
     sessionBridge!.auth.onAuthStateChange((event: string, session: any) => {

@@ -24,6 +24,13 @@ describe("verified Neon session used by every data module", () => {
     expect(await bridge.getToken()).toBe(verified.access_token);
     expect(original.getSession).toHaveBeenCalledTimes(1);
   });
+  it("invalidates private file caches on same-tab account changes", async () => {
+    const { original } = fixture(); const clear = vi.fn();
+    const bridge = createNeonSessionBridge(original, clear);
+    await bridge.auth.signInWithPassword(credentials);
+    expect(clear).toHaveBeenCalled(); clear.mockClear();
+    await bridge.auth.signOut(); expect(clear).toHaveBeenCalled();
+  });
   it("never sends an opaque, expired or wrong-identity token to the API", async () => {
     for (const invalid of [ { ...session(), access_token: "opaque" }, session("igor", 1), { ...session("another"), user: { id: "igor" } } ]) {
       const { original, bridge } = fixture(); original.getSession.mockResolvedValue({ data: { session: invalid as Session }, error: null });
