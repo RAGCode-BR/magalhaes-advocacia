@@ -1,3 +1,4 @@
+import { signInAndHydrate } from "@/lib/sign-in-session";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
@@ -39,6 +40,7 @@ interface AuthCtx {
   finishWorkspaceTransition: () => void;
   hasPermission: (permission: string) => boolean;
   loading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -320,6 +322,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id]);
 
+  const signIn = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      await signInAndHydrate(supabase.auth, { email: email.trim(), password }, async (nextSession) => {
+        // The Neon adapter may return a valid login without emitting SIGNED_IN
+        // to this tab. Use its returned session instead of waiting for an event.
+        loadedUserIdRef.current = nextSession.user.id;
+        setSession(nextSession);
+        setUser(nextSession.user);
+        await loadProfile(nextSession.user.id);
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const signOut = async () => {
     const userId = user?.id;
     // Oscilacoes automaticas de sessao preservam o trabalho pendente. A limpeza
@@ -385,6 +403,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         finishWorkspaceTransition,
         hasPermission,
         loading,
+        signIn,
         signOut,
         refreshProfile,
       }}
