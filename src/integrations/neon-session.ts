@@ -52,7 +52,9 @@ export function createNeonSessionBridge<T extends AuthApi>(original: T, onInvali
   };
   original.onAuthStateChange?.((event) => {
     if (event === "SIGNED_OUT") { signedOut = true; invalidate(); }
-    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") { signedOut = false; invalidate(); }
+    if (event === "SIGNED_IN") { signedOut = false; invalidate(); }
+    // Renewing the token for this account must not interrupt private downloads.
+    if (event === "TOKEN_REFRESHED") { signedOut = false; cached = null; fetchedAt = 0; }
   });
   const auth = new Proxy(original, {
     get(target, key) {
