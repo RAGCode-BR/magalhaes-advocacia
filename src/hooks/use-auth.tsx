@@ -148,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", uid),
       (supabase.from("workspaces") as any).select("id, slug, name"),
     ]);
+    if (loadedUserIdRef.current !== uid) return;
     const results = [
       profileResult,
       activeWorkspaceResult,
@@ -253,6 +254,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Supabase emits auth state changes after sign-in, sign-out and token refresh.
     // The timeout avoids updating profile data inside the auth callback stack.
     const { data: sub } = supabase.auth.onAuthStateChange((_e: unknown, s: Session | null) => {
+      // Restore through our explicit getSession path below. The SDK's initial
+      // event may arrive late with stale/null cached data after a manual login.
+      if (_e === "INITIAL_SESSION") return;
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
@@ -281,6 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     // Initial page load: restore any saved session from localStorage.
     supabase.auth.getSession().then(async ({ data }: { data: { session: Session | null } }) => {
+      if (loadedUserIdRef.current && data.session?.user?.id !== loadedUserIdRef.current) return;
       setSession(data.session);
       setUser(data.session?.user ?? null);
       if (data.session?.user) {
@@ -343,7 +348,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Oscilacoes automaticas de sessao preservam o trabalho pendente. A limpeza
     // acontece somente depois de um logout solicitado e confirmado.
     const { error } = await supabase.auth.signOut();
-    if (!error && userId) await clearOfflineUserData(userId);
+    if (error) throw error;
+    // Same-tab SIGNED_OUT is not guaranteed by the Neon adapter.
+    loadedUserIdRef.current = null;
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setIsAdmin(false);
+    setIsCollaborator(false);
+    setIsClient(false);
+    setClientId(null);
+    setPermissions([]);
+    setWorkspaces([]);
+    setActiveWorkspaceState(null);
+    setIsWorkspaceTransitioning(false);
+    setLoading(false);
+    queryClient.clear();
+    if (userId) await clearOfflineUserData(userId);
   };
 
   const refreshProfile = async () => {

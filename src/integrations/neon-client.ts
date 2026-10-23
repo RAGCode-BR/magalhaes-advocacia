@@ -1,3 +1,4 @@
+import { createNeonSessionBridge } from "./neon-session";
 import { readNeonFile } from "./neon-file-transfer";
 import { createNeonFileLoader } from "./neon-file-loader";
 import { hashPassword } from "@better-auth/utils/password";
@@ -8,14 +9,16 @@ export function createNeonBrowserClient(url: string, accessToken?: string) {
   const base = new URL(url);
   const serviceUrl = (service: string, suffix: string) =>
     `${base.protocol}//${base.hostname.replace(".", `.${service}.`)}${base.pathname}${suffix}`;
-  const client = accessToken
-    ? createClient({
-        dataApi: { url: serviceUrl("apirest", "/rest/v1"), getToken: async () => accessToken },
-      })
-    : createClient({
-        auth: { url: serviceUrl("neonauth", "/auth"), adapter: SupabaseAuthAdapter() },
-        dataApi: { url: serviceUrl("apirest", "/rest/v1") },
-      });
+  const authClient = accessToken ? null : createClient({
+    auth: { url: serviceUrl("neonauth", "/auth"), adapter: SupabaseAuthAdapter() },
+    dataApi: { url: serviceUrl("apirest", "/rest/v1") },
+  });
+  const sessionBridge = authClient ? createNeonSessionBridge(authClient.auth) : null;
+  // Every module (including mural, notifications and offline replay) shares the
+  // verified JWT path rather than the SDK's independent session-cache path.
+  const client = createClient({
+    dataApi: { url: serviceUrl("apirest", "/rest/v1"), getToken: accessToken ? async () => accessToken : sessionBridge!.getToken },
+  });
   const avatarUrls = new Map<string, string>();
   const channels = new Set<{ unsubscribe: () => void }>();
   const failed = (message: string) => ({ data: null, error: new Error(message) });
@@ -24,7 +27,7 @@ export function createNeonBrowserClient(url: string, accessToken?: string) {
   );
   if (!accessToken) {
     let identity: string | null | undefined;
-    (client as any).auth.onAuthStateChange((event: string, session: any) => {
+    sessionBridge!.auth.onAuthStateChange((event: string, session: any) => {
       const next = session?.user?.id ?? null;
       if (event === "SIGNED_OUT" || (identity !== undefined && identity !== next)) fileLoader.clear();
       identity = next;
@@ -176,6 +179,7 @@ export function createNeonBrowserClient(url: string, accessToken?: string) {
   };
   return new Proxy(client, {
     get(target, key) {
+      if (key === "auth" && sessionBridge) return sessionBridge.auth;
       if (key === "storage") return storage;
       if (key === "functions") return functions;
       if (key === "channel") return channel;
