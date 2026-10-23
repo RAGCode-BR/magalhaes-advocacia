@@ -68,3 +68,56 @@ describe("verified Neon session used by every data module", () => {
     expect(original.getSession).not.toHaveBeenCalled();
   });
 });
+
+describe("account switching and delayed auth events", () => {
+  function accounts(onInvalidate = () => {}) {
+    let notify!: (event: string, session: Session | null) => void;
+    let current: Session | null = null;
+    const original = {
+      onAuthStateChange: (callback: typeof notify) => { notify = callback; },
+      getSession: vi.fn(async () => ({ data: { session: current }, error: null })),
+      signInWithPassword: vi.fn(async ({ email }: { email: string; password: string }) => {
+        current = { ...session(email), user: { id: email, email } } as Session;
+        // A queued logout broadcast arrives while a new login is completing.
+        notify("SIGNED_OUT", null);
+        return { data: { session: current }, error: null };
+      }),
+      signOut: vi.fn(async () => { current = null; notify("SIGNED_OUT", null); return { error: null }; }),
+    };
+    return { bridge: createNeonSessionBridge(original, onInvalidate), original, notify: (event: string, s: Session | null) => notify(event, s) };
+  }
+  it("preserves private downloads when a broadcast only renews the same identity", async () => {
+    const clear = vi.fn();
+    const { bridge, notify } = accounts(clear);
+    await bridge.auth.signInWithPassword(credentials);
+    clear.mockClear();
+    notify("TOKEN_REFRESHED", session());
+    await bridge.auth.getSession(); await Promise.resolve();
+    expect(clear).not.toHaveBeenCalled();
+  });
+  it("switches owner -> logout -> Igor -> logout -> owner despite delayed logout events", async () => {
+    const { bridge } = accounts(); const changes = vi.fn();
+    bridge.auth.onAuthStateChange(changes);
+    for (const email of ["owner@example.invalid", "igor@example.invalid", "owner@example.invalid"]) {
+      const login = await bridge.auth.signInWithPassword({ email, password: "fixture" });
+      expect(login.data.session.user.email).toBe(email);
+      expect(await bridge.getToken()).toBe(login.data.session.access_token);
+      await bridge.auth.signOut();
+      expect(await bridge.getToken()).toBeNull();
+    }
+    expect(changes.mock.calls.map(([event]) => event)).toEqual(["SIGNED_IN", "SIGNED_OUT", "SIGNED_IN", "SIGNED_OUT", "SIGNED_IN", "SIGNED_OUT"]);
+  });
+  it("validates stale cross-tab logout and sign-in against the server, ignoring their payload", async () => {
+    const { bridge, notify } = accounts(); const changes = vi.fn();
+    bridge.auth.onAuthStateChange(changes);
+    await bridge.auth.signInWithPassword(credentials);
+    notify("SIGNED_OUT", null);
+    await bridge.auth.getSession(); await Promise.resolve();
+    expect(changes.mock.lastCall?.[1]?.user.email).toBe(credentials.email);
+    await bridge.auth.signOut();
+    notify("SIGNED_IN", session("old-user"));
+    await bridge.auth.getSession(); await Promise.resolve();
+    expect(changes.mock.lastCall).toEqual(["SIGNED_OUT", null]);
+    expect(await bridge.getToken()).toBeNull();
+  });
+});

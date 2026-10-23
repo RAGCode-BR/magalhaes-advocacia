@@ -5,7 +5,7 @@ type AuthApi = {
   getSession(options?: { forceFetch?: boolean }): Promise<SessionResult>;
   signInWithPassword(credentials: { email: string; password: string }): Promise<any>;
   signOut(): Promise<{ error: any }>;
-  onAuthStateChange?(callback: (event: string) => void): any;
+  onAuthStateChange?(callback: (event: string, session: Session | null) => void): any;
 };
 
 function usableToken(session: Session | null) {
@@ -26,7 +26,15 @@ export function createNeonSessionBridge<T extends AuthApi>(original: T, onInvali
   let pending: Promise<SessionResult> | null = null;
   let generation = 0;
   let signedOut = false;
-  const invalidate = () => { generation++; cached = null; pending = null; fetchedAt = 0; onInvalidate(); };
+  let mutating = false;
+  const listeners = new Set<(event: string, session: Session | null) => void>();
+  const emit = (event: string, session: Session | null) => {
+    for (const callback of listeners) callback(event, session);
+  };
+  const invalidate = (clearFiles = true) => {
+    generation++; cached = null; pending = null; fetchedAt = 0;
+    if (clearFiles) onInvalidate();
+  };
   const getSession = async (options?: { forceFetch?: boolean }): Promise<SessionResult> => {
     if (signedOut) return { data: { session: null }, error: null };
     if (!options?.forceFetch && cached && usableToken(cached) && Date.now() - fetchedAt < 60_000)
@@ -51,27 +59,57 @@ export function createNeonSessionBridge<T extends AuthApi>(original: T, onInvali
     finally { if (started === generation) pending = null; }
   };
   original.onAuthStateChange?.((event) => {
-    if (event === "SIGNED_OUT") { signedOut = true; invalidate(); }
-    if (event === "SIGNED_IN") { signedOut = false; invalidate(); }
-    // Renewing the token for this account must not interrupt private downloads.
-    if (event === "TOKEN_REFRESHED") { signedOut = false; cached = null; fetchedAt = 0; }
+    if (event === "INITIAL_SESSION" || mutating) return;
+    // Token refresh broadcasts are only cache hints. Fetching immediately in
+    // response would make two tabs repeatedly refresh one another's JWTs.
+    if (event === "TOKEN_REFRESHED") { cached = null; fetchedAt = 0; return; }
+    if (!["SIGNED_OUT", "SIGNED_IN", "USER_UPDATED"].includes(event)) return;
+    // Broadcasts can be delayed and carry another tab's stale/opaque session.
+    // Reconcile against the server cookie instead of trusting their payload.
+    const previousIdentity = cached?.user.id ?? null;
+    signedOut = false;
+    invalidate(false);
+    const started = generation;
+    void getSession({ forceFetch: true }).then(({ data, error }) => {
+      if (mutating || started !== generation || error) return;
+      signedOut = !data.session;
+      const sameIdentity = !!data.session && previousIdentity === data.session.user.id;
+      if (!sameIdentity) onInvalidate();
+      emit(data.session ? (sameIdentity ? "TOKEN_REFRESHED" : "SIGNED_IN") : "SIGNED_OUT", data.session);
+    });
   });
   const auth = new Proxy(original, {
     get(target, key) {
       if (key === "getSession") return getSession;
+      if (key === "onAuthStateChange") return (callback: (event: string, session: Session | null) => void) => {
+        listeners.add(callback);
+        return { data: { subscription: { unsubscribe: () => listeners.delete(callback) } } };
+      };
+      if (key === "getUser") return async () => {
+        const result = await getSession();
+        return { data: { user: result.data.session?.user ?? null }, error: result.error };
+      };
       if (key === "signInWithPassword") return async (credentials: { email: string; password: string }) => {
+        mutating = true;
         invalidate(); signedOut = false;
-        const result = await target.signInWithPassword(credentials);
-        if (result.error) return result;
-        // A successful password check can still return a cached opaque token.
-        const verified = await getSession({ forceFetch: true });
-        return { data: { user: verified.data.session?.user ?? null, session: verified.data.session }, error: verified.error };
+        try {
+          const result = await target.signInWithPassword(credentials);
+          if (result.error) { signedOut = true; return result; }
+          // Discard even requests started by the adapter during password login.
+          invalidate();
+          const verified = await getSession({ forceFetch: true });
+          if (!verified.error && verified.data.session) emit("SIGNED_IN", verified.data.session);
+          return { data: { user: verified.data.session?.user ?? null, session: verified.data.session }, error: verified.error };
+        } finally { mutating = false; }
       };
       if (key === "signOut") return async () => {
+        mutating = true;
         invalidate();
-        const result = await target.signOut();
-        if (!result.error) { signedOut = true; invalidate(); }
-        return result;
+        try {
+          const result = await target.signOut();
+          if (!result.error) { signedOut = true; invalidate(); emit("SIGNED_OUT", null); }
+          return result;
+        } finally { mutating = false; }
       };
       const value = Reflect.get(target, key);
       return typeof value === "function" ? value.bind(target) : value;

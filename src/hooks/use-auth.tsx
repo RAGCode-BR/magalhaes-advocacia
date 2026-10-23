@@ -74,6 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isWorkspaceTransitioning, setIsWorkspaceTransitioning] = useState(false);
   const [loading, setLoading] = useState(true);
   const loadedUserIdRef = useRef<string | null>(null);
+  const authEpochRef = useRef(0);
+  const authBusyRef = useRef(false);
 
   const restoreOfflineAccess = (uid: string) => {
     try {
@@ -256,7 +258,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_e: unknown, s: Session | null) => {
       // Restore through our explicit getSession path below. The SDK's initial
       // event may arrive late with stale/null cached data after a manual login.
-      if (_e === "INITIAL_SESSION") return;
+      if (_e === "INITIAL_SESSION" || authBusyRef.current) return;
+      authEpochRef.current++;
+      if (loadedUserIdRef.current !== (s?.user.id ?? null)) queryClient.clear();
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
@@ -284,8 +288,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
     // Initial page load: restore any saved session from localStorage.
+    const restoreEpoch = authEpochRef.current;
     supabase.auth.getSession().then(async ({ data }: { data: { session: Session | null } }) => {
-      if (loadedUserIdRef.current && data.session?.user?.id !== loadedUserIdRef.current) return;
+      if (restoreEpoch !== authEpochRef.current || authBusyRef.current) return;
       setSession(data.session);
       setUser(data.session?.user ?? null);
       if (data.session?.user) {
@@ -328,43 +333,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   const signIn = async (email: string, password: string) => {
+    authEpochRef.current++;
+    authBusyRef.current = true;
     setLoading(true);
     try {
       await signInAndHydrate(supabase.auth, { email: email.trim(), password }, async (nextSession) => {
         // The Neon adapter may return a valid login without emitting SIGNED_IN
         // to this tab. Use its returned session instead of waiting for an event.
+        if (loadedUserIdRef.current !== nextSession.user.id) queryClient.clear();
         loadedUserIdRef.current = nextSession.user.id;
         setSession(nextSession);
         setUser(nextSession.user);
         await loadProfile(nextSession.user.id);
       });
     } finally {
+      authBusyRef.current = false;
       setLoading(false);
     }
   };
 
   const signOut = async () => {
     const userId = user?.id;
-    // Oscilacoes automaticas de sessao preservam o trabalho pendente. A limpeza
-    // acontece somente depois de um logout solicitado e confirmado.
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    // Same-tab SIGNED_OUT is not guaranteed by the Neon adapter.
-    loadedUserIdRef.current = null;
-    setSession(null);
-    setUser(null);
-    setProfile(null);
-    setIsAdmin(false);
-    setIsCollaborator(false);
-    setIsClient(false);
-    setClientId(null);
-    setPermissions([]);
-    setWorkspaces([]);
-    setActiveWorkspaceState(null);
-    setIsWorkspaceTransitioning(false);
-    setLoading(false);
-    queryClient.clear();
-    if (userId) await clearOfflineUserData(userId);
+    authEpochRef.current++;
+    authBusyRef.current = true;
+    try {
+      // Oscilacoes automaticas de sessao preservam o trabalho pendente. A limpeza
+      // acontece somente depois de um logout solicitado e confirmado.
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      // Same-tab SIGNED_OUT is not guaranteed by the Neon adapter.
+      loadedUserIdRef.current = null;
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setIsAdmin(false);
+      setIsCollaborator(false);
+      setIsClient(false);
+      setClientId(null);
+      setPermissions([]);
+      setWorkspaces([]);
+      setActiveWorkspaceState(null);
+      setIsWorkspaceTransitioning(false);
+      setLoading(false);
+      queryClient.clear();
+      if (userId) await clearOfflineUserData(userId);
+    } finally { authBusyRef.current = false; }
   };
 
   const refreshProfile = async () => {
