@@ -335,11 +335,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     authEpochRef.current++;
     authBusyRef.current = true;
-    setLoading(true);
+    // Keep the login form mounted while the password is checked, so a failed
+    // attempt retains its inputs and can display the authentication error.
     try {
       await signInAndHydrate(supabase.auth, { email: email.trim(), password }, async (nextSession) => {
         // The Neon adapter may return a valid login without emitting SIGNED_IN
         // to this tab. Use its returned session instead of waiting for an event.
+        setLoading(true);
         if (loadedUserIdRef.current !== nextSession.user.id) queryClient.clear();
         loadedUserIdRef.current = nextSession.user.id;
         setSession(nextSession);

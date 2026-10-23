@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { signInFailureMessage } from "@/lib/sign-in-session";
 import { BrandLogo } from "@/components/BrandLogo";
 import {
   isSupabaseConfigured,
@@ -25,6 +26,7 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const invitationFlow =
     !isNeonDatabase && new URLSearchParams(window.location.search).get("invite") === "1";
 
@@ -34,12 +36,13 @@ function AuthPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError(null);
     setLoading(true);
     try {
       await signIn(email, password);
       toast.success("Bem-vindo de volta!");
     } catch (err) {
-      toast.error((err as Error).message);
+      setLoginError(signInFailureMessage(err));
     } finally {
       setLoading(false);
     }
@@ -177,6 +180,11 @@ function AuthPage() {
           ) : (
             <>
               <form onSubmit={onSubmit} className="mt-6 space-y-4">
+                {loginError && (
+                  <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                    {loginError}
+                  </p>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="email">E-mail</Label>
                   <Input

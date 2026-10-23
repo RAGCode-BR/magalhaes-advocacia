@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Session } from "@supabase/supabase-js";
-import { signInAndHydrate } from "./sign-in-session";
+import { signInAndHydrate, signInFailureMessage } from "./sign-in-session";
 const session = { access_token: "test-token", user: { id: "igor", email: "igor@example.invalid" } } as Session;
 const credentials = { email: "igor@example.invalid", password: "test-only-password" };
 describe("same-tab sign-in session", () => {
@@ -29,5 +29,16 @@ describe("same-tab sign-in session", () => {
     const hydrate = vi.fn();
     await expect(signInAndHydrate({ signInWithPassword: async () => ({ data: { session }, error: null }) }, { ...credentials, email: "another@example.invalid" }, hydrate)).rejects.toThrow("não corresponde");
     expect(hydrate).not.toHaveBeenCalled();
+  });
+});
+
+describe("login failure shown on the form", () => {
+  it("explains rejected credentials in Portuguese without exposing credentials", () => {
+    for (const message of ["Invalid email or password", "Invalid login credentials", "INVALID_EMAIL_OR_PASSWORD"])
+      expect(signInFailureMessage(new Error(message))).toBe("E-mail ou senha incorretos. Confira seus dados e tente novamente.");
+  });
+  it("preserves specific session errors and provides a fallback for an absent error", () => {
+    expect(signInFailureMessage(new Error("A sessão retornada não corresponde ao login informado."))).toContain("sessão retornada");
+    expect(signInFailureMessage(null)).toBe("Não foi possível entrar. Tente novamente.");
   });
 });

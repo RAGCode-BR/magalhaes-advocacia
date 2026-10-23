@@ -22,3 +22,11 @@ export async function signInAndHydrate(
     throw new Error("A sessão retornada não corresponde ao login informado. Saia e entre novamente.");
   await hydrate(session);
 }
+
+/** Provider messages are not always localized by the Neon adapter. */
+export function signInFailureMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/invalid.*(email|password|credentials)|invalid_email_or_password/i.test(message))
+    return "E-mail ou senha incorretos. Confira seus dados e tente novamente.";
+  return message || "Não foi possível entrar. Tente novamente.";
+}
