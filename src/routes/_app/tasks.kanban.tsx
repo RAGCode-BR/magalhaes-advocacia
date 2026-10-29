@@ -17,6 +17,8 @@ import {
   useSensor,
   useSensors,
   DragOverlay,
+  defaultDropAnimationSideEffects,
+  type DropAnimation,
   useDroppable,
   closestCenter,
   getFirstCollision,
@@ -95,6 +97,7 @@ import {
 import { TaskCard } from "@/components/TaskCard";
 import { duplicateTask as duplicateTaskWithContents } from "@/lib/duplicate-task";
 import { TaskDialog } from "@/components/TaskDialog";
+import { KanbanScrollRail } from "@/components/KanbanScrollRail";
 import { usePersonalTaskPins } from "@/hooks/use-task-card-activity";
 import { TagManagerDialog } from "@/components/TagManagerDialog";
 import { MarketingFormatSettings } from "@/components/MarketingFormatSettings";
@@ -142,7 +145,6 @@ function SortableTaskCard({
   const style = {
     transform: CSS.Translate.toString(transform),
     transition: transition ?? "transform 180ms cubic-bezier(0.2, 0, 0, 1)",
-    opacity: isDragging ? 0.4 : 1,
     willChange: "transform",
   } as CSSProperties;
 
@@ -150,11 +152,11 @@ function SortableTaskCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={
+      className={`${
         minimal
           ? "w-[clamp(15rem,18vw,19rem)] max-w-full min-w-0 shrink-0"
           : "w-72 max-w-full min-w-0 shrink-0"
-      }
+      } ${isDragging ? "kanban-drag-ghost" : ""}`}
     >
       <TaskCard
         task={task}
@@ -172,6 +174,17 @@ function SortableTaskCard({
     </div>
   );
 }
+
+// The lifted card settles back (straightens and shrinks) while it flies to its
+// new place, and the slot left behind fades in instead of popping.
+const CARD_DROP_ANIMATION: DropAnimation = {
+  duration: 280,
+  easing: "cubic-bezier(0.32, 0.72, 0, 1)",
+  sideEffects: (parameters) => {
+    parameters.dragOverlay.node.classList.add("kanban-drop-settling");
+    return defaultDropAnimationSideEffects({ styles: { active: { opacity: "0.4" } } })(parameters);
+  },
+};
 
 const COMPLETED_COL_ID = "__completed__";
 
@@ -205,7 +218,7 @@ function CompletedColumn({
       <button
         type="button"
         onClick={onOpenChange}
-        className="mb-2 flex w-full items-center gap-1.5 rounded px-1 text-left hover:bg-muted/50"
+        className={`mb-2 flex w-full gap-1.5 rounded px-1 text-left hover:bg-muted/50 ${isH ? "h-[3.75rem] items-start pt-0.5" : "items-center"}`}
       >
         <span className="h-3 w-3 rounded-full bg-emerald-500 dark:bg-emerald-400 dark:ring-2 dark:ring-emerald-200/40 dark:shadow-[0_0_12px_rgba(74,222,128,0.7)]" />
         <h3 className="font-semibold">Concluídas</h3>
@@ -227,7 +240,7 @@ function CompletedColumn({
       >
         <div
           ref={setNodeRef}
-          className={`rounded-lg border-2 border-solid p-2 transition ${
+          className={`rounded-2xl border border-solid p-2 transition ${
             open
               ? isH
                 ? "flex flex-col gap-2"
@@ -294,8 +307,8 @@ function SortableColumn({
           : "flex w-full flex-col"
       }
     >
-      <div className="mb-2 flex min-w-0 items-center justify-between gap-1 px-1">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+      <div className={`mb-2 flex min-w-0 justify-between gap-1 px-1 ${isH ? "h-[3.75rem] items-start" : "items-center"}`}>
+        <div className={`flex min-w-0 flex-1 gap-1.5 ${isH ? "items-start" : "items-center"}`}>
           {canManage && (
             <span
               {...attributes}
@@ -307,10 +320,10 @@ function SortableColumn({
             </span>
           )}
           <span
-            className="h-3 w-3 shrink-0 rounded-full dark:ring-2 dark:ring-white/45 dark:shadow-[0_0_12px_rgba(255,255,255,0.32)]"
+            className={`h-3 w-3 shrink-0 rounded-full dark:ring-2 dark:ring-white/45 dark:shadow-[0_0_12px_rgba(255,255,255,0.32)] ${isH ? "mt-1" : ""}`}
             style={{ background: col.color || "#1e3a8a" }}
           />
-          <h3 className="min-w-0 flex-1 truncate font-semibold" title={col.name}>{col.name}</h3>
+          <h3 className={`min-w-0 flex-1 text-[13px] font-semibold leading-5 [overflow-wrap:anywhere] ${isH ? "line-clamp-3" : ""}`} title={col.name}>{col.name}</h3>
           <span
             className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold dark:ring-1 dark:ring-white/45 dark:shadow-[0_0_10px_rgba(255,255,255,0.2)]"
             style={{
@@ -361,12 +374,12 @@ function SortableColumn({
       >
         <div
           ref={setDropRef}
-          className={`rounded-lg border-2 border-solid border-l-4 p-2 transition ${
-            isH ? "flex flex-col gap-3" : "flex flex-nowrap items-start gap-4 overflow-x-auto pb-2"
-          } ${isOver ? "border-primary bg-primary/5" : "border-transparent bg-muted/40"}`}
+          className={`rounded-2xl p-2 transition-[background-color,box-shadow] duration-200 ${
+            isH ? "flex flex-col gap-2.5" : "flex flex-nowrap items-start gap-3 overflow-x-auto pb-2"
+          } ${isOver ? "bg-primary/5 ring-2 ring-primary/60" : "kanban-well"}`}
           style={{
             minHeight: isH ? 200 : 120,
-            borderLeftColor: col.color || "#1e3a8a",
+            ["--kanban-accent" as string]: col.color || "#1e3a8a",
           }}
         >
           {children}
@@ -1296,36 +1309,36 @@ function KanbanPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 border-b bg-background px-4 py-2 sm:px-6">
-        <div className="flex flex-col items-start gap-3 xl:flex-row xl:flex-wrap xl:items-center xl:gap-2">
-          <div className="order-2 grid w-full min-w-0 grid-cols-1 gap-2 min-[380px]:grid-cols-2 xl:ml-auto xl:flex xl:w-auto xl:flex-wrap xl:items-center xl:justify-end">
-            <Button variant="outline" className="w-full rounded-full xl:w-auto" onClick={() => setFilesOpen(true)}>
+      <header className="shrink-0 border-b border-border/60 px-3 py-1.5 sm:px-4">
+        <div className="flex flex-col items-start gap-2 lg:flex-row lg:flex-wrap lg:items-center">
+          <div className="order-2 grid w-full min-w-0 grid-cols-1 gap-1.5 min-[380px]:grid-cols-2 lg:ml-auto lg:flex lg:w-auto lg:flex-wrap lg:items-center lg:justify-end">
+            <Button variant="outline" size="sm" className="h-8 w-full rounded-full transition-transform active:scale-[0.97] lg:w-auto" onClick={() => setFilesOpen(true)}>
               <FolderOpen className="mr-2 h-4 w-4" />
               Arquivos Cliente
             </Button>
             {activeWorkspace?.slug !== "marketing" ? (
-              <Button variant="outline" className="w-full rounded-full xl:w-auto" onClick={() => setTagsOpen(true)}>
+              <Button variant="outline" size="sm" className="h-8 w-full rounded-full transition-transform active:scale-[0.97] lg:w-auto" onClick={() => setTagsOpen(true)}>
                 Etiquetas
               </Button>
             ) : null}
             {activeWorkspace?.slug === "marketing" && isAdmin ? (
               <>
-                <Button variant="outline" className="w-full rounded-full xl:w-auto" onClick={() => setMarketingFormatsOpen(true)}>
+                <Button variant="outline" size="sm" className="h-8 w-full rounded-full transition-transform active:scale-[0.97] lg:w-auto" onClick={() => setMarketingFormatsOpen(true)}>
                   <Tags className="mr-2 h-4 w-4" /> Formatos
                 </Button>
-                <Button variant="outline" className="w-full rounded-full xl:w-auto" onClick={() => setMarketingObjectivesOpen(true)}>
+                <Button variant="outline" size="sm" className="h-8 w-full rounded-full transition-transform active:scale-[0.97] lg:w-auto" onClick={() => setMarketingObjectivesOpen(true)}>
                   <Tags className="mr-2 h-4 w-4" /> Objetivos
                 </Button>
               </>
             ) : null}
             {isAdmin && (
-              <Button variant="outline" className="w-full rounded-full xl:w-auto" onClick={addColumn}>
+              <Button variant="outline" size="sm" className="h-8 w-full rounded-full transition-transform active:scale-[0.97] lg:w-auto" onClick={addColumn}>
                 <Plus className="mr-2 h-4 w-4" />
                 Coluna
               </Button>
             )}
             <Button
-              className={`h-9 w-full rounded-full px-5 shadow-sm xl:w-auto ${
+              className={`h-8 w-full rounded-full px-4 shadow-sm transition-transform active:scale-[0.97] lg:w-auto ${
                 (activeWorkspace?.slug === "marketing" ? isAdmin : !isAdmin)
                   ? "min-[380px]:col-span-2"
                   : ""
@@ -1340,7 +1353,7 @@ function KanbanPage() {
               Tarefa
             </Button>
           </div>
-          <div className="order-1 w-full min-w-0 xl:w-auto">
+          <div className="order-1 w-full min-w-0 lg:w-auto">
           <TaskFilters
             filters={filters}
             onChange={setFilters}
@@ -1560,9 +1573,9 @@ function KanbanPage() {
               </CompletedColumn>
             </div>
           </SortableContext>
-          <DragOverlay>
+          <DragOverlay dropAnimation={CARD_DROP_ANIMATION}>
             {activeTask && (
-              <div className="rotate-2 opacity-90">
+              <div className="kanban-drag-lift">
                 <TaskCard
                   task={activeTask}
                   clients={clients}
@@ -1728,8 +1741,6 @@ function KanbanScrollArea({
   children: React.ReactNode;
 }) {
   const mainRef = useRef<HTMLDivElement>(null);
-  const topScrollRef = useRef<HTMLDivElement>(null);
-  const topScrollContentRef = useRef<HTMLDivElement>(null);
   const previousOrientationRef = useRef(orientation);
 
   // Cada orientação usa dimensões e estratégias de ordenação diferentes.
@@ -1745,69 +1756,16 @@ function KanbanScrollArea({
     if (orientation === "vertical") main.scrollTop = 0;
   }, [orientation]);
 
-  // A barra nativa do navegador sempre fica no rodapé do elemento rolável.
-  // Esta área auxiliar, acima do quadro, mantém uma barra superior sincronizada.
-  useEffect(() => {
-    const main = mainRef.current;
-    const topScroll = topScrollRef.current;
-    const topScrollContent = topScrollContentRef.current;
-    if (!main || !topScroll || !topScrollContent || orientation !== "horizontal") return;
-
-    // Ignore the scroll event generated by our own mirror write. Otherwise a
-    // delayed event from the top bar can push the board back during momentum.
-    let mirroredMain = main.scrollLeft;
-    let mirroredTop = topScroll.scrollLeft;
-    const syncFromMain = () => {
-      if (main.scrollLeft === mirroredMain) return;
-      mirroredMain = main.scrollLeft;
-      topScroll.scrollLeft = mirroredMain;
-      mirroredTop = topScroll.scrollLeft;
-    };
-    const syncFromTop = () => {
-      if (topScroll.scrollLeft === mirroredTop) return;
-      mirroredTop = topScroll.scrollLeft;
-      main.scrollLeft = mirroredTop;
-      mirroredMain = main.scrollLeft;
-    };
-    const updateTopScrollbar = () => {
-      topScrollContent.style.width = `${main.scrollWidth}px`;
-      topScroll.scrollLeft = main.scrollLeft;
-      mirroredMain = main.scrollLeft;
-      mirroredTop = topScroll.scrollLeft;
-    };
-
-    updateTopScrollbar();
-    main.addEventListener("scroll", syncFromMain, { passive: true });
-    topScroll.addEventListener("scroll", syncFromTop, { passive: true });
-
-    const resizeObserver = new ResizeObserver(updateTopScrollbar);
-    resizeObserver.observe(main);
-    if (main.firstElementChild) resizeObserver.observe(main.firstElementChild);
-
-    return () => {
-      main.removeEventListener("scroll", syncFromMain);
-      topScroll.removeEventListener("scroll", syncFromTop);
-      resizeObserver.disconnect();
-    };
-  }, [orientation]);
-
   // Keep trackpad momentum and Shift+wheel on the browser's native scrolling
   // path. A non-passive wheel listener blocks it even when it returns early.
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {orientation === "horizontal" && (
-        <div
-          ref={topScrollRef}
-          className="kanban-top-scroll shrink-0 overflow-x-scroll overflow-y-hidden [scroll-behavior:auto]"
-          aria-label="Rolagem horizontal do Kanban"
-        >
-          <div ref={topScrollContentRef} className="h-px" />
-        </div>
-      )}
+      {/* Always-visible rail above the board (macOS hides native scrollbars). */}
+      {orientation === "horizontal" && <KanbanScrollRail targetRef={mainRef} />}
       <div
         ref={mainRef}
-        className={`kanban-scroll min-h-0 flex-1 overflow-y-auto p-4 [scroll-behavior:auto] ${
+        className={`kanban-scroll kanban-canvas min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4 [scroll-behavior:auto] ${
           orientation === "horizontal" ? "overflow-x-auto" : "overflow-x-hidden"
         }`}
       >

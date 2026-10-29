@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { TOP_NAV_ITEM_CLASS, TopNavItemContent } from "@/components/TopNavItem";
 
 export function ClientsNavGroup({
   expanded,
@@ -48,30 +49,33 @@ export function ClientsNavGroup({
 
   if (!expanded)
     return (
-      <div className="relative mx-auto h-11 w-11">
+      <div className="flex shrink-0 items-center">
         <Link
           to="/clients"
           search={{}}
           onClick={onNavigate}
           title="Clientes · calendário geral"
-          className={`grid h-10 w-10 cursor-pointer place-items-center rounded-full ${active ? "bg-sidebar-primary/10 text-sidebar-primary" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/10"}`}
+          aria-current={active ? "page" : undefined}
+          className={TOP_NAV_ITEM_CLASS}
         >
-          <Building2 className="h-4 w-4" />
+          <TopNavItemContent active={active} icon={Building2} label="Clientes" />
         </Link>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
               aria-label="Abrir lista de clientes"
-              className="absolute -right-1 bottom-0 grid h-5 w-5 cursor-pointer place-items-center rounded-full border bg-background shadow-sm"
+              title="Lista de clientes"
+              className="-ml-1 grid h-7 w-5 cursor-pointer place-items-center rounded-full text-sidebar-foreground/70 transition hover:bg-white/10 hover:text-sidebar-foreground"
             >
               <ChevronDown className="h-3 w-3" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            side="right"
+            side="bottom"
             align="start"
-            className="max-h-[65dvh] w-60 overflow-y-auto"
+            sideOffset={10}
+            className="max-h-[65dvh] w-64 overflow-y-auto rounded-2xl p-1.5"
           >
             <DropdownMenuItem asChild>
               <Link to="/clients" search={{}} onClick={onNavigate}>
@@ -84,7 +88,7 @@ export function ClientsNavGroup({
                   to="/clients"
                   search={{ client: client.id }}
                   onClick={onNavigate}
-                  className="truncate"
+                  className={`truncate ${active && selectedId === client.id ? "bg-primary/10 font-semibold text-primary" : ""}`}
                 >
                   {client.name}
                 </Link>

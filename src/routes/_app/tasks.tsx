@@ -5,6 +5,8 @@ import { useClients, useTasks, useTaskStatuses, type Task } from "@/hooks/use-da
 import { TaskDialog } from "@/components/TaskDialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { SlidingThumb } from "@/components/SlidingThumb";
+import { LayoutGroup } from "motion/react";
 
 export const Route = createFileRoute("/_app/tasks")({
   component: TasksLayout,
@@ -57,8 +59,8 @@ function TasksLayout() {
   ] as const;
   return (
     <div className="flex flex-col">
-      <div className="sticky top-0 z-30 flex min-w-0 flex-wrap items-center gap-3 border-b bg-background/95 px-4 py-2.5 backdrop-blur sm:px-6">
-        <div className="relative w-full sm:w-80 lg:w-[28rem]">
+      <div className="glass-surface sticky top-0 z-30 flex min-w-0 flex-wrap items-center gap-2 px-3 py-1.5 sm:px-4">
+        <div className="relative w-full sm:w-72 lg:w-80">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
@@ -66,7 +68,7 @@ function TasksLayout() {
             onChange={(event) => setTaskSearch(event.target.value)}
             placeholder="Buscar tarefa pelo título..."
             aria-label="Buscar tarefas pelo título"
-            className="pl-9 pr-9"
+            className="h-8 rounded-full pl-9 pr-9"
           />
           {taskSearch && (
             <Button
@@ -81,11 +83,12 @@ function TasksLayout() {
             </Button>
           )}
         </div>
+        <LayoutGroup id="task-views">
         <div className="flex w-full min-w-0 items-center gap-3 overflow-x-auto sm:ml-auto sm:w-auto">
-          <span className="hidden shrink-0 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:inline">
+          <span className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground lg:inline">
             Visualizar
           </span>
-          <div className="flex w-full min-w-0 rounded-md border bg-muted/35 p-0.5 sm:inline-flex sm:w-auto sm:shrink-0">
+          <div className="glass-track flex w-full min-w-0 rounded-full p-0.5 sm:inline-flex sm:w-auto sm:shrink-0">
             {views.map((v) => {
               const active = pathname === v.to || pathname.startsWith(v.to + "/");
               const Icon = v.icon;
@@ -93,19 +96,22 @@ function TasksLayout() {
                 <Link
                   key={v.to}
                   to={v.to}
-                  className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-sm px-1 py-1.5 text-center text-xs leading-tight transition sm:flex-none sm:gap-2 sm:px-3 sm:text-sm ${
-                    active
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                  aria-current={active ? "page" : undefined}
+                  className={`relative flex min-w-0 flex-1 items-center justify-center rounded-full px-1 py-1 text-center text-xs leading-tight transition-colors sm:flex-none sm:px-3 sm:text-sm ${
+                    active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
-                  {v.label}
+                  {active && <SlidingThumb layoutId="task-view-thumb" />}
+                  <span className="relative flex items-center gap-1.5 sm:gap-2">
+                    <Icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
+                    {v.label}
+                  </span>
                 </Link>
               );
             })}
           </div>
         </div>
+        </LayoutGroup>
       </div>
       {searching && (
         <div className="space-y-3 p-4 sm:p-6">

@@ -19,7 +19,9 @@ import {
   Filter as FilterIcon,
   RotateCcw,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
+import { LayoutGroup } from "motion/react";
+import { SlidingThumb } from "@/components/SlidingThumb";
 import { useAssignableProfiles, useClients, useColumns } from "@/hooks/use-data";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -81,6 +83,7 @@ export function TaskFilters({
   const { data: columns = [] } = useColumns(filters.workspace);
   const [clientsOpen, setClientsOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const scopeGroupId = useId();
   const [search, setSearch] = useState("");
 
   const scope: TaskScope = filters.scope ?? "all";
@@ -207,8 +210,9 @@ export function TaskFilters({
   ].filter((chip): chip is { key: string; label: string; clear: () => void } => chip !== null);
 
   return (
-    <div className="flex w-full min-w-0 flex-wrap items-center gap-3 sm:w-auto">
-      <div className="flex w-full min-w-0 flex-wrap rounded-2xl border bg-muted/40 p-0.5 sm:inline-flex sm:w-auto sm:rounded-full">
+    <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+      <LayoutGroup id={scopeGroupId}>
+      <div className="glass-track flex w-full min-w-0 flex-wrap rounded-2xl p-0.5 sm:inline-flex sm:w-auto sm:rounded-full">
         <ScopeBtn
           active={scope === "all" && !filters.assignee}
           onClick={() => onChange({ ...filters, scope: undefined, assignee: undefined })}
@@ -240,9 +244,10 @@ export function TaskFilters({
           </ScopeBtn>
         )}
       </div>
+      </LayoutGroup>
       <Popover open={panelOpen} onOpenChange={setPanelOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-9 w-full gap-2 rounded-full px-4 shadow-sm sm:w-auto">
+          <Button variant="outline" size="sm" className="h-8 w-full gap-2 rounded-full px-3.5 shadow-sm transition-transform active:scale-[0.97] sm:w-auto">
             <FilterIcon className="h-4 w-4" />
             Filtros
             {activeCount > 0 && (
@@ -255,7 +260,7 @@ export function TaskFilters({
         <PopoverContent
           align="start"
           sideOffset={8}
-          className="max-h-[80vh] w-[calc(100vw-2rem)] max-w-5xl overflow-y-auto rounded-2xl p-3 shadow-xl sm:p-4"
+          className="max-h-[80vh] w-[calc(100vw-2rem)] max-w-5xl overflow-y-auto rounded-2xl p-3 shadow-xl duration-300 data-[side=bottom]:slide-in-from-top-4 sm:p-4"
         >
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
@@ -509,14 +514,16 @@ function ScopeBtn({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-1 py-1 text-center text-xs font-medium leading-tight transition sm:flex-none sm:gap-1.5 sm:px-2 sm:py-0.5 ${
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
+      aria-pressed={active}
+      className={`relative inline-flex min-w-0 flex-1 items-center justify-center rounded-full px-1 py-1 text-center text-xs font-medium leading-tight transition-colors sm:flex-none sm:px-2.5 ${
+        active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
       }`}
     >
-      {icon}
-      {children}
+      {active && <SlidingThumb layoutId="task-scope-thumb" />}
+      <span className="relative inline-flex min-w-0 items-center gap-1 sm:gap-1.5">
+        {icon}
+        {children}
+      </span>
     </button>
   );
 }

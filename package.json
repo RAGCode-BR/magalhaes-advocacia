@@ -7,7 +7,9 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "vite --config vite.pages.config.ts --port 5180",
+    "dev": "vite --config vite.pages.config.ts --port 5180 --mode real",
+    "dev:teste": "vite --config vite.pages.config.ts --port 5180",
+    "dev:mcp-teste": "vite --config vite.pages.config.ts --port 5180 --mode mcp-teste",
     "build": "npm run build:pages",
     "build:pages": "npm run build:edge && vite build --config vite.pages.config.ts && node scripts/prepare-gh-pages.mjs",
     "deploy:pages": "npm run build:pages && node scripts/deploy-gh-pages.mjs",

@@ -1,5 +1,7 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-top-glass-nav"
+  | "claude-connector"
   | "magalhaes-process-navigation"
   | "magalhaes-clean-documents"
   | "magalhaes-client-files-fast"
@@ -74,6 +76,16 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-barra-superior-vidro-2026-10-28", title: "Menu no topo e mais espaço para os processos",
+    date: "2026-10-28", preview: "magalhaes-top-glass-nav", audience: "all", workspaces: ["consultoria", "marketing"],
+    details: ["No computador, o menu lateral virou uma barra no topo, em vidro vinho. O item aberto mostra o nome e o destaque desliza até a tela escolhida; os demais mostram o nome ao passar o mouse.", "A barra mostra o logo completo da Magalhães. A seta no canto (ou Ocultar barra, no menu da sua foto) encolhe a barra até sobrar só uma pílula com o logo no topo; clicar no logo abre a barra de novo. Com a barra encolhida, as setas ← e → do teclado passam para a tela anterior ou seguinte do menu, param na primeira e na última, e o nome da tela aparece em destaque na pílula; as setas continuam normais enquanto você digita ou com uma janela ou menu aberto. A escolha fica salva neste navegador.", "Em Gestão de processos, a busca, Kanban/Lista/Calendário, os filtros e os botões ficam em faixas mais baixas, liberando altura e largura para as colunas, a lista e o calendário. Tema, notificações, novidades e Sair continuam na barra; no celular o menu segue abrindo pela lateral.", "No Kanban, colunas e cards ganharam acabamento em vidro vinho. Acima do quadro há uma barra de rolagem sempre visível (inclusive no Mac), com setas para ir de coluna em coluna e um puxador vinho para arrastar. Os títulos das colunas e os nomes dos clientes não são mais cortados, e todas as colunas começam na mesma altura. Dentro do card, etiquetas, prioridade, prazo, arquivos e responsáveis seguem o mesmo alinhamento, e os botões Concluir, Duplicar e Editar aparecem flutuando ao passar o mouse, sem apertar o título. Ao arrastar, o card se levanta com borda dourada, deixa uma vaga tracejada no lugar e assenta suavemente ao ser solto.", "A janela de editar tarefa ficou mais limpa: título e ações ficam fixos no topo, Salvar e Cancelar fixos no rodapé, os campos seguem uma grade alinhada com rótulos padronizados, e descrição, subtarefas e abas ganharam acabamento mais organizado, sem mudar nenhum campo.", "O botão Pedir ao Claude virou um pequeno círculo de vidro no canto, que mostra o nome ao passar o mouse. O × ao lado o recolhe para a borda da tela, deixando só uma ponta; clique nela para trazê-lo de volta. Ctrl/⌘ + J continua abrindo o pedido."],
+  },
+  {
+    id: "claude-conector-2026-10-24", title: "Conecte o seu Claude ao TaskFlow",
+    date: "2026-10-24", preview: "claude-connector", audience: "all", workspaces: ["consultoria", "marketing"],
+    details: ["Nova área Claude no menu: cada pessoa conecta a própria assinatura do Claude ao TaskFlow, com o passo a passo, a situação da conexão e a opção de desconectar.", "No Claude, você pode pedir resumos de clientes e tarefas e a leitura dos arquivos anexados. Com a sua aprovação, ele também cria e altera cards, comentários e subtarefas em seu nome.", "Em qualquer tela, o botão Pedir ao Claude (ou Ctrl/⌘ + J) abre o seu Claude em uma nova aba com o pedido que você escrever e o contexto da tela, como o cliente aberto.", "O Claude vê apenas o que você vê no TaskFlow e não exclui nada."],
+  },
   {
     id: "magalhaes-gestao-processos-logo-2026-10-21", title: "Gestão de processos e marca mais legível",
     date: "2026-10-21", preview: "magalhaes-process-navigation", audience: "all", workspaces: ["consultoria"],

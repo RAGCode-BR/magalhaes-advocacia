@@ -5,6 +5,25 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates the wine glass top bar, the active item and the hidden-bar handle without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-top-glass-nav" }));
+    expect(html).toContain("data-top-glass-nav");
+    expect(html).toContain("data-top-nav-active");
+    expect(html).toContain("data-top-glass-handle");
+    expect(html).toContain("Gestão de processos");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
+  it("illustrates the Claude area and the consent screen without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "claude-connector" }));
+    expect(html).toContain("data-claude-connection-status");
+    expect(html).toContain("data-claude-consent");
+    expect(html).toContain("data-claude-request");
+    expect(html).toContain("Permitir acesso ao seu TaskFlow?");
+    expect(html).toContain("Nunca exclui");
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("href=");
+  });
   it("illustrates the attachment count while a subtask is collapsed", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "subtask-attachment-indicator" }));
     expect(html).toContain("data-subtask-attachment-count");

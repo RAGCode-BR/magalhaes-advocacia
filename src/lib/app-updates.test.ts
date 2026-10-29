@@ -3,7 +3,7 @@ import { APP_UPDATES, formatAppUpdateDate, getVisibleAppUpdates } from "./app-up
 
 describe("application release catalogue", () => {
   it("requires a unique version, date, explanation and preview for every release", () => {
-    expect(APP_UPDATES).toHaveLength(30);
+    expect(APP_UPDATES).toHaveLength(32);
     expect(new Set(APP_UPDATES.map((update) => update.id)).size).toBe(APP_UPDATES.length);
     for (const update of APP_UPDATES) {
       expect(update.id.trim()).not.toBe("");
@@ -27,28 +27,22 @@ describe("application release catalogue", () => {
       expect(updates.map((update) => update.id)).toEqual(
         workspace === "consultoria"
           ? [
+              "magalhaes-barra-superior-vidro-2026-10-28",
+              "claude-conector-2026-10-24",
               "magalhaes-gestao-processos-logo-2026-10-21",
               "magalhaes-documentos-sem-backups-2026-10-21",
               "magalhaes-anexos-clientes-rapidos-2026-10-21",
-              "magalhaes-minhas-tarefas-clientes-2026-10-21",
-              "magalhaes-menu-clientes-ativos-2026-10-21",
             ]
           : [
+              "magalhaes-barra-superior-vidro-2026-10-28",
+              "claude-conector-2026-10-24",
               "magalhaes-identidade-2026-10-20",
               "anexos-visiveis-nas-subtarefas-recolhidas-2026-10-19",
               "miniaturas-dos-arquivos-das-subtarefas-2026-10-19",
-              "imagens-arrastadas-para-subtarefas-2026-10-19",
-              "atualizacao-automatica-segura-2026-10-19",
             ],
       );
-      expect(updates[0].preview).toBe(
-        workspace === "consultoria" ? "magalhaes-process-navigation" : "magalhaes-brand",
-      );
-      expect(getVisibleAppUpdates(true, workspace)[0].id).toBe(
-        workspace === "consultoria"
-          ? "magalhaes-gestao-processos-logo-2026-10-21"
-          : "magalhaes-identidade-2026-10-20",
-      );
+      expect(updates[0].preview).toBe("magalhaes-top-glass-nav");
+      expect(getVisibleAppUpdates(true, workspace)[0].id).toBe("magalhaes-barra-superior-vidro-2026-10-28");
       expect(updates.every((update) => update.audience === "all")).toBe(true);
     },
   );

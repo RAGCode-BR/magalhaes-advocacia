@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { LayoutGroup } from "motion/react";
+import { SlidingThumb } from "@/components/SlidingThumb";
 import { createPortal } from "react-dom";
 import {
   DndContext,
@@ -84,6 +86,7 @@ import { normalizeTasksWithOpenSubtasks } from "@/lib/task-utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function CalendarPage({ clientCalendar = false, clientId }: { clientCalendar?: boolean; clientId?: string } = {}) {
+  const calendarViewGroupId = useId();
   const teamVisibilityWorkspaceId = useTeamTaskVisibility();
   const { user, isCollaborator, isClient, activeWorkspace, workspaces } = useAuth();
   const queryClient = useQueryClient();
@@ -495,49 +498,64 @@ export function CalendarPage({ clientCalendar = false, clientId }: { clientCalen
   const selectedDayEntries = selectedDay ? dayEntries(selectedDay) : [];
 
   return (
-    <div className="space-y-4 p-4 sm:p-6">
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium capitalize">{calendarLabel}</span>
+    <div className="space-y-3 px-3 py-3 sm:px-4">
+      <header className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <div className="flex gap-1">
-            <Button size="icon" variant="outline" onClick={() => moveCursor(-1)}>
+            <Button size="icon" variant="outline" className="h-8 w-8 rounded-full transition-transform active:scale-[0.94]" onClick={() => moveCursor(-1)} aria-label={calendarView === "week" ? "Semana anterior" : "Mês anterior"}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button size="icon" variant="outline" onClick={() => moveCursor(1)}>
+            <Button size="icon" variant="outline" className="h-8 w-8 rounded-full transition-transform active:scale-[0.94]" onClick={() => moveCursor(1)} aria-label={calendarView === "week" ? "Próxima semana" : "Próximo mês"}>
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" onClick={() => setCursor(new Date())}>
-              Hoje
-            </Button>
           </div>
+          <span key={calendarLabel} className="min-w-28 animate-in fade-in-0 slide-in-from-bottom-1 text-sm font-semibold capitalize duration-300">{calendarLabel}</span>
+          <Button variant="ghost" size="sm" className="h-8 rounded-full" onClick={() => setCursor(new Date())}>
+            Hoje
+          </Button>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        {!clientCalendar && <TaskFilters
+          filters={filters}
+          onChange={setFilters}
+          hideAssignee={isCollaborator && !teamVisibilityWorkspaceId}
+          extraActiveChips={showSubtasks ? [{ key: "calendar-subtasks", label: "Subtarefas", clear: () => setShowSubtasks(false) }] : []}
+          sections={{
+            visualization: <label className="flex cursor-pointer items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-xs" htmlFor="calendar-show-subtasks"><Checkbox id="calendar-show-subtasks" checked={showSubtasks} onCheckedChange={checked => setShowSubtasks(checked === true)} />Subtarefas</label>,
+            category: workspaces.length > 1 ? (
+              <WorkspaceTaskFilter
+                value={filters.workspace}
+                onChange={(workspace) => setFilters({ ...filters, workspace })}
+              />
+            ) : undefined,
+          }}
+        />}
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
           {!clientCalendar && canPin && <Button size="sm" variant={showPinnedOnly ? "secondary" : "outline"} aria-pressed={showPinnedOnly}
             title="Mostrar somente tarefas fixadas no período do calendário"
             onClick={() => setShowPinnedOnly(current => !current)}><Pin className="mr-1 h-3.5 w-3.5" />Fixadas</Button>}
-          <div
-            className="flex rounded-md border bg-muted/30 p-0.5"
-            role="group"
-            aria-label="Visão do calendário"
-          >
-            <Button
-              size="sm"
-              variant={calendarView === "week" ? "secondary" : "ghost"}
-              className="h-7 px-2.5 text-xs"
-              onClick={() => setCalendarView("week")}
+          <LayoutGroup id={calendarViewGroupId}>
+            <div
+              className="glass-track flex rounded-full p-0.5"
+              role="group"
+              aria-label="Visão do calendário"
             >
-              Semana
-            </Button>
-            <Button
-              size="sm"
-              variant={calendarView === "month" ? "secondary" : "ghost"}
-              className="h-7 px-2.5 text-xs"
-              onClick={() => setCalendarView("month")}
-            >
-              Mês
-            </Button>
-          </div>
+              {([["week", "Semana"], ["month", "Mês"]] as const).map(([view, label]) => (
+                <button
+                  key={view}
+                  type="button"
+                  aria-pressed={calendarView === view}
+                  className={`relative h-7 rounded-full px-3 text-xs font-medium transition-colors ${calendarView === view ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setCalendarView(view)}
+                >
+                  {calendarView === view && <SlidingThumb layoutId="calendar-view-thumb" />}
+                  <span className="relative">{label}</span>
+                </button>
+              ))}
+            </div>
+          </LayoutGroup>
           <Button
+            size="sm"
+            className="h-8 rounded-full px-4 shadow-sm transition-transform active:scale-[0.97]"
             disabled={!clientAvailable}
             onClick={() => {
               setNewTaskDay(undefined);
@@ -550,21 +568,6 @@ export function CalendarPage({ clientCalendar = false, clientId }: { clientCalen
           </Button>
         </div>
       </header>
-      {!clientCalendar && <TaskFilters
-        filters={filters}
-        onChange={setFilters}
-        hideAssignee={isCollaborator && !teamVisibilityWorkspaceId}
-        extraActiveChips={showSubtasks ? [{ key: "calendar-subtasks", label: "Subtarefas", clear: () => setShowSubtasks(false) }] : []}
-        sections={{
-          visualization: <label className="flex cursor-pointer items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-xs" htmlFor="calendar-show-subtasks"><Checkbox id="calendar-show-subtasks" checked={showSubtasks} onCheckedChange={checked => setShowSubtasks(checked === true)} />Subtarefas</label>,
-          category: workspaces.length > 1 ? (
-            <WorkspaceTaskFilter
-              value={filters.workspace}
-              onChange={(workspace) => setFilters({ ...filters, workspace })}
-            />
-          ) : undefined,
-        }}
-      />}
 
       {clientCalendar && <p className="text-xs text-muted-foreground sm:hidden">Deslize o calendário para os lados para ler os títulos.</p>}
       <DndContext
@@ -576,7 +579,7 @@ export function CalendarPage({ clientCalendar = false, clientId }: { clientCalen
         onDragCancel={() => setDraggedTask(null)}
         onDragEnd={finishDrag}
       >
-        <div className={`${showSubtasks || clientCalendar ? "overflow-x-auto" : "overflow-hidden"} rounded-lg border bg-card`}>
+        <div className={`${showSubtasks || clientCalendar ? "overflow-x-auto" : "overflow-hidden"} rounded-xl border bg-card shadow-sm`}>
           <div className={clientCalendar ? "min-w-[42rem]" : showSubtasks ? "min-w-[56rem]" : undefined}>
           <div className="grid grid-cols-7 border-b bg-muted/40 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((d) => (

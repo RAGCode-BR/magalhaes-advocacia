@@ -278,18 +278,8 @@ function ListPage() {
   };
 
   return (
-    <div className="space-y-4 p-4 sm:p-6">
-      <header className="flex items-center justify-end gap-3 flex-wrap">
-        <Button
-          onClick={() => {
-            setEdit(null);
-            setOpen(true);
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Nova tarefa
-        </Button>
-      </header>
+    <div className="space-y-3 px-3 py-3 sm:px-4">
+      <header className="flex flex-wrap items-center gap-2">
       <TaskFilters
         filters={filters}
         onChange={setFilters}
@@ -303,8 +293,20 @@ function ListPage() {
           ) : undefined,
         }}
       />
+        <Button
+          size="sm"
+          className="h-8 w-full rounded-full px-4 shadow-sm transition-transform active:scale-[0.97] sm:ml-auto sm:w-auto"
+          onClick={() => {
+            setEdit(null);
+            setOpen(true);
+          }}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Nova tarefa
+        </Button>
+      </header>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <table className="w-full table-fixed border-collapse text-xs">
           <thead className="border-b bg-muted/50 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
             <tr>

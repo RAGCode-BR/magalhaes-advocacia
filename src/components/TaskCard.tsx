@@ -1148,15 +1148,15 @@ export function TaskCard({
       <>
       <div
         {...dragHandleProps}
-        className="group flex min-h-[132px] w-full cursor-grab touch-none flex-col overflow-hidden rounded-[0.75rem] border bg-card shadow-sm transition hover:border-primary/40 hover:shadow active:cursor-grabbing"
+        className="kanban-card group flex min-h-[132px] w-full cursor-grab touch-none flex-col overflow-hidden rounded-2xl active:cursor-grabbing"
         title={task.title || "Sem título"}
       >
         <div
-          className="flex min-h-7 items-center gap-1.5 px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
-          style={client?.color ? { background: client.color, color: clientText } : undefined}
+          className="kanban-card-band flex min-h-7 items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
+          style={client?.color ? { backgroundColor: client.color, color: clientText } : undefined}
         >
           <Users className="h-3 w-3 shrink-0" />
-          <span className="truncate">{client?.name || "Sem cliente"}</span>
+          <span className="min-w-0 leading-tight [overflow-wrap:anywhere]">{client?.name || "Sem cliente"}</span>
         </div>
         <div
           role="button"
@@ -1173,12 +1173,12 @@ export function TaskCard({
             stop(event);
             onEdit?.();
           }}
-          className="min-h-0 flex-1 px-2 py-1.5 text-left text-sm font-medium leading-snug [overflow-wrap:anywhere] hover:text-primary"
+          className="min-h-0 flex-1 px-2.5 py-2 text-left text-sm font-medium leading-snug [overflow-wrap:anywhere] hover:text-primary"
         >
           {task.title ? <LinkedText text={task.title} /> : <span className="text-muted-foreground">Sem título</span>}
           {task.is_draft && <span className="mt-1 block text-[10px] font-semibold text-amber-700">Em elaboração</span>}
         </div>
-        <div className="flex items-center gap-1 border-t px-1.5 py-1">
+        <div className="flex items-center gap-1 border-t border-border/60 px-1.5 py-1">
           <Button
             size="icon"
             variant="ghost"
@@ -1271,38 +1271,37 @@ export function TaskCard({
       <div
         {...dragHandleProps}
         className={cn(
-          "group relative flex min-h-[420px] w-full cursor-grab touch-none flex-col overflow-visible rounded-[0.75rem] border bg-card shadow-sm transition hover:border-primary/40 hover:shadow active:cursor-grabbing",
+          "kanban-card group relative flex min-h-[420px] w-full cursor-grab touch-none flex-col overflow-visible rounded-2xl active:cursor-grabbing",
         )}
       >
         {/* Client color strip at top */}
         {client?.color ? (
           <div
             className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider",
-              "rounded-t-[0.75rem]",
+              "kanban-card-band flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider",
+              "rounded-t-2xl",
             )}
-            style={{ background: client.color, color: clientText }}
+            style={{ backgroundColor: client.color, color: clientText }}
           >
-            <Users className="h-3 w-3" />
-            <span className="truncate">{client.name}</span>
+            <Users className="h-3 w-3 shrink-0" />
+            <span className="min-w-0 leading-tight [overflow-wrap:anywhere]">{client.name}</span>
           </div>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-visible p-2">
-          <div className="flex flex-col gap-0.5">
+        <div className="min-h-0 flex-1 overflow-visible px-3 pb-3 pt-2.5">
+          <div className="flex flex-col gap-2">
             {/* Tags — multiple, click chip to manage */}
             {isVisible("tags") && isMarketingWorkspace ? (
-              <div className="mb-2 -mx-1" style={{ order: orderOf("tags") }}>
+              <div style={{ order: orderOf("tags") }}>
                 {selectedTags.length > 0 ? (
                   <span className="flex flex-wrap items-center gap-1">
                     {selectedTags.map((tag) => (
                       <span
                         key={tag.id}
-                        className="inline-flex rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wider shadow-sm"
+                        className="kanban-tag inline-flex h-[22px] items-center rounded-full px-2.5 text-[10px] font-bold uppercase tracking-wider"
                         style={{
-                          background: tag.color,
+                          backgroundColor: tag.color,
                           color: readableText(tag.color),
-                          boxShadow: `0 2px 8px -2px ${tag.color}80`,
                         }}
                       >
                         {tag.name}
@@ -1314,7 +1313,7 @@ export function TaskCard({
                 )}
               </div>
             ) : isVisible("tags") ? (
-              <div className="mb-2 -mx-1" style={{ order: orderOf("tags") }}>
+              <div style={{ order: orderOf("tags") }}>
                 <ChipPopover
                   value={
                     selectedTags.length > 0 ? (
@@ -1322,23 +1321,22 @@ export function TaskCard({
                         {selectedTags.map((t) => (
                           <span
                             key={t.id}
-                            className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wider shadow-sm"
+                            className="kanban-tag inline-flex h-[22px] items-center rounded-full px-2.5 text-[10px] font-bold uppercase tracking-wider"
                             style={{
-                              background: t.color,
+                              backgroundColor: t.color,
                               color: readableText(t.color),
-                              boxShadow: `0 2px 8px -2px ${t.color}80`,
                             }}
                           >
                             {t.name}
                           </span>
                         ))}
-                        <span className="inline-flex items-center gap-1 rounded-md border border-dashed px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted">
-                          <Plus className="h-2.5 w-2.5" />
+                        <span className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full border border-dashed text-muted-foreground hover:bg-muted" title="Etiquetas">
+                          <Plus className="h-3 w-3" />
                         </span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-md border border-dashed px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted">
-                        <TagIcon className="h-2.5 w-2.5" /> Adicionar etiquetas
+                      <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-dashed px-2.5 text-[11px] text-muted-foreground hover:bg-muted">
+                        <TagIcon className="h-3 w-3" /> Adicionar etiquetas
                       </span>
                     )
                   }
@@ -1386,7 +1384,7 @@ export function TaskCard({
             ) : null}
 
             {/* Title row */}
-            <div className="mb-1 flex items-start justify-between gap-1" style={{ order: -1 }}>
+            <div className="relative flex items-start gap-1.5" style={{ order: -1 }}>
               <TaskPinButton task={task} compact />
               {titleEditing ? (
                 <Textarea
@@ -1430,32 +1428,6 @@ export function TaskCard({
                   {task.is_draft && <span className="mt-1 block text-[10px] font-semibold text-amber-700">Em elaboração</span>}
                 </div>
               )}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 shrink-0 text-success opacity-0 transition group-hover:opacity-100"
-                onPointerDown={stop}
-                onClick={(e) => {
-                  stop(e);
-                  startCompletion();
-                }}
-                title="Concluir tarefa"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 shrink-0 opacity-0 transition group-hover:opacity-100"
-                onPointerDown={stop}
-                onClick={(e) => {
-                  stop(e);
-                  onDuplicate?.();
-                }}
-                title="Duplicar tarefa"
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </Button>
               {false && (
                 <Popover>
                   <PopoverTrigger asChild>
@@ -1502,7 +1474,7 @@ export function TaskCard({
                 </Popover>
               )}
               {taskPeople.length > 0 ? (
-                <div className="flex -space-x-1.5" title="Responsável e colaboradores">
+                <div className="flex shrink-0 -space-x-1.5 pt-px" title="Responsável e colaboradores">
                   {taskPeople.slice(0, 4).map((person) => {
                     const name = person.full_name || person.email || "Usuário";
                     return (
@@ -1523,26 +1495,57 @@ export function TaskCard({
                   ) : null}
                 </div>
               ) : null}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 shrink-0 opacity-0 transition group-hover:opacity-100"
-                onPointerDown={stop}
-                onClick={(e) => {
-                  stop(e);
-                  onEdit?.();
-                }}
-                title="Editar tarefa"
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </Button>
+              <div className="kanban-card-actions absolute -right-1 -top-1 z-10 flex items-center gap-0.5 rounded-full p-0.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 shrink-0 rounded-full text-success"
+                  onPointerDown={stop}
+                  onClick={(e) => {
+                    stop(e);
+                    startCompletion();
+                  }}
+                  title="Concluir tarefa"
+                  aria-label="Concluir tarefa"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 shrink-0 rounded-full"
+                  onPointerDown={stop}
+                  onClick={(e) => {
+                    stop(e);
+                    onDuplicate?.();
+                  }}
+                  title="Duplicar tarefa"
+                  aria-label="Duplicar tarefa"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 shrink-0 rounded-full"
+                  onPointerDown={stop}
+                  onClick={(e) => {
+                    stop(e);
+                    onEdit?.();
+                  }}
+                  title="Editar tarefa"
+                  aria-label="Editar tarefa"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
 
             {/* Description — inline editable */}
             {isVisible("description") ? (
               <div style={{ order: orderOf("description") }}>
                 {descEditing ? (
-                  <div className="mb-2" onPointerDown={stop} onClick={stop}>
+                  <div onPointerDown={stop} onClick={stop}>
                     <RichTextEditor
                       value={descDraft}
                       autoFocus
@@ -1554,7 +1557,7 @@ export function TaskCard({
                     />
                   </div>
                 ) : task.description && hasDescriptionText(task.description) ? (
-                  <div className="mb-2">
+                  <div>
                     <div
                       onPointerDown={stop}
                       onClick={(e) => {
@@ -1596,9 +1599,9 @@ export function TaskCard({
                       stop(e);
                       setDescEditing(true);
                     }}
-                    className="mb-2 mt-1 flex w-full items-center gap-1.5 rounded px-1 py-1 text-left text-[11px] text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+                    className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground/70 hover:bg-muted hover:text-foreground"
                   >
-                    <AlignLeft className="h-3 w-3" />
+                    <AlignLeft className="h-3.5 w-3.5" />
                     <span>Adicionar observação</span>
                   </button>
                 )}
@@ -1617,7 +1620,7 @@ export function TaskCard({
                         <Collapsible
                           open={subtasksOpen}
                           onOpenChange={setSubtasksOpen}
-                          className="mb-2 rounded-md border bg-muted/20"
+                          className="rounded-lg border bg-muted/20"
                         >
                           <div className="flex w-full items-center gap-0.5 pr-1 hover:bg-muted/40">
                             <CollapsibleTrigger asChild>
@@ -1632,7 +1635,7 @@ export function TaskCard({
                                 ) : (
                                   <ChevronRight className="h-3.5 w-3.5 shrink-0" />
                                 )}
-                                <ListChecks className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                <ListChecks className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                 <span className="min-w-0 flex-1 truncate">{subtasksTitle}</span>
                                 {rootSubs.length > 0 ? (
                                   <span className="shrink-0 text-[10px] font-normal text-muted-foreground">
@@ -1871,9 +1874,9 @@ export function TaskCard({
                                     stop(e);
                                     setAddingSubtask(true);
                                   }}
-                                  className="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+                                  className="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[11px] text-muted-foreground/70 hover:bg-muted hover:text-foreground"
                                 >
-                                  <Plus className="h-3 w-3" />
+                                  <Plus className="h-3.5 w-3.5" />
                                   <span>Adicionar subtarefa</span>
                                 </button>
                               )}
@@ -1889,9 +1892,9 @@ export function TaskCard({
                             setAddingSubtask(true);
                             setSubtasksOpen(true);
                           }}
-                          className="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+                          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground/70 hover:bg-muted hover:text-foreground"
                         >
-                          <Plus className="h-3 w-3" />
+                          <Plus className="h-3.5 w-3.5" />
                           <span>Adicionar subtarefa</span>
                         </button>
                       )}
@@ -1902,16 +1905,16 @@ export function TaskCard({
 
             {/* Attachment thumbnails grid */}
             {isVisible("attachments") ? (
-              <div className="" style={{ order: orderOf("attachments") }}>
+              <div className="space-y-1" style={{ order: orderOf("attachments") }}>
                 {attachments.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-1">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {attachments.slice(0, 6).map((a) => {
                       const isLink = a.mime_type === LINK_MIME;
                       const isImage = !isLink && a.mime_type?.startsWith("image/");
                       return (
                         <div
                           key={a.id}
-                          className="group/att relative aspect-square overflow-hidden rounded border bg-muted"
+                          className="kanban-attachment group/att relative aspect-square overflow-hidden rounded-lg"
                         >
                           {isImage ? (
                             <button
@@ -1933,15 +1936,15 @@ export function TaskCard({
                                 stop(e);
                                 openAttachment(a);
                               }}
-                              className="flex h-full w-full flex-col items-center justify-center gap-0.5 p-1 text-muted-foreground"
+                              className="flex h-full w-full flex-col items-center justify-center gap-1 p-1.5 text-muted-foreground"
                               title={a.file_name}
                             >
                               {isLink ? (
-                                <Link2 className="h-4 w-4" />
+                                <Link2 className="h-5 w-5 text-primary/80" />
                               ) : (
-                                <FileText className="h-4 w-4" />
+                                <FileText className="h-5 w-5 text-primary/80" />
                               )}
-                              <span className="line-clamp-1 w-full break-all text-center text-[8px] leading-tight">
+                              <span className="line-clamp-2 w-full break-all text-center text-[9px] font-medium leading-tight">
                                 {a.file_name}
                               </span>
                             </button>
@@ -1953,7 +1956,7 @@ export function TaskCard({
                               stop(e);
                               void deleteAttachment(a);
                             }}
-                            className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 opacity-0 transition group-hover/att:opacity-100"
+                            className="absolute right-1 top-1 rounded-full bg-background/85 p-0.5 opacity-0 shadow-sm backdrop-blur transition group-hover/att:opacity-100"
                             title="Remover"
                           >
                             <X className="h-2.5 w-2.5" />
@@ -1969,7 +1972,7 @@ export function TaskCard({
                           stop(e);
                           onEdit?.();
                         }}
-                        className="flex aspect-square items-center justify-center rounded border bg-muted text-[10px] font-medium text-muted-foreground hover:bg-muted/60"
+                        className="kanban-attachment flex aspect-square items-center justify-center rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground"
                       >
                         +{attachments.length - 6}
                       </button>
@@ -1988,9 +1991,9 @@ export function TaskCard({
                       stop(e);
                       fileRef.current?.click();
                     }}
-                    className="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+                    className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground/70 hover:bg-muted hover:text-foreground"
                   >
-                    <Upload className="h-3 w-3" />
+                    <Upload className="h-3.5 w-3.5" />
                     <span>
                       {fileUploadProgress
                         ? `Enviando ${fileUploadProgress.current}/${fileUploadProgress.total}…`
@@ -2023,15 +2026,15 @@ export function TaskCard({
                   value={
                     priority ? (
                       <span
-                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                        className="inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-semibold"
                         style={{ background: `${priority.color}22`, color: priority.color }}
                       >
-                        <Flag className="h-2.5 w-2.5" />
+                        <Flag className="h-3.5 w-3.5" />
                         {priority.label}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded border border-dashed px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted">
-                        <Flag className="h-2.5 w-2.5" />
+                      <span className="inline-flex h-6 items-center gap-1.5 rounded-full border border-dashed px-2.5 text-[11px] text-muted-foreground hover:bg-muted">
+                        <Flag className="h-3.5 w-3.5" />
                         Definir prioridade
                       </span>
                     )
@@ -2066,7 +2069,7 @@ export function TaskCard({
               <Collapsible
                 open={collaboratorsOpen}
                 onOpenChange={setCollaboratorsOpen}
-                className="rounded-md border"
+                className="rounded-lg border"
                 style={{ order: orderOf("meta") }}
               >
                 <CollapsibleTrigger asChild>
@@ -2129,7 +2132,7 @@ export function TaskCard({
                   value={
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 text-xs shadow-sm",
+                        "inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-[11px] shadow-sm",
                         dueChipClass,
                       )}
                       title={dueMeta.label}
@@ -2164,9 +2167,9 @@ export function TaskCard({
                       setHistoryOpen(true);
                     }}
                     title="Histórico de mudanças de prazo"
-                    className="inline-flex items-center rounded-sm border border-dashed px-1 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-dashed text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
-                    <History className="h-3 w-3" />
+                    <History className="h-3.5 w-3.5" />
                   </button>
                 ) : null}
               </div>
@@ -2181,10 +2184,10 @@ export function TaskCard({
                 <ChipPopover
                   value={
                     <span
-                      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted"
+                      className="inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[11px] text-muted-foreground hover:bg-muted"
                       title={`Criada em ${format(new Date(task.created_at), "dd/MM/yyyy", { locale: ptBR })}`}
                     >
-                      <CalendarIcon className="h-2.5 w-2.5" />
+                      <CalendarIcon className="h-3.5 w-3.5" />
                       Criada · {format(new Date(task.created_at), "dd MMM", { locale: ptBR })}
                     </span>
                   }
@@ -2207,10 +2210,10 @@ export function TaskCard({
                 style={{ order: orderOf("createdAt") + 0.1 }}
               >
                 <span
-                  className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-300"
+                  className="inline-flex h-6 items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-300"
                   title={`Concluída em ${format(new Date(task.completed_at), "dd/MM/yyyy", { locale: ptBR })}`}
                 >
-                  <CheckCircle2 className="h-2.5 w-2.5" />
+                  <CheckCircle2 className="h-3.5 w-3.5" />
                   Concluída · {format(new Date(task.completed_at), "dd MMM", { locale: ptBR })}
                 </span>
               </div>
@@ -2218,13 +2221,13 @@ export function TaskCard({
 
             {isVisible("meta") ? (
               <div className="space-y-0" style={{ order: orderOf("meta") }}>
-                <div className="flex items-center gap-1.5 px-1 py-0.5 text-[11px] text-muted-foreground">
-                  <UserIcon className="h-3 w-3 shrink-0" />
+                <div className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] text-muted-foreground">
+                  <UserIcon className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">Criada por: {creatorName}</span>
                 </div>
                 {task.assignee_id && task.assigned_by ? (
-                  <div className="flex items-center gap-1.5 px-1 py-0.5 text-[11px] text-muted-foreground">
-                    <Users className="h-3 w-3 shrink-0" />
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] text-muted-foreground">
+                    <Users className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">
                       Atribuída por:{" "}
                       {assigner?.full_name || assigner?.email || "Usuário não identificado"}
@@ -2238,7 +2241,7 @@ export function TaskCard({
             {isVisible("meta") ? (
               <div className="space-y-0" style={{ order: orderOf("meta") }}>
                 <CompactRow
-                  icon={<UserIcon className="h-3 w-3" />}
+                  icon={<UserIcon className="h-3.5 w-3.5" />}
                   empty={!assignee}
                   label={
                     assignee
@@ -2272,7 +2275,7 @@ export function TaskCard({
 
                 {!client ? (
                   <CompactRow
-                    icon={<Users className="h-3 w-3" />}
+                    icon={<Users className="h-3.5 w-3.5" />}
                     empty
                     label="Adicionar cliente"
                     render={(close) => (
@@ -2296,9 +2299,9 @@ export function TaskCard({
                     stop(event);
                     void navigate({ to: "/conversations", search: { task: task.id } });
                   }}
-                  className="flex w-full items-center gap-1.5 rounded px-1 py-1 text-left text-[11px] text-primary transition hover:bg-primary/10"
+                  className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] text-primary transition hover:bg-primary/10"
                 >
-                  <MessageCircle className="h-3 w-3" />
+                  <MessageCircle className="h-3.5 w-3.5" />
                   <span>Conversa</span>
                 </button>
               </div>
@@ -2569,11 +2572,11 @@ function CompactRow({
           onPointerDown={stop}
           onClick={stop}
           className={cn(
-            "flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] hover:bg-muted",
+            "flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] hover:bg-muted",
             empty ? "text-muted-foreground/70" : "text-foreground",
           )}
         >
-          <span className="text-muted-foreground">{icon}</span>
+          <span className="grid shrink-0 place-items-center text-muted-foreground">{icon}</span>
           <span className="truncate">{label}</span>
         </button>
       </PopoverTrigger>

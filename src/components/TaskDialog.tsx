@@ -1662,22 +1662,29 @@ export function TaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-1rem)] max-w-4xl gap-0 overflow-y-auto rounded-lg p-0 shadow-2xl sm:max-h-[90vh]">
-        <DialogHeader className="border-b bg-muted/20 px-4 py-4 sm:px-6 sm:py-5">
-          <DialogTitle className="text-xl">
-            {isDraft ? "Tarefa em elaboração" : task ? "Editar tarefa" : "Nova tarefa"}
-          </DialogTitle>
-          {task && <div className="flex flex-wrap gap-1"><TaskPinButton task={task} /><TaskCardOpenings task={task} /></div>}
+      <DialogContent className="max-h-[calc(100dvh-1rem)] max-w-4xl gap-0 overflow-y-auto rounded-2xl p-0 shadow-2xl sm:max-h-[90vh] sm:rounded-3xl [&>button:last-child]:z-30">
+        <DialogHeader className="glass-surface sticky top-0 z-20 flex-row flex-wrap items-center gap-x-4 gap-y-1 space-y-0 px-4 py-3 pr-12 text-left sm:px-6">
+          <div className="min-w-0 flex-1">
+            <DialogTitle className="text-lg font-semibold tracking-tight">
+              {isDraft ? "Tarefa em elaboração" : task ? "Editar tarefa" : "Nova tarefa"}
+            </DialogTitle>
+            {task && (
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                Criada por <span className="font-medium text-foreground/80">{taskCreatorName}</span>
+              </p>
+            )}
+          </div>
+          {task && <div className="flex flex-wrap items-center gap-1"><TaskPinButton task={task} /><TaskCardOpenings task={task} /></div>}
         </DialogHeader>
 
-        <div className="space-y-5 px-4 py-5 sm:px-6">
-          <div className="space-y-2">
-            <Label>Título *</Label>
+        <div className="space-y-6 px-4 py-5 sm:px-6 sm:py-6">
+          <div className="space-y-1.5">
+            <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Título <span className="text-destructive">*</span></Label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="O que precisa ser feito?"
-              className="h-11 text-base"
+              className="h-12 rounded-xl px-4 text-base font-medium shadow-sm"
             />
             <FieldLinks value={title} />
           </div>
@@ -1704,9 +1711,9 @@ export function TaskDialog({
             </div>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-3 rounded-md border bg-muted/15 p-4 sm:grid-cols-2 md:grid-cols-3">
-            <div className="order-1 space-y-2">
-              <Label className="text-xs">Prioridade</Label>
+          <div className="grid grid-cols-1 items-start gap-x-4 gap-y-5 rounded-2xl border border-border/70 bg-card/70 p-4 shadow-sm sm:grid-cols-2 sm:p-5 md:grid-cols-3">
+            <div className="order-1 space-y-1.5">
+              <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Prioridade</Label>
               <Select
                 value={priority ?? "none"}
                 onValueChange={(v) => setPriority(v === "none" ? null : (v as Task["priority"]))}
@@ -1724,8 +1731,8 @@ export function TaskDialog({
               </Select>
             </div>
             {isMarketingTask ? (
-              <div className="order-2 space-y-2">
-                <Label className="text-xs">Formato</Label>
+              <div className="order-2 space-y-1.5">
+                <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Formato</Label>
                 <Select
                   value={categoryId || "__no_marketing_category__"}
                   onValueChange={(value) =>
@@ -1752,8 +1759,8 @@ export function TaskDialog({
               </div>
             ) : null}
             {isMarketingTask ? (
-              <div className="order-3 space-y-2">
-                <Label className="text-xs">Objetivo da tarefa</Label>
+              <div className="order-3 space-y-1.5">
+                <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Objetivo da tarefa</Label>
                 <Select value={objectiveId || "__no_marketing_objective__"} onValueChange={(value) => setObjectiveId(value === "__no_marketing_objective__" ? "" : value)}>
                   <SelectTrigger><SelectValue placeholder="Selecione um objetivo" /></SelectTrigger>
                   <SelectContent>
@@ -1763,11 +1770,11 @@ export function TaskDialog({
                 </Select>
               </div>
             ) : null}
-            <div className="order-6 space-y-2">
-              <Label className="text-xs">
+            <div className="order-6 space-y-1.5">
+              <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                 Prazo {!task ? <span className="text-destructive">*</span> : null}
               </Label>
-              <div className="rounded-md border bg-muted/30 p-1.5 shadow-sm">
+              <div className="rounded-xl border bg-background p-1 shadow-sm">
                 <div className="flex items-center gap-1.5">
                   <Input
                     type="date"
@@ -1824,8 +1831,8 @@ export function TaskDialog({
                 </div>
               )}
             </div>
-            <div className="order-5 space-y-2">
-              <Label className="text-xs">Colaboradores</Label>
+            <div className="order-5 space-y-1.5">
+              <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Colaboradores</Label>
               <Popover open={collaboratorPickerOpen} onOpenChange={setCollaboratorPickerOpen}>
                 <PopoverTrigger asChild>
                   <Button
@@ -1894,8 +1901,8 @@ export function TaskDialog({
                 </Button>
               )}
             </div>
-            <div className="order-2 space-y-2">
-              <Label className="text-xs">Status</Label>
+            <div className="order-2 space-y-1.5">
+              <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Status</Label>
               <Select
                 value={status === "done" ? COMPLETED_STATUS_VALUE : columnId || "none"}
                 onValueChange={(value) => {
@@ -1923,7 +1930,7 @@ export function TaskDialog({
               </Select>
             </div>
             {status === "done" ? (
-              <div className="order-4 space-y-2">
+              <div className="order-4 space-y-1.5">
                 <Label htmlFor="completion-date" className="text-xs">
                   Data de conclusão
                 </Label>
@@ -1941,8 +1948,8 @@ export function TaskDialog({
                 </p>
               </div>
             ) : null}
-            <div className="order-3 space-y-2">
-              <Label className="text-xs">Cliente</Label>
+            <div className="order-3 space-y-1.5">
+              <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Cliente</Label>
               <Popover open={clientPickerOpen} onOpenChange={setClientPickerOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-between font-normal">
@@ -1998,8 +2005,8 @@ export function TaskDialog({
                 </PopoverContent>
               </Popover>
             </div>
-            <div className="order-4 space-y-2">
-              <Label className="text-xs">Responsável</Label>
+            <div className="order-4 space-y-1.5">
+              <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Responsável</Label>
               <Popover open={assigneePickerOpen} onOpenChange={setAssigneePickerOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-between font-normal">
@@ -2052,17 +2059,11 @@ export function TaskDialog({
                   </div>
                 </PopoverContent>
               </Popover>
-              {task && (
-                <div className="pt-1">
-                  <Label className="text-xs text-muted-foreground">Criada por</Label>
-                  <p className="mt-1 text-sm font-medium">{taskCreatorName}</p>
-                </div>
-              )}
             </div>
           </div>
 
           {(!task || isDraft) && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/15 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed bg-muted/20 px-4 py-2.5">
               <p className="text-xs text-muted-foreground">
                 Informe título e prazo, escolha os participantes e converse antes de finalizar.
               </p>
@@ -2078,8 +2079,8 @@ export function TaskDialog({
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label>Descrição</Label>
+          <div className="space-y-1.5 [&_.tiptap-wrapper]:rounded-2xl [&_.tiptap-wrapper]:border-border/70 [&_.tiptap-wrapper]:shadow-sm">
+            <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Descrição</Label>
             <RichTextEditor
               value={description}
               onChange={setDescription}
@@ -2091,13 +2092,13 @@ export function TaskDialog({
           </div>
 
           {
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList>
-                <TabsTrigger value="subtasks">Subtarefas ({subtasks.length})</TabsTrigger>
-                <TabsTrigger value="comments">Conversa ({comments.length})</TabsTrigger>
-                <TabsTrigger value="files">Arquivos ({attachments.length})</TabsTrigger>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
+              <TabsList className="glass-track h-9 rounded-full p-1">
+                <TabsTrigger value="subtasks" className="rounded-full px-3.5 data-[state=active]:shadow-sm">Subtarefas <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums">{subtasks.length}</span></TabsTrigger>
+                <TabsTrigger value="comments" className="rounded-full px-3.5 data-[state=active]:shadow-sm">Conversa <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums">{comments.length}</span></TabsTrigger>
+                <TabsTrigger value="files" className="rounded-full px-3.5 data-[state=active]:shadow-sm">Arquivos <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums">{attachments.length}</span></TabsTrigger>
               </TabsList>
-              <TabsContent value="subtasks" className="space-y-2">
+              <TabsContent value="subtasks" className="space-y-2.5">
                 {subtasks.map((s) => {
                   const dueStr = s.due_date ? format(new Date(s.due_date), "yyyy-MM-dd") : "";
                   const historyOpen = subDueOpen[s.id];
@@ -2106,7 +2107,7 @@ export function TaskDialog({
                   const files = subAttachments[s.id] ?? [];
                   const assignee = profiles?.find((p) => p.id === s.assignee_id);
                   return (
-                    <div key={s.id} className="space-y-1.5 rounded-md border bg-muted/30 px-3 py-2">
+                    <div key={s.id} className={`space-y-2 rounded-xl border px-3.5 py-2.5 shadow-sm transition-colors hover:border-primary/30 ${s.done ? "border-emerald-500/25 bg-emerald-500/5" : "border-border/70 bg-card"}`}>
                       <div className="flex items-center gap-2">
                         <Checkbox checked={s.done} onCheckedChange={() => toggleSubtask(s)} />
                         {editingSubtaskId === s.id ? (
@@ -2360,19 +2361,19 @@ export function TaskDialog({
                     </div>
                   );
                 })}
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 p-2">
                   <Input
                     placeholder="Nova subtarefa"
                     value={newSubtask}
                     onChange={(e) => setNewSubtask(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && addSubtask()}
-                    className="min-w-[180px] flex-1"
+                    className="h-9 min-w-[180px] flex-1 rounded-lg bg-background"
                   />
                   <Input
                     type="date"
                     value={newSubtaskDue}
                     onChange={(e) => setNewSubtaskDue(e.target.value)}
-                    className="w-52"
+                    className="h-9 w-44 rounded-lg bg-background"
                     title="Prazo (opcional)"
                   />
                   <div className="flex gap-1.5">
@@ -2380,7 +2381,7 @@ export function TaskDialog({
                       value={newSubtaskAssignee || "none"}
                       onValueChange={(v) => setNewSubtaskAssignee(v === "none" ? "" : v)}
                     >
-                      <SelectTrigger className="w-44" title="Responsável (opcional)">
+                      <SelectTrigger className="h-9 w-44 rounded-lg bg-background" title="Responsável (opcional)">
                         <SelectValue placeholder="Responsável" />
                       </SelectTrigger>
                       <SelectContent>
@@ -2396,7 +2397,7 @@ export function TaskDialog({
                       type="button"
                       variant="outline"
                       size="icon"
-                      className="shrink-0"
+                      className="h-9 w-9 shrink-0 rounded-lg"
                       title="Abrir editor completo da subtarefa"
                       onClick={() => void openNewSubtaskDialog()}
                     >
@@ -2404,7 +2405,7 @@ export function TaskDialog({
                       <span className="sr-only">Abrir editor completo da subtarefa</span>
                     </Button>
                   </div>
-                  <Button onClick={addSubtask} size="icon">
+                  <Button onClick={addSubtask} size="icon" className="h-9 w-9 shrink-0 rounded-lg shadow-sm" title="Adicionar subtarefa" aria-label="Adicionar subtarefa">
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
@@ -2493,7 +2494,7 @@ export function TaskDialog({
             </Tabs>
           }
 
-          <div className="flex justify-between gap-2 pt-2">
+          <div className="sticky bottom-0 z-20 -mx-4 -mb-5 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 bg-background/85 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:-mb-6 sm:px-6">
             <div>
               {currentTaskId && canDeleteTask && (
                 <Button

@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppAgendaRouteImport } from './routes/_app/agenda'
 import { Route as AppAmbientesRouteImport } from './routes/_app/ambientes'
+import { Route as AppClaudeRouteImport } from './routes/_app/claude'
 import { Route as AppClientsRouteImport } from './routes/_app/clients'
 import { Route as AppConversationsRouteImport } from './routes/_app/conversations'
 import { Route as AppCrmRouteImport } from './routes/_app/crm'
@@ -29,6 +30,8 @@ import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTasksRouteImport } from './routes/_app/tasks'
 import { Route as AppTrashRouteImport } from './routes/_app/trash'
 import { Route as AppUsersRouteImport } from './routes/_app/users'
+import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
+import { Route as OauthLoginRouteImport } from './routes/oauth.login'
 import { Route as AppClientReportClientIdRouteImport } from './routes/_app/client-report.$clientId'
 import { Route as AppClientsIndexRouteImport } from './routes/_app/clients.index'
 import { Route as AppClientsDirectoryRouteImport } from './routes/_app/clients.directory'
@@ -64,6 +67,11 @@ const AppAgendaRoute = AppAgendaRouteImport.update({
 const AppAmbientesRoute = AppAmbientesRouteImport.update({
   id: '/ambientes',
   path: '/ambientes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppClaudeRoute = AppClaudeRouteImport.update({
+  id: '/claude',
+  path: '/claude',
   getParentRoute: () => AppRoute,
 } as any)
 const AppClientsRoute = AppClientsRouteImport.update({
@@ -141,6 +149,16 @@ const AppUsersRoute = AppUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AppRoute,
 } as any)
+const OauthConsentRoute = OauthConsentRouteImport.update({
+  id: '/oauth/consent',
+  path: '/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthLoginRoute = OauthLoginRouteImport.update({
+  id: '/oauth/login',
+  path: '/oauth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppClientReportClientIdRoute = AppClientReportClientIdRouteImport.update({
   id: '/client-report/$clientId',
   path: '/client-report/$clientId',
@@ -208,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/agenda': typeof AppAgendaRoute
   '/ambientes': typeof AppAmbientesRoute
+  '/claude': typeof AppClaudeRoute
   '/clients': typeof AppClientsRouteWithChildren
   '/conversations': typeof AppConversationsRoute
   '/crm': typeof AppCrmRoute
@@ -223,6 +242,8 @@ export interface FileRoutesByFullPath {
   '/tasks': typeof AppTasksRouteWithChildren
   '/trash': typeof AppTrashRoute
   '/users': typeof AppUsersRoute
+  '/oauth/consent': typeof OauthConsentRoute
+  '/oauth/login': typeof OauthLoginRoute
   '/client-report/$clientId': typeof AppClientReportClientIdRoute
   '/clients/directory': typeof AppClientsDirectoryRoute
   '/clients/new': typeof AppClientsNewRoute
@@ -241,6 +262,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/agenda': typeof AppAgendaRoute
   '/ambientes': typeof AppAmbientesRoute
+  '/claude': typeof AppClaudeRoute
   '/conversations': typeof AppConversationsRoute
   '/crm': typeof AppCrmRoute
   '/dashboard': typeof AppDashboardRoute
@@ -254,6 +276,8 @@ export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/trash': typeof AppTrashRoute
   '/users': typeof AppUsersRoute
+  '/oauth/consent': typeof OauthConsentRoute
+  '/oauth/login': typeof OauthLoginRoute
   '/client-report/$clientId': typeof AppClientReportClientIdRoute
   '/clients/directory': typeof AppClientsDirectoryRoute
   '/clients/new': typeof AppClientsNewRoute
@@ -274,6 +298,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_app/agenda': typeof AppAgendaRoute
   '/_app/ambientes': typeof AppAmbientesRoute
+  '/_app/claude': typeof AppClaudeRoute
   '/_app/clients': typeof AppClientsRouteWithChildren
   '/_app/conversations': typeof AppConversationsRoute
   '/_app/crm': typeof AppCrmRoute
@@ -289,6 +314,8 @@ export interface FileRoutesById {
   '/_app/tasks': typeof AppTasksRouteWithChildren
   '/_app/trash': typeof AppTrashRoute
   '/_app/users': typeof AppUsersRoute
+  '/oauth/consent': typeof OauthConsentRoute
+  '/oauth/login': typeof OauthLoginRoute
   '/_app/client-report/$clientId': typeof AppClientReportClientIdRoute
   '/_app/clients/directory': typeof AppClientsDirectoryRoute
   '/_app/clients/new': typeof AppClientsNewRoute
@@ -309,6 +336,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/agenda'
     | '/ambientes'
+    | '/claude'
     | '/clients'
     | '/conversations'
     | '/crm'
@@ -324,6 +352,8 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/trash'
     | '/users'
+    | '/oauth/consent'
+    | '/oauth/login'
     | '/client-report/$clientId'
     | '/clients/directory'
     | '/clients/new'
@@ -342,6 +372,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/agenda'
     | '/ambientes'
+    | '/claude'
     | '/conversations'
     | '/crm'
     | '/dashboard'
@@ -355,6 +386,8 @@ export interface FileRouteTypes {
     | '/settings'
     | '/trash'
     | '/users'
+    | '/oauth/consent'
+    | '/oauth/login'
     | '/client-report/$clientId'
     | '/clients/directory'
     | '/clients/new'
@@ -374,6 +407,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_app/agenda'
     | '/_app/ambientes'
+    | '/_app/claude'
     | '/_app/clients'
     | '/_app/conversations'
     | '/_app/crm'
@@ -389,6 +423,8 @@ export interface FileRouteTypes {
     | '/_app/tasks'
     | '/_app/trash'
     | '/_app/users'
+    | '/oauth/consent'
+    | '/oauth/login'
     | '/_app/client-report/$clientId'
     | '/_app/clients/directory'
     | '/_app/clients/new'
@@ -407,6 +443,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
+  OauthConsentRoute: typeof OauthConsentRoute
+  OauthLoginRoute: typeof OauthLoginRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -444,6 +482,13 @@ declare module '@tanstack/react-router' {
       path: '/ambientes'
       fullPath: '/ambientes'
       preLoaderRoute: typeof AppAmbientesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/claude': {
+      id: '/_app/claude'
+      path: '/claude'
+      fullPath: '/claude'
+      preLoaderRoute: typeof AppClaudeRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/clients': {
@@ -550,6 +595,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/users'
       preLoaderRoute: typeof AppUsersRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/oauth/consent': {
+      id: '/oauth/consent'
+      path: '/oauth/consent'
+      fullPath: '/oauth/consent'
+      preLoaderRoute: typeof OauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/login': {
+      id: '/oauth/login'
+      path: '/oauth/login'
+      fullPath: '/oauth/login'
+      preLoaderRoute: typeof OauthLoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/client-report/$clientId': {
       id: '/_app/client-report/$clientId'
@@ -679,6 +738,7 @@ const AppTasksRouteWithChildren = AppTasksRoute._addFileChildren(
 interface AppRouteChildren {
   AppAgendaRoute: typeof AppAgendaRoute
   AppAmbientesRoute: typeof AppAmbientesRoute
+  AppClaudeRoute: typeof AppClaudeRoute
   AppClientsRoute: typeof AppClientsRouteWithChildren
   AppConversationsRoute: typeof AppConversationsRoute
   AppCrmRoute: typeof AppCrmRoute
@@ -702,6 +762,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAgendaRoute: AppAgendaRoute,
   AppAmbientesRoute: AppAmbientesRoute,
+  AppClaudeRoute: AppClaudeRoute,
   AppClientsRoute: AppClientsRouteWithChildren,
   AppConversationsRoute: AppConversationsRoute,
   AppCrmRoute: AppCrmRoute,
@@ -728,6 +789,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
+  OauthConsentRoute: OauthConsentRoute,
+  OauthLoginRoute: OauthLoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

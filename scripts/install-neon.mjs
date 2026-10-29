@@ -22,6 +22,7 @@ try {
     "direct-users",
     "additional-admins",
     "no-client-mirror",
+    "mcp-role",
   ])
     await db.query(readFileSync(`neon/${file}.sql`, "utf8"));
   const email = readFileSync(".env.neon.local", "utf8").match(
