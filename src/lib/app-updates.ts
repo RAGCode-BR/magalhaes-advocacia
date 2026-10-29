@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "claude-connect-documents"
   | "magalhaes-top-glass-nav"
   | "claude-connector"
   | "magalhaes-process-navigation"
@@ -76,6 +77,11 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "claude-conectar-e-ler-documentos-2026-10-28", title: "Conecte o Claude em um clique e peça para ler os anexos",
+    date: "2026-10-28", preview: "claude-connect-documents", audience: "all", workspaces: ["consultoria", "marketing"],
+    details: ["Na área Claude, o botão Conectar meu Claude copia o endereço do conector e abre os conectores do Claude: lá você clica em Adicionar conector personalizado, cola o endereço e entra com o seu próprio login do TaskFlow. O passo a passo completo continua logo abaixo.", "O Claude agora lê os arquivos anexados aos cards: PDF (texto de todas as páginas), Word, Excel, PowerPoint, imagens JPG e PNG e mapas KMZ/KML, com os nomes das áreas, os vértices e a área aproximada em hectares.", "PDFs escaneados, sem texto selecionável, são avisados pelo Claude; nesses casos envie um print das páginas importantes."],
+  },
   {
     id: "magalhaes-barra-superior-vidro-2026-10-28", title: "Menu no topo e mais espaço para os processos",
     date: "2026-10-28", preview: "magalhaes-top-glass-nav", audience: "all", workspaces: ["consultoria", "marketing"],

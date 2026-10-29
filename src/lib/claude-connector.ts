@@ -5,8 +5,9 @@
  * list and revoke that connection.
  */
 
-/** Public MCP endpoint people paste into Claude. Empty until the connector is published. */
-export const CLAUDE_CONNECTOR_URL: string = import.meta.env.VITE_TASKFLOW_MCP_URL ?? "";
+/** Public MCP endpoint people paste into Claude (mcp/wrangler.toml); a test build may override it. */
+export const CLAUDE_CONNECTOR_URL: string =
+  import.meta.env.VITE_TASKFLOW_MCP_URL || "https://taskflow-mcp.ragcodebr.workers.dev/mcp";
 
 /** Neon Auth issuer derived from the public project URL, like the browser data client. */
 export function neonAuthIssuer(neonUrl: string | undefined = import.meta.env.VITE_NEON_URL) {

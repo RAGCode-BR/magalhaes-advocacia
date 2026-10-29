@@ -175,10 +175,11 @@ function SortableTaskCard({
   );
 }
 
-// The lifted card settles back (straightens and shrinks) while it flies to its
-// new place, and the slot left behind fades in instead of popping.
+// Reordering inside a column: the lifted card settles into its slot quickly.
+// The drop animation flies to where the card was picked up, so a move to another
+// column (already shown there optimistically) skips it instead of flying back.
 const CARD_DROP_ANIMATION: DropAnimation = {
-  duration: 280,
+  duration: 160,
   easing: "cubic-bezier(0.32, 0.72, 0, 1)",
   sideEffects: (parameters) => {
     parameters.dragOverlay.node.classList.add("kanban-drop-settling");
@@ -534,6 +535,8 @@ function KanbanPage() {
   }, [user?.id, isAdmin, isCollaborator, activeWorkspace?.slug, authLoading, teamVisibilityWorkspaceId]);
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  // False when the last drop moved the card to another column (no fly-back animation).
+  const [dropInPlace, setDropInPlace] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [defaultCol, setDefaultCol] = useState<string | null>(null);
@@ -707,7 +710,7 @@ function KanbanPage() {
   }, [tasks, allSubtasks, user?.id, collaboratorTaskIds, viewedWorkspaceId, completedRange, filters, isCollaborator]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
   );
 
@@ -903,6 +906,9 @@ function KanbanPage() {
   };
 
   const onDragEnd = async (e: DragEndEvent) => {
+    const overColumn = (e.over?.data.current as { colId?: string } | undefined)?.colId;
+    const pickedColumn = (e.active.data.current as { colId?: string } | undefined)?.colId;
+    setDropInPlace(!overColumn || overColumn === pickedColumn);
     setActiveTask(null);
     const activeType = e.active.data.current?.type;
     if (!e.over) return;
@@ -1573,7 +1579,7 @@ function KanbanPage() {
               </CompletedColumn>
             </div>
           </SortableContext>
-          <DragOverlay dropAnimation={CARD_DROP_ANIMATION}>
+          <DragOverlay dropAnimation={dropInPlace ? CARD_DROP_ANIMATION : null}>
             {activeTask && (
               <div className="kanban-drag-lift">
                 <TaskCard

@@ -5,6 +5,15 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates the Connect Claude button and the attachment formats without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "claude-connect-documents" }));
+    expect(html).toContain("data-claude-connect-cta");
+    expect(html).toContain("data-claude-reads-attachments");
+    expect(html).toContain("Conectar meu Claude");
+    expect(html).toContain("KMZ");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
   it("illustrates the wine glass top bar, the active item and the hidden-bar handle without real actions", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-top-glass-nav" }));
     expect(html).toContain("data-top-glass-nav");

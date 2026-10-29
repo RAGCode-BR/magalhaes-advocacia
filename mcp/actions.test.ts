@@ -107,7 +107,7 @@ describe("readAttachment", () => {
       attachments: [{ file_name: name, mime_type: mime, size: 3, payload: Buffer.from("abc") }],
     }).query;
 
-  it("returns text, image or PDF content and refuses other formats", async () => {
+  it("returns text or image content, extracts documents and refuses other formats", async () => {
     const id = { anexo_id: CARD };
     expect((await readAttachment(file("text/plain", "a.txt"), id))[0]).toMatchObject({
       type: "text",
@@ -117,8 +117,13 @@ describe("readAttachment", () => {
       type: "image",
       mimeType: "image/png",
     });
-    expect((await readAttachment(file("application/pdf", "a.pdf"), id))[1]).toMatchObject({
-      type: "resource",
+    // Documents always go as text; a broken file is reported instead of failing the call.
+    const pdf = await readAttachment(file("application/pdf", "a.pdf"), id);
+    expect(pdf.every((part) => part.type === "text")).toBe(true);
+    expect(pdf[0]).toMatchObject({ text: expect.stringContaining("danificado ou protegido") });
+    expect((await readAttachment(file("", "foto.JPG"), id))[1]).toMatchObject({
+      type: "image",
+      mimeType: "image/jpeg",
     });
     expect((await readAttachment(file("application/zip", "a.zip"), id))[0]).toMatchObject({
       text: expect.stringContaining("não pode ser lido"),

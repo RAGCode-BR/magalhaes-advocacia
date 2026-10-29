@@ -1,0 +1,11 @@
+# Conector TaskFlow publicado no Cloudflare Workers (plano gratuito).
+# Segredo (não fica no repositório): npx wrangler secret put MCP_DATABASE_URL
+name = "taskflow-mcp"
+main = "worker.ts"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Data API do Neon da produção (o mesmo VITE_NEON_URL do app) e o endereço /mcp deste worker.
+NEON_URL = "https://ep-weathered-hat-b4vy9dtp.c-6.us-east-2.aws.neon.tech/magalhaes"
+MCP_RESOURCE_URL = "https://taskflow-mcp.ragcodebr.workers.dev/mcp"

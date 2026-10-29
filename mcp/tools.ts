@@ -1,4 +1,5 @@
 import type { Query } from "./db.ts";
+import { extractDocument } from "./documents.ts";
 
 export type Ambiente = "marketing" | "consultoria";
 
@@ -283,10 +284,9 @@ const TEXT_TYPES = /^(text\/|application\/(json|xml|csv))/;
 
 type ToolContent =
   | { type: "text"; text: string }
-  | { type: "image"; data: string; mimeType: string }
-  | { type: "resource"; resource: { uri: string; mimeType: string; blob: string } };
+  | { type: "image"; data: string; mimeType: string };
 
-/** Returns an attachment in a form Claude can read: text, image or PDF. */
+/** Returns an attachment in a form Claude can read: text (documents are extracted) or image. */
 export async function readAttachment(
   query: Query,
   { anexo_id }: { anexo_id: string },
@@ -313,29 +313,38 @@ export async function readAttachment(
       `"${file.file_name}" tem ${Math.round((file.size ?? 0) / 1048576)} MB, acima do limite de 8 MB.`,
     );
   const mime = file.mime_type ?? "application/octet-stream";
-  if (TEXT_TYPES.test(mime) || /\.(txt|md|csv|json)$/i.test(file.file_name))
+  if (TEXT_TYPES.test(mime) && !/html|xml/.test(mime) || /\.(txt|md|csv|json)$/i.test(file.file_name))
     return text(`Conteúdo de "${file.file_name}":\n\n${file.payload.toString("utf8")}`);
-  if (mime.startsWith("image/"))
+  const imageMime = mime.startsWith("image/")
+    ? mime
+    : IMAGE_EXTENSIONS[file.file_name.toLowerCase().match(/\.(\w+)$/)?.[1] ?? ""];
+  if (imageMime && /^image\/(png|jpeg|gif|webp)$/.test(imageMime))
     return [
       { type: "text", text: `Imagem "${file.file_name}":` },
-      { type: "image", data: file.payload.toString("base64"), mimeType: mime },
+      { type: "image", data: file.payload.toString("base64"), mimeType: imageMime },
     ];
-  if (mime === "application/pdf" || /\.pdf$/i.test(file.file_name))
-    return [
-      { type: "text", text: `PDF "${file.file_name}":` },
-      {
-        type: "resource",
-        resource: {
-          uri: `taskflow://anexos/${anexo_id}`,
-          mimeType: "application/pdf",
-          blob: file.payload.toString("base64"),
-        },
-      },
-    ];
+  // PDF, Word, Excel, PowerPoint, maps and others: Claude's apps cannot open these
+  // files from a connector, so their content goes as text.
+  try {
+    const document = await extractDocument(file.file_name, file.mime_type, new Uint8Array(file.payload));
+    if (document) return document;
+  } catch {
+    return text(
+      `Não foi possível ler "${file.file_name}": o arquivo parece danificado ou protegido por senha.`,
+    );
+  }
   return text(
-    `"${file.file_name}" (${mime}) não pode ser lido pelo conector. Formatos aceitos: texto, imagens e PDF.`,
+    `"${file.file_name}" (${mime}) não pode ser lido pelo conector. Formatos aceitos: PDF, Word, Excel, PowerPoint, OpenDocument, KMZ/KML, RTF, HTML, e-mail, texto e imagens (JPG, PNG, GIF, WebP).`,
   );
 }
+
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+};
 
 const MAX_ROWS = 200;
 

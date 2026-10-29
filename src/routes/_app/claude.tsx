@@ -117,9 +117,7 @@ function ConnectionStatus() {
           Não foi possível verificar agora. Atualize a página para tentar de novo.
         </p>
       ) : list.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          O seu Claude ainda não está conectado. Siga os passos abaixo.
-        </p>
+        <ConnectClaude />
       ) : (
         <ul className="space-y-2">
           {list.map((connection) => (
@@ -169,6 +167,69 @@ function ConnectionStatus() {
   );
 }
 
+const CLAUDE_CONNECTORS_URL = "https://claude.ai/settings/connectors";
+
+/**
+ * The quick path: one click copies the connector address and opens Claude's
+ * connector settings, where the person adds it and signs in with their own
+ * TaskFlow account (Claude offers no link that adds a connector by itself).
+ */
+function ConnectClaude() {
+  const [opened, setOpened] = useState(false);
+  const connect = async () => {
+    // Copy while this tab still has focus; the new tab would make the clipboard refuse.
+    try {
+      await navigator.clipboard.writeText(CLAUDE_CONNECTOR_URL);
+      toast.success("Endereço do conector copiado. Cole no Claude.");
+    } catch {
+      toast.message("Copie o endereço do conector no passo 1, abaixo.");
+    }
+    window.open(CLAUDE_CONNECTORS_URL, "_blank", "noopener");
+    setOpened(true);
+  };
+
+  return (
+    <div className="glass-wine relative overflow-hidden rounded-2xl p-5 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 text-base font-semibold text-sidebar-foreground">
+            <Sparkles className="h-5 w-5 text-sidebar-primary" />
+            O seu Claude ainda não está conectado
+          </p>
+          <p className="mt-1 text-sm text-sidebar-foreground/75">
+            Leva menos de um minuto. Você entra com o seu próprio login do TaskFlow.
+          </p>
+        </div>
+        <Button
+          onClick={() => void connect()}
+          disabled={!CLAUDE_CONNECTOR_URL}
+          className="h-11 shrink-0 rounded-full bg-sidebar-primary px-6 text-base font-semibold text-sidebar-primary-foreground shadow-lg transition-transform hover:bg-sidebar-primary/90 active:scale-[0.97]"
+        >
+          <Sparkles className="mr-2 h-4 w-4" />
+          Conectar meu Claude
+        </Button>
+      </div>
+      {opened && (
+        <ol className="mt-5 grid gap-2 text-sm text-sidebar-foreground sm:grid-cols-3">
+          {[
+            ["Na aba do Claude que abriu", "clique em Adicionar conector personalizado."],
+            ["Nome: TaskFlow", "e no endereço cole com ⌘V / Ctrl+V (já está copiado)."],
+            ["Clique em Conectar", "entre com o seu e-mail e senha do TaskFlow e clique em Permitir."],
+          ].map(([title, detail], index) => (
+            <li key={title} className="rounded-xl bg-white/10 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+              <span className="mb-1 grid h-6 w-6 place-items-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground">
+                {index + 1}
+              </span>
+              <p className="font-semibold">{title}</p>
+              <p className="text-sidebar-foreground/75">{detail}</p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 function SetupSteps() {
   const copy = async () => {
     try {
@@ -186,6 +247,7 @@ function SetupSteps() {
           O endereço do conector ainda não foi configurado neste ambiente.
         </p>
       ) : (
+        <>
         <ol className="space-y-4 text-sm">
           <li>
             <p className="font-medium">1. Copie o endereço do conector</p>
@@ -199,7 +261,7 @@ function SetupSteps() {
           <li>
             <p className="font-medium">2. Abra os conectores do Claude</p>
             <Button asChild variant="outline" size="sm" className="mt-2">
-              <a href="https://claude.ai/settings/connectors" target="_blank" rel="noreferrer">
+              <a href={CLAUDE_CONNECTORS_URL} target="_blank" rel="noreferrer">
                 <ExternalLink className="mr-2 h-4 w-4" />
                 Abrir configurações do Claude
               </a>
@@ -215,11 +277,32 @@ function SetupSteps() {
           <li>
             <p className="font-medium">4. Entre e permita</p>
             <p className="mt-1 text-muted-foreground">
-              Clique em <strong>Conectar</strong>. Abre a tela do TaskFlow: entre com a sua conta e
-              clique em <strong>Permitir</strong>. Pronto, a conexão aparece acima.
+              Clique em <strong>Conectar</strong>. Abre a tela do TaskFlow: entre com{" "}
+              <strong>o seu próprio e-mail e senha do TaskFlow</strong> e clique em{" "}
+              <strong>Permitir</strong>. Pronto, a conexão aparece acima.
+            </p>
+          </li>
+          <li>
+            <p className="font-medium">5. Teste numa conversa nova</p>
+            <p className="mt-1 text-muted-foreground">
+              Peça, por exemplo: <em>“Use o TaskFlow e me resuma os processos do cliente X e leia os
+              documentos dele.”</em> O Claude lê PDF, Word, Excel, imagens e mapas KMZ anexados aos
+              cards.
             </p>
           </li>
         </ol>
+        <ul className="mt-4 space-y-1.5 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
+          <li>
+            • Cada pessoa conecta <strong>a própria conta</strong>: o Claude vê só o que você vê aqui e
+            tudo o que ele fizer fica no seu nome.
+          </li>
+          <li>
+            • No celular, conecte uma vez pelo computador: o conector aparece sozinho no app do
+            Claude da mesma conta.
+          </li>
+          <li>• Para desconectar, use o botão em “Sua conexão”, acima, ou os conectores do Claude.</li>
+        </ul>
+        </>
       )}
     </Section>
   );
