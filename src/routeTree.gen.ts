@@ -19,6 +19,7 @@ import { Route as AppClientsRouteImport } from './routes/_app/clients'
 import { Route as AppConversationsRouteImport } from './routes/_app/conversations'
 import { Route as AppCrmRouteImport } from './routes/_app/crm'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
 import { Route as AppImportAtaRouteImport } from './routes/_app/import-ata'
 import { Route as AppMeetingsRouteImport } from './routes/_app/meetings'
 import { Route as AppMuralRouteImport } from './routes/_app/mural'
@@ -92,6 +93,11 @@ const AppCrmRoute = AppCrmRouteImport.update({
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFinanceiroRoute = AppFinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
   getParentRoute: () => AppRoute,
 } as any)
 const AppImportAtaRoute = AppImportAtaRouteImport.update({
@@ -231,6 +237,7 @@ export interface FileRoutesByFullPath {
   '/conversations': typeof AppConversationsRoute
   '/crm': typeof AppCrmRoute
   '/dashboard': typeof AppDashboardRoute
+  '/financeiro': typeof AppFinanceiroRoute
   '/import-ata': typeof AppImportAtaRoute
   '/meetings': typeof AppMeetingsRoute
   '/mural': typeof AppMuralRoute
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   '/conversations': typeof AppConversationsRoute
   '/crm': typeof AppCrmRoute
   '/dashboard': typeof AppDashboardRoute
+  '/financeiro': typeof AppFinanceiroRoute
   '/import-ata': typeof AppImportAtaRoute
   '/meetings': typeof AppMeetingsRoute
   '/mural': typeof AppMuralRoute
@@ -303,6 +311,7 @@ export interface FileRoutesById {
   '/_app/conversations': typeof AppConversationsRoute
   '/_app/crm': typeof AppCrmRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/financeiro': typeof AppFinanceiroRoute
   '/_app/import-ata': typeof AppImportAtaRoute
   '/_app/meetings': typeof AppMeetingsRoute
   '/_app/mural': typeof AppMuralRoute
@@ -341,6 +350,7 @@ export interface FileRouteTypes {
     | '/conversations'
     | '/crm'
     | '/dashboard'
+    | '/financeiro'
     | '/import-ata'
     | '/meetings'
     | '/mural'
@@ -376,6 +386,7 @@ export interface FileRouteTypes {
     | '/conversations'
     | '/crm'
     | '/dashboard'
+    | '/financeiro'
     | '/import-ata'
     | '/meetings'
     | '/mural'
@@ -412,6 +423,7 @@ export interface FileRouteTypes {
     | '/_app/conversations'
     | '/_app/crm'
     | '/_app/dashboard'
+    | '/_app/financeiro'
     | '/_app/import-ata'
     | '/_app/meetings'
     | '/_app/mural'
@@ -517,6 +529,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/financeiro': {
+      id: '/_app/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof AppFinanceiroRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/import-ata': {
@@ -743,6 +762,7 @@ interface AppRouteChildren {
   AppConversationsRoute: typeof AppConversationsRoute
   AppCrmRoute: typeof AppCrmRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppFinanceiroRoute: typeof AppFinanceiroRoute
   AppImportAtaRoute: typeof AppImportAtaRoute
   AppMeetingsRoute: typeof AppMeetingsRoute
   AppMuralRoute: typeof AppMuralRoute
@@ -767,6 +787,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppConversationsRoute: AppConversationsRoute,
   AppCrmRoute: AppCrmRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppFinanceiroRoute: AppFinanceiroRoute,
   AppImportAtaRoute: AppImportAtaRoute,
   AppMeetingsRoute: AppMeetingsRoute,
   AppMuralRoute: AppMuralRoute,

@@ -1,5 +1,7 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-finance-orders"
+  | "magalhaes-office-finance"
   | "claude-connect-documents"
   | "magalhaes-top-glass-nav"
   | "claude-connector"
@@ -77,6 +79,34 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-finance-orders-2026-11-07",
+    title: "Serviços e compras ligados ao financeiro",
+    date: "2026-11-07",
+    preview: "magalhaes-finance-orders",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "Cadastre serviços com preços de referência e organize ordens de serviço e compras com itens, desconto e parcelas.",
+      "Acompanhe responsável, início e previsão de entrega, com vínculo ao cliente e ao processo.",
+      "Inicie e conclua pedidos antes de gerar contas a receber ou pagar. A geração não duplica parcelas ao repetir a solicitação.",
+      "Consulte os detalhes e cancele pedidos com motivo e histórico. Baixas precisam ser estornadas antes do cancelamento.",
+    ],
+  },
+  {
+    id: "magalhaes-office-finance-2026-11-07",
+    title: "Financeiro com contratos, orçamentos e contas",
+    date: "2026-11-07",
+    preview: "magalhaes-office-finance",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "Cadastre honorários vinculados a clientes e processos e acompanhe despesas e parcelas.",
+      "Gere parcelas de orçamentos aprovados e mensalidades de contratos recorrentes.",
+      "Cadastre contas, fornecedores, categorias e centros de custo. Registre baixas e transferências internas.",
+      "Edite lançamentos, estorne baixas e consulte extratos, relatórios CSV e histórico.",
+    ],
+  },
   {
     id: "claude-conectar-e-ler-documentos-2026-10-28", title: "Conecte o Claude em um clique e peça para ler os anexos",
     date: "2026-10-28", preview: "claude-connect-documents", audience: "all", workspaces: ["consultoria", "marketing"],

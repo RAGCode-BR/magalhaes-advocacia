@@ -25,6 +25,8 @@ const ONLINE_ONLY_QUERY_ROOTS = new Set([
   "meeting_minutes",
   "meeting_transcripts",
   "client_invoices",
+  "office-finance",
+  "office-finance-orders",
 ]);
 
 function shouldPersistQuery(query: { queryKey: readonly unknown[]; state: { status: string } }) {

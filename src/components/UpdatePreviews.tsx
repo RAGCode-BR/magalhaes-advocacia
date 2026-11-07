@@ -1535,6 +1535,36 @@ function ClaudeConnectorPreview() {
   return <PreviewGrid label="Prévia da área Claude e da autorização no TaskFlow"><div className="rounded-xl border bg-background p-4 text-xs" data-claude-connection-status><p className="flex items-center gap-1.5 font-semibold"><Sparkles className="h-3.5 w-3.5 text-primary" /> Claude</p><div className="mt-3 flex items-center gap-2 rounded-lg border p-2"><CheckCircle2 className="h-4 w-4 text-primary" /> Conectado<span className="ml-auto rounded border px-2 py-1">Desconectar</span></div><div className="mt-3 rounded-lg border p-2" data-claude-request><p className="font-semibold">Pedir ao Claude · Ctrl/⌘ + J</p><p className="mt-1 text-muted-foreground">Crie um card para revisar o contrato amanhã</p><p className="mt-1 text-muted-foreground">Contexto: Cliente de exemplo</p></div></div><div className="rounded-xl border bg-background p-4 text-xs" data-claude-consent><strong>Permitir acesso ao seu TaskFlow?</strong><p className="mt-2 text-muted-foreground">Vê o que você vê. Cria e altera só com a sua aprovação. Nunca exclui.</p><div className="mt-3 flex justify-end gap-2"><span className="rounded border px-3 py-1.5">Negar</span><span className="rounded bg-primary px-3 py-1.5 text-primary-foreground">Permitir</span></div><p className="mt-3 flex gap-1.5 text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" /> Sempre no seu nome</p></div></PreviewGrid>;
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-finance-orders": () => (
+    <PreviewGrid label="Prévia de serviços e compras com geração de parcelas">
+      <div className="space-y-3 rounded-xl border bg-background p-4 text-xs">
+        <strong>Ordem de serviço · Exemplo</strong>
+        <p className="rounded bg-muted p-2">Consultoria · 2 × R$ 150,00</p>
+        <p>Desconto R$ 30,00 · Total R$ 270,00</p>
+        <p className="text-primary">Rascunho → Em andamento → Concluído</p>
+      </div>
+      <div className="space-y-3 rounded-xl border bg-background p-4 text-xs">
+        <strong>Gerar financeiro</strong>
+        <p className="rounded bg-muted p-2">Serviços → Contas a receber</p>
+        <p className="rounded bg-muted p-2">Compras → Contas a pagar</p>
+        <p>3 parcelas de R$ 90,00 · Histórico preservado</p>
+      </div>
+    </PreviewGrid>
+  ),
+  "magalhaes-office-finance": () => (
+    <div role="img" aria-label="Financeiro com contratos recorrentes, orçamentos e contas a receber" className="space-y-2 rounded-lg border bg-card p-3 text-xs text-card-foreground">
+      <strong>Financeiro</strong>
+      <div className="flex gap-2 text-[10px] text-primary"><span>Orçamentos</span><span>Contratos</span><span>Contas</span></div>
+      <div className="flex flex-wrap gap-2">
+        <span className="rounded bg-muted px-2 py-1">Contas a receber</span>
+        <span className="rounded bg-muted px-2 py-1">Contas a pagar</span>
+      </div>
+      <div className="flex items-center justify-between gap-2 border-t pt-2">
+        <span>Honorários · Parcela 1/3</span>
+        <span className="text-primary">Registrar baixa</span>
+      </div>
+    </div>
+  ),
   "claude-connect-documents": ClaudeConnectDocumentsPreview,
   "magalhaes-top-glass-nav": MagalhaesTopGlassNavPreview,
   "claude-connector": ClaudeConnectorPreview,

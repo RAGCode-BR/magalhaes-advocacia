@@ -5,6 +5,14 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates orders, discounts and installments without performing financial actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-finance-orders" }));
+    expect(html).toContain("Consultoria");
+    expect(html).toContain("Contas a pagar");
+    expect(html).toContain("3 parcelas");
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("href=");
+  });
   it("illustrates the Connect Claude button and the attachment formats without real actions", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "claude-connect-documents" }));
     expect(html).toContain("data-claude-connect-cta");

@@ -3,7 +3,7 @@ import { APP_UPDATES, formatAppUpdateDate, getVisibleAppUpdates } from "./app-up
 
 describe("application release catalogue", () => {
   it("requires a unique version, date, explanation and preview for every release", () => {
-    expect(APP_UPDATES).toHaveLength(33);
+    expect(APP_UPDATES).toHaveLength(35);
     expect(new Set(APP_UPDATES.map((update) => update.id)).size).toBe(APP_UPDATES.length);
     for (const update of APP_UPDATES) {
       expect(update.id.trim()).not.toBe("");
@@ -42,7 +42,11 @@ describe("application release catalogue", () => {
             ],
       );
       expect(updates[0].preview).toBe("claude-connect-documents");
-      expect(getVisibleAppUpdates(true, workspace)[0].id).toBe("claude-conectar-e-ler-documentos-2026-10-28");
+      expect(getVisibleAppUpdates(true, workspace)[0].id).toBe(
+        workspace === "consultoria"
+          ? "magalhaes-finance-orders-2026-11-07"
+          : "claude-conectar-e-ler-documentos-2026-10-28",
+      );
       expect(updates.every((update) => update.audience === "all")).toBe(true);
     },
   );
