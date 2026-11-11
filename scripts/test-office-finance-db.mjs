@@ -17,6 +17,7 @@ const adminId = "00000000-0000-0000-0000-000000000001";
 const outsiderId = "00000000-0000-0000-0000-000000000002";
 const clientId = randomUUID();
 const processId = randomUUID();
+const workspaceId = randomUUID();
 const today = new Date().toISOString().slice(0, 10);
 let started = false;
 
@@ -108,7 +109,16 @@ try {
     CREATE TYPE public.app_role AS ENUM('admin','collaborator');
     CREATE FUNCTION public.has_role(uuid,public.app_role) RETURNS boolean LANGUAGE sql STABLE AS
       $$ SELECT $1='00000000-0000-0000-0000-000000000001' AND $2='admin' $$;
-    CREATE TABLE public.clients(id uuid PRIMARY KEY);
+    CREATE TABLE public.workspaces(id uuid PRIMARY KEY);
+    CREATE TABLE public.clients(id uuid PRIMARY KEY,name text NOT NULL DEFAULT 'Cliente',workspace_id uuid,email text,phone text);
+    -- Minimal CRM shape used by the quote → lead integration.
+    CREATE TABLE public.crm_opportunities(
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      workspace_id uuid NOT NULL REFERENCES public.workspaces(id),
+      title text NOT NULL, company_name text, client_id uuid REFERENCES public.clients(id),
+      contact_email text, contact_phone text, stage text NOT NULL DEFAULT 'novo',
+      source text, amount numeric(14,2), notes text, created_by uuid);
+    GRANT SELECT ON public.crm_opportunities TO authenticated;
     CREATE TABLE public.tasks(id uuid PRIMARY KEY,client_id uuid,deleted_at timestamptz);
     GRANT USAGE ON SCHEMA auth TO authenticated;
     GRANT SELECT ON public.tasks TO authenticated;
@@ -120,12 +130,17 @@ try {
       CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
     `);
   }
-  await owner.query("INSERT INTO public.clients VALUES($1)", [clientId]);
+  await owner.query("INSERT INTO public.workspaces VALUES($1)", [workspaceId]);
+  await owner.query(
+    "INSERT INTO public.clients(id,name,workspace_id,email) VALUES($1,'Cliente Teste',$2,'cliente@exemplo.com')",
+    [clientId, workspaceId],
+  );
   await owner.query("INSERT INTO public.tasks VALUES($1,$2,NULL)", [processId, clientId]);
   for (const filename of [
     "20261106120000_office_finance.sql",
     "20261107120000_office_finance_workflows.sql",
     "20261107150000_office_finance_orders.sql",
+    "20261110120000_finance_quote_proposal_crm.sql",
   ]) {
     await owner.query(await readFile(join(root, "supabase/migrations", filename), "utf8"));
   }
@@ -257,6 +272,126 @@ try {
     10000,
   );
   assert.ok(quoteEntries.every((row) => row.competence_date === "2026-01-15"));
+
+  // Each new quote becomes one "novo" CRM lead carrying the proposal document.
+  const lead = (
+    await admin.query(
+      "SELECT o.stage,o.amount::text,o.client_id,o.contact_email,o.source,o.proposal,a.crm_opportunity_id=o.id linked FROM public.crm_opportunities o JOIN public.office_finance_agreements a ON a.id=o.finance_agreement_id WHERE a.id=$1",
+      [quoteId],
+    )
+  ).rows;
+  assert.equal(lead.length, 1);
+  assert.equal(lead[0].stage, "novo");
+  assert.equal(lead[0].amount, "100.00");
+  assert.equal(lead[0].client_id, clientId);
+  assert.equal(lead[0].contact_email, "cliente@exemplo.com");
+  assert.equal(lead[0].source, "Orçamento");
+  assert.ok(lead[0].linked);
+  const proposalQuote = randomUUID();
+  const proposal = { number: "2026-TEST", scope: ["Análise"], validity_days: 15 };
+  for (let attempt = 0; attempt < 2; attempt += 1)
+    await admin.query("SELECT public.office_finance_save_agreement($1,'quote',$2)", [
+      proposalQuote,
+      payload({ proposal }),
+    ]);
+  const proposalLeads = (
+    await admin.query(
+      "SELECT o.proposal,a.proposal agreement_proposal FROM public.crm_opportunities o JOIN public.office_finance_agreements a ON a.id=o.finance_agreement_id WHERE a.id=$1",
+      [proposalQuote],
+    )
+  ).rows;
+  assert.equal(proposalLeads.length, 1, "retries must not duplicate the lead");
+  assert.deepEqual(proposalLeads[0].proposal, proposal);
+  assert.deepEqual(proposalLeads[0].agreement_proposal, proposal);
+  await assert.rejects(
+    outsider.query("SELECT public.office_finance_save_agreement($1,'quote',$2)", [
+      randomUUID(),
+      payload(),
+    ]),
+    { code: "42501" },
+  );
+
+  // A quote can target a new contact without a client record. The lead goes to
+  // the active workspace; generating finance requires linking a client first.
+  const prospectQuote = randomUUID();
+  await assert.rejects(
+    admin.query("SELECT public.office_finance_save_agreement($1,'quote',$2)", [
+      randomUUID(),
+      payload({ client_id: "", process_id: "" }),
+    ]),
+    /Selecione o cliente/,
+  );
+  await assert.rejects(
+    admin.query("SELECT public.office_finance_save_agreement($1,'recurring',$2)", [
+      randomUUID(),
+      payload({ client_id: "", process_id: "", proposal: { client: { name: "Novo" } } }),
+    ]),
+    /Selecione o cliente/,
+  );
+  await admin.query("SELECT public.office_finance_save_agreement($1,'quote',$2)", [
+    prospectQuote,
+    payload({
+      client_id: "",
+      process_id: "",
+      workspace_id: workspaceId,
+      proposal: { client: { name: "Contato Novo" }, contact_email: "novo@exemplo.com" },
+    }),
+  ]);
+  const prospectLead = (
+    await admin.query(
+      "SELECT o.client_id,o.company_name,o.contact_email,o.workspace_id,o.stage,a.client_id agreement_client FROM public.crm_opportunities o JOIN public.office_finance_agreements a ON a.id=o.finance_agreement_id WHERE a.id=$1",
+      [prospectQuote],
+    )
+  ).rows[0];
+  assert.equal(prospectLead.client_id, null);
+  assert.equal(prospectLead.agreement_client, null);
+  assert.equal(prospectLead.company_name, "Contato Novo");
+  assert.equal(prospectLead.contact_email, "novo@exemplo.com");
+  assert.equal(prospectLead.workspace_id, workspaceId);
+  assert.equal(prospectLead.stage, "novo");
+  await admin.query("SELECT public.office_finance_agreement_action($1,'approve')", [prospectQuote]);
+  await assert.rejects(
+    admin.query("SELECT public.office_finance_agreement_action($1,'generate')", [prospectQuote]),
+    /cliente/,
+  );
+  await assert.rejects(
+    outsider.query("SELECT public.office_finance_link_agreement_client($1,$2)", [
+      prospectQuote,
+      clientId,
+    ]),
+    { code: "42501" },
+  );
+  for (let attempt = 0; attempt < 2; attempt += 1)
+    await admin.query("SELECT public.office_finance_link_agreement_client($1,$2)", [
+      prospectQuote,
+      clientId,
+    ]);
+  assert.equal(
+    (
+      await admin.query(
+        "SELECT o.client_id FROM public.crm_opportunities o WHERE o.finance_agreement_id=$1",
+        [prospectQuote],
+      )
+    ).rows[0].client_id,
+    clientId,
+  );
+  await assert.rejects(
+    admin.query("SELECT public.office_finance_link_agreement_client($1,$2)", [
+      prospectQuote,
+      randomUUID(),
+    ]),
+    /já tem um cliente/,
+  );
+  await admin.query("SELECT public.office_finance_agreement_action($1,'generate')", [prospectQuote]);
+  assert.equal(
+    (
+      await admin.query(
+        "SELECT count(*)::int n FROM public.office_finance_entries WHERE group_id=$1 AND client_id=$2",
+        [prospectQuote, clientId],
+      )
+    ).rows[0].n,
+    3,
+  );
 
   const recurringId = randomUUID();
   await admin.query("SELECT public.office_finance_save_agreement($1,'recurring',$2)", [

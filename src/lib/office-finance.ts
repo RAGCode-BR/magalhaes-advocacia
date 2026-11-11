@@ -113,6 +113,9 @@ export type FinanceAgreement = {
   cost_center: string | null;
   notes: string | null;
   generated_at: string | null;
+  created_at?: string;
+  proposal?: unknown;
+  crm_opportunity_id?: string | null;
 };
 export type FinanceTransfer = {
   id: string;

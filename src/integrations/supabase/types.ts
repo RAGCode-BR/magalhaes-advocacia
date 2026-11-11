@@ -35,6 +35,7 @@ export type Database = {
           stage_id: string
           label: string
           color: string
+          position: number | null
           updated_at: string
         }
         Insert: {
@@ -42,6 +43,7 @@ export type Database = {
           stage_id: string
           label: string
           color: string
+          position?: number | null
           updated_at?: string
         }
         Update: {
@@ -49,6 +51,7 @@ export type Database = {
           stage_id?: string
           label?: string
           color?: string
+          position?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -73,6 +76,8 @@ export type Database = {
           created_by: string | null
           created_at: string
           updated_at: string
+          finance_agreement_id: string | null
+          proposal: Json | null
         }
         Insert: {
           id?: string
@@ -91,6 +96,8 @@ export type Database = {
           created_by?: string | null
           created_at?: string
           updated_at?: string
+          finance_agreement_id?: string | null
+          proposal?: Json | null
         }
         Update: {
           id?: string
@@ -109,6 +116,8 @@ export type Database = {
           created_by?: string | null
           created_at?: string
           updated_at?: string
+          finance_agreement_id?: string | null
+          proposal?: Json | null
         }
         Relationships: [
           { foreignKeyName: "crm_opportunities_workspace_id_fkey"; columns: ["workspace_id"]; isOneToOne: false; referencedRelation: "workspaces"; referencedColumns: ["id"] },

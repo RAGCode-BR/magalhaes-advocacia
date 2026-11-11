@@ -1,5 +1,7 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "crm-column-order"
+  | "magalhaes-quote-proposal-crm"
   | "magalhaes-finance-orders"
   | "magalhaes-office-finance"
   | "claude-connect-documents"
@@ -79,6 +81,35 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "crm-ordem-das-colunas-2026-11-10",
+    title: "Escolha a ordem das colunas do CRM",
+    date: "2026-11-10",
+    preview: "crm-column-order",
+    audience: "all",
+    workspaces: ["consultoria", "marketing"],
+    details: [
+      "Arraste a coluna pelo título para mudar a posição dela no funil, por exemplo, deixar Novos Leads em primeiro.",
+      "No lápis de cada coluna, além do título e da cor, os botões Esquerda e Direita mudam a posição, inclusive no celular.",
+      "A ordem vale para todos que usam o CRM no mesmo ambiente. Os leads continuam nas mesmas etapas.",
+    ],
+  },
+  {
+    id: "magalhaes-orcamento-proposta-crm-2026-11-10",
+    title: "Orçamento vira proposta em PDF e lead no CRM",
+    date: "2026-11-10",
+    preview: "magalhaes-quote-proposal-crm",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "Orçamentos agora é uma aba própria na barra de cima, ao lado do Financeiro.",
+      "O novo orçamento é montado como uma proposta de honorários: objeto, área, escopo, o que não está incluído, valor fixo ou fixo com êxito, parcelas, forma de pagamento e validade.",
+      "Baixe a proposta em PDF no timbrado vinho e dourado da Magalhães, com cláusulas, tabela de parcelas e espaço para assinatura.",
+      "Ao salvar, o cliente entra como lead em Novos Leads no CRM. Ao abrir o lead, você vê o resumo da proposta e baixa o mesmo PDF.",
+      "A proposta pode ser feita para um cliente cadastrado ou para um novo cliente, sem cadastro. Se ela for aprovada, o botão Cadastrar cliente cria o cadastro com os dados da proposta (ou usa um cliente existente) antes de gerar o financeiro.",
+      "As seções do Financeiro agora são abas agrupadas em Movimento, Comercial e Gestão e não são mais cortadas em janelas menores.",
+    ],
+  },
   {
     id: "magalhaes-finance-orders-2026-11-07",
     title: "Serviços e compras ligados ao financeiro",

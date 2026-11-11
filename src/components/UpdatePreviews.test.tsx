@@ -5,6 +5,23 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates dragging CRM columns and the position buttons without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "crm-column-order" }));
+    expect(html).toContain("data-crm-column-drag");
+    expect(html).toContain("data-crm-column-position");
+    expect(html).toContain("Novos Leads");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
+  it("illustrates the letterhead proposal and the CRM lead without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-quote-proposal-crm" }));
+    expect(html).toContain("data-proposal-pdf");
+    expect(html).toContain("data-proposal-crm-lead");
+    expect(html).toContain("Proposta de honorários");
+    expect(html).toContain("Novos Leads");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
   it("illustrates orders, discounts and installments without performing financial actions", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-finance-orders" }));
     expect(html).toContain("Consultoria");

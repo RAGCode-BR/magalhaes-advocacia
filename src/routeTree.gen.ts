@@ -25,6 +25,7 @@ import { Route as AppMeetingsRouteImport } from './routes/_app/meetings'
 import { Route as AppMuralRouteImport } from './routes/_app/mural'
 import { Route as AppNotesRouteImport } from './routes/_app/notes'
 import { Route as AppObligationsRouteImport } from './routes/_app/obligations'
+import { Route as AppOrcamentosRouteImport } from './routes/_app/orcamentos'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppRequestsRouteImport } from './routes/_app/requests'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
@@ -123,6 +124,11 @@ const AppNotesRoute = AppNotesRouteImport.update({
 const AppObligationsRoute = AppObligationsRouteImport.update({
   id: '/obligations',
   path: '/obligations',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrcamentosRoute = AppOrcamentosRouteImport.update({
+  id: '/orcamentos',
+  path: '/orcamentos',
   getParentRoute: () => AppRoute,
 } as any)
 const AppReportsRoute = AppReportsRouteImport.update({
@@ -243,6 +249,7 @@ export interface FileRoutesByFullPath {
   '/mural': typeof AppMuralRoute
   '/notes': typeof AppNotesRoute
   '/obligations': typeof AppObligationsRoute
+  '/orcamentos': typeof AppOrcamentosRoute
   '/reports': typeof AppReportsRoute
   '/requests': typeof AppRequestsRoute
   '/settings': typeof AppSettingsRoute
@@ -279,6 +286,7 @@ export interface FileRoutesByTo {
   '/mural': typeof AppMuralRoute
   '/notes': typeof AppNotesRoute
   '/obligations': typeof AppObligationsRoute
+  '/orcamentos': typeof AppOrcamentosRoute
   '/reports': typeof AppReportsRoute
   '/requests': typeof AppRequestsRoute
   '/settings': typeof AppSettingsRoute
@@ -317,6 +325,7 @@ export interface FileRoutesById {
   '/_app/mural': typeof AppMuralRoute
   '/_app/notes': typeof AppNotesRoute
   '/_app/obligations': typeof AppObligationsRoute
+  '/_app/orcamentos': typeof AppOrcamentosRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/requests': typeof AppRequestsRoute
   '/_app/settings': typeof AppSettingsRoute
@@ -356,6 +365,7 @@ export interface FileRouteTypes {
     | '/mural'
     | '/notes'
     | '/obligations'
+    | '/orcamentos'
     | '/reports'
     | '/requests'
     | '/settings'
@@ -392,6 +402,7 @@ export interface FileRouteTypes {
     | '/mural'
     | '/notes'
     | '/obligations'
+    | '/orcamentos'
     | '/reports'
     | '/requests'
     | '/settings'
@@ -429,6 +440,7 @@ export interface FileRouteTypes {
     | '/_app/mural'
     | '/_app/notes'
     | '/_app/obligations'
+    | '/_app/orcamentos'
     | '/_app/reports'
     | '/_app/requests'
     | '/_app/settings'
@@ -571,6 +583,13 @@ declare module '@tanstack/react-router' {
       path: '/obligations'
       fullPath: '/obligations'
       preLoaderRoute: typeof AppObligationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/orcamentos': {
+      id: '/_app/orcamentos'
+      path: '/orcamentos'
+      fullPath: '/orcamentos'
+      preLoaderRoute: typeof AppOrcamentosRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/reports': {
@@ -768,6 +787,7 @@ interface AppRouteChildren {
   AppMuralRoute: typeof AppMuralRoute
   AppNotesRoute: typeof AppNotesRoute
   AppObligationsRoute: typeof AppObligationsRoute
+  AppOrcamentosRoute: typeof AppOrcamentosRoute
   AppReportsRoute: typeof AppReportsRoute
   AppRequestsRoute: typeof AppRequestsRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -793,6 +813,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMuralRoute: AppMuralRoute,
   AppNotesRoute: AppNotesRoute,
   AppObligationsRoute: AppObligationsRoute,
+  AppOrcamentosRoute: AppOrcamentosRoute,
   AppReportsRoute: AppReportsRoute,
   AppRequestsRoute: AppRequestsRoute,
   AppSettingsRoute: AppSettingsRoute,

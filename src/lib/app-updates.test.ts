@@ -3,7 +3,7 @@ import { APP_UPDATES, formatAppUpdateDate, getVisibleAppUpdates } from "./app-up
 
 describe("application release catalogue", () => {
   it("requires a unique version, date, explanation and preview for every release", () => {
-    expect(APP_UPDATES).toHaveLength(35);
+    expect(APP_UPDATES).toHaveLength(37);
     expect(new Set(APP_UPDATES.map((update) => update.id)).size).toBe(APP_UPDATES.length);
     for (const update of APP_UPDATES) {
       expect(update.id.trim()).not.toBe("");
@@ -27,24 +27,25 @@ describe("application release catalogue", () => {
       expect(updates.map((update) => update.id)).toEqual(
         workspace === "consultoria"
           ? [
+              "crm-ordem-das-colunas-2026-11-10",
               "claude-conectar-e-ler-documentos-2026-10-28",
               "magalhaes-barra-superior-vidro-2026-10-28",
               "claude-conector-2026-10-24",
               "magalhaes-gestao-processos-logo-2026-10-21",
-              "magalhaes-documentos-sem-backups-2026-10-21",
             ]
           : [
+              "crm-ordem-das-colunas-2026-11-10",
               "claude-conectar-e-ler-documentos-2026-10-28",
               "magalhaes-barra-superior-vidro-2026-10-28",
               "claude-conector-2026-10-24",
               "magalhaes-identidade-2026-10-20",
-              "anexos-visiveis-nas-subtarefas-recolhidas-2026-10-19",
             ],
       );
-      expect(updates[0].preview).toBe("claude-connect-documents");
-      expect(getVisibleAppUpdates(true, workspace)[0].id).toBe(
+      expect(updates[0].preview).toBe("crm-column-order");
+      expect(getVisibleAppUpdates(true, workspace)[0].id).toBe("crm-ordem-das-colunas-2026-11-10");
+      expect(getVisibleAppUpdates(true, workspace).map((update) => update.id)).toContain(
         workspace === "consultoria"
-          ? "magalhaes-finance-orders-2026-11-07"
+          ? "magalhaes-orcamento-proposta-crm-2026-11-10"
           : "claude-conectar-e-ler-documentos-2026-10-28",
       );
       expect(updates.every((update) => update.audience === "all")).toBe(true);

@@ -1,6 +1,10 @@
 import { BrandLogo, BrandWordmark } from "@/components/BrandLogo";
 import type { ReactNode } from "react";
 import {
+  FileText,
+  GripVertical,
+  ChevronLeft,
+  ChevronRight,
   ArrowRight,
   AlertTriangle,
   Archive,
@@ -1534,7 +1538,84 @@ function MagalhaesTopGlassNavPreview() {
 function ClaudeConnectorPreview() {
   return <PreviewGrid label="Prévia da área Claude e da autorização no TaskFlow"><div className="rounded-xl border bg-background p-4 text-xs" data-claude-connection-status><p className="flex items-center gap-1.5 font-semibold"><Sparkles className="h-3.5 w-3.5 text-primary" /> Claude</p><div className="mt-3 flex items-center gap-2 rounded-lg border p-2"><CheckCircle2 className="h-4 w-4 text-primary" /> Conectado<span className="ml-auto rounded border px-2 py-1">Desconectar</span></div><div className="mt-3 rounded-lg border p-2" data-claude-request><p className="font-semibold">Pedir ao Claude · Ctrl/⌘ + J</p><p className="mt-1 text-muted-foreground">Crie um card para revisar o contrato amanhã</p><p className="mt-1 text-muted-foreground">Contexto: Cliente de exemplo</p></div></div><div className="rounded-xl border bg-background p-4 text-xs" data-claude-consent><strong>Permitir acesso ao seu TaskFlow?</strong><p className="mt-2 text-muted-foreground">Vê o que você vê. Cria e altera só com a sua aprovação. Nunca exclui.</p><div className="mt-3 flex justify-end gap-2"><span className="rounded border px-3 py-1.5">Negar</span><span className="rounded bg-primary px-3 py-1.5 text-primary-foreground">Permitir</span></div><p className="mt-3 flex gap-1.5 text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" /> Sempre no seu nome</p></div></PreviewGrid>;
 }
+function CrmColumnOrderPreview() {
+  const columns = [
+    ["Novos Leads", "#3278d4"],
+    ["Atendendo", "#16a77e"],
+    ["Qualificados", "#5b45ad"],
+  ] as const;
+  return (
+    <PreviewGrid label="Prévia da reordenação das colunas do CRM">
+      <div className="rounded-xl border bg-background p-3 text-[10px]" data-crm-column-drag>
+        <p className="font-semibold">Arraste pelo título</p>
+        <div className="mt-2 grid grid-cols-3 gap-1.5">
+          {columns.map(([label, color], index) => (
+            <div
+              key={label}
+              className={`rounded-lg border bg-muted/30 p-1.5 ${index === 0 ? "-translate-y-1 shadow-md ring-1 ring-primary/40" : ""}`}
+              style={{ borderTop: `3px solid ${color}` }}
+            >
+              <p className="flex items-center gap-0.5 font-semibold">
+                <GripVertical className="h-3 w-3 text-muted-foreground" />
+                {label}
+              </p>
+              <p className="mt-1 rounded bg-card px-1 py-1 shadow-sm">Lead de exemplo</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-xl border bg-background p-3 text-[10px]" data-crm-column-position>
+        <p className="font-semibold">Editar coluna</p>
+        <p className="mt-2 text-muted-foreground">Posição no funil</p>
+        <div className="mt-1 flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-0.5 rounded border px-1.5 py-1">
+            <ChevronLeft className="h-3 w-3" /> Esquerda
+          </span>
+          <span className="tabular-nums text-muted-foreground">1 de 6</span>
+          <span className="inline-flex items-center gap-0.5 rounded border px-1.5 py-1">
+            Direita <ChevronRight className="h-3 w-3" />
+          </span>
+        </div>
+        <p className="mt-2 text-muted-foreground">Vale para todos neste ambiente.</p>
+      </div>
+    </PreviewGrid>
+  );
+}
+function MagalhaesQuoteProposalCrmPreview() {
+  return (
+    <PreviewGrid label="Prévia da proposta de honorários em PDF e do lead criado no CRM">
+      <div className="overflow-hidden rounded-xl border bg-white text-[10px] text-[#301b1d] shadow-sm" data-proposal-pdf>
+        <div className="flex items-center justify-between bg-[#591b20] px-3 py-2 text-[#fff9ed]">
+          <span className="font-serif text-xs italic text-[#ddbc70]">Magalhães</span>
+          <span className="text-right text-[8px] leading-tight"><span className="block text-[#ddbc70]">Proposta de honorários</span>Nº 2026-EXEMP</span>
+        </div>
+        <div className="h-0.5 bg-[#ddbc70]" />
+        <div className="space-y-1.5 p-3">
+          <p className="font-serif text-xs font-bold text-[#591b20]">Ação de exemplo</p>
+          <p className="rounded border-l-2 border-[#ddbc70] bg-[#fbf6f0] px-2 py-1">Contratante: Cliente de exemplo</p>
+          <p className="font-semibold text-[#591b20]">Escopo dos serviços</p>
+          <p className="text-muted-foreground">▪ Análise do caso ▪ Petição ▪ Audiências</p>
+          <p className="rounded bg-[#591b20] px-2 py-1 font-semibold text-[#fff9ed]">R$ 3.000,00 · 3 parcelas</p>
+        </div>
+      </div>
+      <div className="rounded-xl border bg-background p-3 text-[10px]" data-proposal-crm-lead>
+        <p className="font-semibold">CRM · Novos Leads</p>
+        <div className="mt-2 rounded-lg border border-l-[3px] border-l-[#3278d4] bg-card p-2 shadow-sm">
+          <p className="font-semibold">Ação de exemplo</p>
+          <p className="text-muted-foreground">Cliente de exemplo</p>
+          <p className="mt-1 font-semibold">R$ 3.000,00</p>
+          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
+            <FileText className="h-3 w-3" /> Proposta nº 2026-EXEMP
+          </span>
+        </div>
+        <p className="mt-2 text-muted-foreground">Ao abrir o lead: resumo da proposta e Baixar PDF.</p>
+      </div>
+    </PreviewGrid>
+  );
+}
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "crm-column-order": CrmColumnOrderPreview,
+  "magalhaes-quote-proposal-crm": MagalhaesQuoteProposalCrmPreview,
   "magalhaes-finance-orders": () => (
     <PreviewGrid label="Prévia de serviços e compras com geração de parcelas">
       <div className="space-y-3 rounded-xl border bg-background p-4 text-xs">

@@ -4,6 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  FileDown,
+  FileText,
+  GripVertical,
   KanbanSquare,
   Mail,
   MapPin,
@@ -19,6 +24,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useClients } from "@/hooks/use-data";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import {
+  proposalPayments,
+  proposalValidUntil,
+  type ProposalDocument,
+} from "@/lib/finance-proposal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,6 +86,21 @@ const initialForm = {
   expected_close_date: "",
   notes: "",
 };
+// Leads criados por um orçamento do financeiro trazem a proposta completa.
+function leadProposal(lead: Opportunity | null): ProposalDocument | null {
+  const doc = lead?.proposal as Partial<ProposalDocument> | null | undefined;
+  return doc && doc.version === 1 && Array.isArray(doc.scope) ? (doc as ProposalDocument) : null;
+}
+const brDate = (iso: string) => iso.split("-").reverse().join("/");
+async function downloadLeadProposal(doc: ProposalDocument) {
+  try {
+    const { downloadProposalPdf } = await import("@/lib/finance-proposal-pdf");
+    await downloadProposalPdf(doc);
+  } catch (error) {
+    toast.error((error as Error).message || "Não foi possível gerar o PDF.");
+  }
+}
+
 const money = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 const normalize = (value: string) =>
@@ -128,12 +153,69 @@ function CrmPage() {
   });
   const stages = useMemo(
     () =>
-      defaultStages.map((stage) => {
-        const saved = stageSettings.data?.find((item) => item.stage_id === stage.id);
-        return saved ? { ...stage, label: saved.label, color: saved.color } : stage;
-      }),
+      defaultStages
+        .map((stage, index) => {
+          const saved = stageSettings.data?.find((item) => item.stage_id === stage.id);
+          const order = saved?.position ?? index;
+          return saved
+            ? { ...stage, label: saved.label, color: saved.color, order, index }
+            : { ...stage, order, index };
+        })
+        .sort((a, b) => a.order - b.order || a.index - b.index),
     [stageSettings.data],
   );
+  const [draggingStage, setDraggingStage] = useState<Stage | null>(null);
+
+  // Saves the full column order so every stage has an explicit position.
+  const reorderStages = useMutation({
+    mutationFn: async (order: Stage[]) => {
+      if (!workspaceId) throw new Error("Ambiente indisponível.");
+      const rows = order.map((id, position) => {
+        const stage = stages.find((item) => item.id === id)!;
+        return {
+          workspace_id: workspaceId,
+          stage_id: id,
+          label: stage.label,
+          color: stage.color,
+          position,
+        };
+      });
+      const { error } = await supabase
+        .from("crm_pipeline_stages")
+        .upsert(rows, { onConflict: "workspace_id,stage_id" });
+      if (error) throw error;
+    },
+    onMutate: async (order) => {
+      await queryClient.cancelQueries({ queryKey: stagesQueryKey });
+      const previous = queryClient.getQueryData<StageSetting[]>(stagesQueryKey);
+      queryClient.setQueryData<StageSetting[]>(stagesQueryKey, () =>
+        order.map((id, position) => {
+          const stage = stages.find((item) => item.id === id)!;
+          const saved = previous?.find((item) => item.stage_id === id);
+          return {
+            workspace_id: workspaceId!,
+            stage_id: id,
+            label: stage.label,
+            color: stage.color,
+            position,
+            updated_at: saved?.updated_at ?? new Date().toISOString(),
+          };
+        }),
+      );
+      return { previous };
+    },
+    onError: (error, _order, context) => {
+      queryClient.setQueryData(stagesQueryKey, context?.previous);
+      toast.error(`Não foi possível reordenar as colunas: ${error.message}`);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: stagesQueryKey }),
+  });
+  function placeStage(id: Stage, targetIndex: number) {
+    const order = stages.map((stage) => stage.id).filter((stageId) => stageId !== id);
+    const index = Math.max(0, Math.min(targetIndex, order.length));
+    order.splice(index, 0, id);
+    if (order.some((stageId, i) => stageId !== stages[i].id)) reorderStages.mutate(order);
+  }
 
   const saveStage = useMutation({
     mutationFn: async () => {
@@ -407,28 +489,52 @@ function CrmPage() {
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => {
                   event.preventDefault();
+                  if (draggingStage) {
+                    placeStage(
+                      draggingStage,
+                      stages.findIndex((item) => item.id === stage.id),
+                    );
+                    setDraggingStage(null);
+                    return;
+                  }
                   const id = event.dataTransfer.getData("text/plain");
                   if (id && all.some((lead) => lead.id === id && lead.stage !== stage.id))
                     move.mutate({ id, stage: stage.id });
                 }}
               >
-                <div className="flex items-start justify-between gap-2 px-3 py-3">
-                  <div>
-                    <h2 className="text-sm font-semibold">
-                      {stage.label}{" "}
-                      <span className="ml-1 text-xs font-normal text-muted-foreground">
-                        {leads.length}
-                      </span>
-                    </h2>
-                    <p className="mt-1 text-xs text-muted-foreground">{money(value)}</p>
+                <div
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("application/x-crm-stage", stage.id);
+                    setDraggingStage(stage.id);
+                  }}
+                  onDragEnd={() => setDraggingStage(null)}
+                  title="Arraste para mudar a ordem da coluna"
+                  className={`flex cursor-grab items-start justify-between gap-2 px-3 py-3 active:cursor-grabbing ${draggingStage === stage.id ? "opacity-50" : ""}`}
+                >
+                  <div className="flex min-w-0 items-start gap-1">
+                    <GripVertical
+                      aria-hidden="true"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-semibold">
+                        {stage.label}{" "}
+                        <span className="ml-1 text-xs font-normal text-muted-foreground">
+                          {leads.length}
+                        </span>
+                      </h2>
+                      <p className="mt-1 text-xs text-muted-foreground">{money(value)}</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-0.5">
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      title={`Editar título e cor de ${stage.label}`}
-                      aria-label={`Editar título e cor de ${stage.label}`}
+                      title={`Editar título, cor e posição de ${stage.label}`}
+                      aria-label={`Editar título, cor e posição de ${stage.label}`}
                       onClick={() => openStageEditor(stage)}
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -514,10 +620,24 @@ function CrmPage() {
                             Previsão: {lead.expected_close_date.split("-").reverse().join("/")}
                           </p>
                         )}
-                        {lead.source && (
-                          <span className="mt-2 inline-block max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] text-muted-foreground">
-                            {lead.source}
-                          </span>
+                        {(lead.source || leadProposal(lead)) && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {leadProposal(lead) && (
+                              <button
+                                type="button"
+                                onClick={() => openEdit(lead)}
+                                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/15"
+                              >
+                                <FileText className="h-3 w-3" /> Proposta nº{" "}
+                                {leadProposal(lead)!.number}
+                              </button>
+                            )}
+                            {lead.source && (
+                              <span className="inline-block max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] text-muted-foreground">
+                                {lead.source}
+                              </span>
+                            )}
+                          </div>
                         )}
                         <div className="mt-3 border-t pt-2">
                           <Select
@@ -598,7 +718,7 @@ function CrmPage() {
           <DialogHeader>
             <DialogTitle>Editar coluna</DialogTitle>
             <DialogDescription>
-              O título e a cor serão atualizados para todos neste ambiente.
+              O título, a cor e a posição valem para todos neste ambiente.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -633,6 +753,41 @@ function CrmPage() {
                 </span>
               </div>
             </div>
+            {editingStage &&
+              (() => {
+                const index = stages.findIndex((stage) => stage.id === editingStage);
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Posição no funil</Label>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={index <= 0 || reorderStages.isPending}
+                        onClick={() => placeStage(editingStage, index - 1)}
+                      >
+                        <ChevronLeft className="h-4 w-4" /> Esquerda
+                      </Button>
+                      <span className="min-w-14 text-center text-sm tabular-nums text-muted-foreground">
+                        {index + 1} de {stages.length}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={index >= stages.length - 1 || reorderStages.isPending}
+                        onClick={() => placeStage(editingStage, index + 1)}
+                      >
+                        Direita <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      A posição muda na hora. Você também pode arrastar a coluna pelo título.
+                    </p>
+                  </div>
+                );
+              })()}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditingStage(null)}>
                 Cancelar
@@ -653,6 +808,7 @@ function CrmPage() {
               Registre a oportunidade e acompanhe sua etapa no pipeline.
             </DialogDescription>
           </DialogHeader>
+          {leadProposal(editing) && <ProposalPanel doc={leadProposal(editing)!} />}
           <form className="space-y-4" onSubmit={submit}>
             <div className="space-y-1.5">
               <Label htmlFor="crm-title">Nome do lead *</Label>
@@ -882,5 +1038,80 @@ function CrmPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function ProposalPanel({ doc }: { doc: ProposalDocument }) {
+  const [busy, setBusy] = useState(false);
+  const plan =
+    doc.periods === 1
+      ? `À vista em ${brDate(doc.first_due)}`
+      : `${doc.periods} parcelas a partir de ${brDate(doc.first_due)}`;
+  return (
+    <section
+      aria-label="Orçamento vinculado"
+      className="overflow-hidden rounded-xl border bg-muted/30"
+    >
+      <div aria-hidden className="h-1 bg-[#ddbc70]" />
+      <div className="space-y-3 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">Proposta de honorários nº {doc.number}</p>
+            <p className="font-semibold leading-snug">{doc.title}</p>
+            <p className="text-xs text-muted-foreground">
+              {doc.area}, {doc.practice === "consultivo" ? "consultivo" : "contencioso"}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              await downloadLeadProposal(doc);
+              setBusy(false);
+            }}
+          >
+            <FileDown className="h-4 w-4" /> {busy ? "Gerando…" : "Baixar PDF"}
+          </Button>
+        </div>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-xs text-muted-foreground">
+              {doc.fee_model === "fixed_success" ? "Valor inicial" : "Honorários"}
+            </dt>
+            <dd className="font-semibold tabular-nums text-primary">
+              {money(doc.amount_cents / 100)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">Pagamento</dt>
+            <dd>
+              {plan}, {proposalPayments[doc.payment_method]?.toLowerCase()}
+            </dd>
+          </div>
+          {doc.fee_model === "fixed_success" && doc.success_percent ? (
+            <div>
+              <dt className="text-xs text-muted-foreground">Êxito</dt>
+              <dd>{String(doc.success_percent).replace(".", ",")}% do proveito</dd>
+            </div>
+          ) : null}
+          <div>
+            <dt className="text-xs text-muted-foreground">Válida até</dt>
+            <dd>{brDate(proposalValidUntil(doc))}</dd>
+          </div>
+        </dl>
+        <details className="text-sm">
+          <summary className="cursor-pointer text-muted-foreground">
+            Escopo ({doc.scope.length} {doc.scope.length === 1 ? "atividade" : "atividades"})
+          </summary>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            {doc.scope.map((item, index) => (
+              <li key={index}>{item}</li>
+            ))}
+          </ul>
+        </details>
+      </div>
+    </section>
   );
 }

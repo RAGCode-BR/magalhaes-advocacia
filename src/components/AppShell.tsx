@@ -18,6 +18,7 @@ import {
   CalendarDays,
   CalendarCog,
   CircleDollarSign,
+  FileSignature,
   ChevronDown,
   ChevronUp,
   MessageSquareText,
@@ -95,6 +96,7 @@ const allNav: readonly NavItem[] = [
   { to: "/meetings", label: "Reuniões", icon: Handshake },
   { to: "/clients", label: "Clientes", icon: Building2 },
   { to: "/crm", label: "CRM", icon: ContactRound },
+  { to: "/orcamentos", label: "Orçamentos", icon: FileSignature, adminOnly: true },
   { to: "/financeiro", label: "Financeiro", icon: CircleDollarSign, adminOnly: true },
   { to: "/reports", label: "Relatórios", icon: BarChart3 },
   { to: "/agenda", label: "Agenda", icon: CalendarDays },
@@ -147,7 +149,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       "/settings": "settings",
     };
     return allNav.filter((item) => {
-      if (item.to === "/financeiro") return isAdmin && !isClient;
+      if (item.to === "/financeiro" || item.to === "/orcamentos") return isAdmin && !isClient;
       if (item.to === "/settings") return true;
       // Every team member may connect their own Claude; client portal accounts may not.
       if (item.to === "/claude") return !isClient;

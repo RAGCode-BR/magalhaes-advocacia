@@ -64,6 +64,35 @@ async function insertFinance(name: FinanceTable, values: object | object[]) {
   if (error) throw error;
 }
 
+// Grouped by what the office is doing: day-to-day money, sales and long-lived setup.
+const financeSections: { label: string; items: [string, string][] }[] = [
+  {
+    label: "Movimento",
+    items: [
+      ["entries", "Lançamentos"],
+      ["statement", "Extrato"],
+      ["accounts", "Contas"],
+    ],
+  },
+  {
+    label: "Comercial",
+    items: [
+      ["recurring", "Contratos"],
+      ["services", "Serviços"],
+      ["service", "Ordens de serviço"],
+      ["purchase", "Compras"],
+    ],
+  },
+  {
+    label: "Gestão",
+    items: [
+      ["registers", "Cadastros"],
+      ["reports", "Relatórios"],
+      ["history", "Histórico"],
+    ],
+  },
+];
+
 function FinanceRoute() {
   const { isAdmin, isClient, user } = useAuth();
   if (!isAdmin || isClient || !user) return <Navigate to="/settings" replace />;
@@ -135,7 +164,7 @@ function FinancePage({ userId }: { userId: string }) {
   const refresh = () => queryClient.invalidateQueries({ queryKey });
 
   return (
-    <section className="mx-auto max-w-7xl space-y-5 p-4 md:p-6">
+    <section className="mx-auto w-full min-w-0 max-w-7xl space-y-5 p-4 md:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-primary">
@@ -155,30 +184,36 @@ function FinancePage({ userId }: { userId: string }) {
           </Button>
         )}
       </header>
-      <nav className="flex gap-2 overflow-x-auto pb-2" aria-label="Seções do financeiro">
-        {[
-          ["entries", "Lançamentos"],
-          ["quote", "Orçamentos"],
-          ["recurring", "Contratos"],
-          ["services", "Serviços"],
-          ["service", "Ordens de serviço"],
-          ["purchase", "Compras"],
-          ["accounts", "Contas"],
-          ["registers", "Cadastros"],
-          ["statement", "Extrato"],
-          ["reports", "Relatórios"],
-          ["history", "Histórico"],
-        ].map(([value, label]) => (
-          <Button
-            className="shrink-0"
-            key={value}
-            variant={section === value ? "default" : "outline"}
-            aria-pressed={section === value}
-            onClick={() => setSection(value)}
-          >
-            {label}
-          </Button>
-        ))}
+      <nav
+        className="-mx-4 overflow-x-auto border-b px-4 [scrollbar-width:none] md:-mx-6 md:px-6 [&::-webkit-scrollbar]:hidden"
+        aria-label="Seções do financeiro"
+      >
+        <div className="flex w-max items-end gap-5">
+          {financeSections.map((group) => (
+            <div
+              key={group.label}
+              role="group"
+              aria-label={group.label}
+              className="flex items-end gap-1 border-l pl-4 first:border-l-0 first:pl-0"
+            >
+              {group.items.map(([value, label]) => (
+                <button
+                  type="button"
+                  key={value}
+                  aria-current={section === value ? "page" : undefined}
+                  onClick={() => setSection(value)}
+                  className={`relative whitespace-nowrap rounded-t-md px-2.5 pb-3 pt-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    section === value
+                      ? "font-semibold text-primary after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
       </nav>
       {ledger.isPending && <p role="status">Carregando o financeiro…</p>}
       {ledger.isError && (
@@ -418,8 +453,8 @@ function FinancePage({ userId }: { userId: string }) {
           </Card>
         </>
       )}
-      {ledger.data && (section === "quote" || section === "recurring") && (
-        <FinanceAgreements agreements={ledger.data.agreements} kind={section} refresh={refresh} />
+      {ledger.data && section === "recurring" && (
+        <FinanceAgreements agreements={ledger.data.agreements} kind="recurring" refresh={refresh} />
       )}
       {ledger.data && section === "accounts" && (
         <FinanceAccounts ledger={ledger.data} refresh={refresh} />
