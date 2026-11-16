@@ -43,18 +43,25 @@ export type FinanceTable =
 // Database types are generated separately for the original application schema.
 export const table = (name: FinanceTable) => supabase.from(name as never);
 
-export async function financeRows<T>(name: FinanceTable, columns = "*"): Promise<T[]> {
+export async function financeRows<T extends { id: string }>(
+  name: FinanceTable,
+  columns = "*",
+): Promise<T[]> {
   const rows: T[] = [];
   const pageSize = 500;
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await table(name)
-      .select(columns)
-      .order("id")
-      .range(offset, offset + pageSize - 1);
+  let lastId: string | undefined;
+  for (;;) {
+    // Continue from the primary key instead of rescanning an increasing OFFSET.
+    // Inserts/deletions before this cursor cannot shift already-read pages.
+    let query = table(name).select(columns).order("id").limit(pageSize);
+    if (lastId) query = query.gt("id", lastId);
+    const { data, error } = await query;
     if (error) throw error;
     const page = (data ?? []) as T[];
     rows.push(...page);
     if (page.length < pageSize) return rows;
+    lastId = page[page.length - 1].id;
+    if (!lastId) throw new Error("A consulta financeira precisa incluir o identificador id.");
   }
 }
 
