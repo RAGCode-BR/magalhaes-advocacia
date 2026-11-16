@@ -3,7 +3,7 @@ import { APP_UPDATES, formatAppUpdateDate, getVisibleAppUpdates } from "./app-up
 
 describe("application release catalogue", () => {
   it("requires a unique version, date, explanation and preview for every release", () => {
-    expect(APP_UPDATES).toHaveLength(37);
+    expect(APP_UPDATES).toHaveLength(38);
     expect(new Set(APP_UPDATES.map((update) => update.id)).size).toBe(APP_UPDATES.length);
     for (const update of APP_UPDATES) {
       expect(update.id.trim()).not.toBe("");
@@ -42,7 +42,11 @@ describe("application release catalogue", () => {
             ],
       );
       expect(updates[0].preview).toBe("crm-column-order");
-      expect(getVisibleAppUpdates(true, workspace)[0].id).toBe("crm-ordem-das-colunas-2026-11-10");
+      expect(getVisibleAppUpdates(true, workspace)[0].id).toBe(
+        workspace === "consultoria"
+          ? "magalhaes-proposta-mensalidade-2026-11-16"
+          : "crm-ordem-das-colunas-2026-11-10",
+      );
       expect(getVisibleAppUpdates(true, workspace).map((update) => update.id)).toContain(
         workspace === "consultoria"
           ? "magalhaes-orcamento-proposta-crm-2026-11-10"

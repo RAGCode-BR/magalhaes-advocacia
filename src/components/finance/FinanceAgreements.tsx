@@ -27,8 +27,13 @@ import {
 } from "@/lib/office-finance-data";
 import {
   defaultExclusions,
+  defaultHighlights,
   defaultScope,
+  minimumWageCents,
   proposalAreas,
+  proposalFeeModels,
+  proposalLedgerCents,
+  proposalMoneyCents,
   proposalFromAgreement,
   proposalLines,
   proposalNumber,
@@ -41,6 +46,19 @@ import {
 } from "@/lib/finance-proposal";
 import { supabase } from "@/integrations/supabase/client";
 import { FinanceActionDialog, type FinanceAction } from "./FinanceActionDialog";
+import { ProposalRows } from "./ProposalRows";
+
+const brlInput = (cents: number) =>
+  (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const decimal = (value: string) => Number(value.trim().replace(/\./g, "").replace(",", "."));
+
+/** Mensalidade da proposta, quando o orçamento é de assessoria mensal. */
+function monthlyOf(item: FinanceAgreement) {
+  const doc = item.proposal as Partial<ProposalDocument> | null | undefined;
+  return doc?.fee_model === "monthly" && typeof doc.amount_cents === "number"
+    ? doc.amount_cents
+    : null;
+}
 
 /** Contratante salvo na proposta (útil para orçamentos de novos contatos). */
 function savedParty(item: FinanceAgreement) {
@@ -50,8 +68,8 @@ function savedParty(item: FinanceAgreement) {
 
 const statuses: Record<FinanceAgreement["status"], { label: string; className: string }> = {
   draft: { label: "Aguardando resposta", className: "bg-secondary text-secondary-foreground" },
-  approved: { label: "Aprovado", className: "bg-[#f3e4bd] text-[#5c4210]" },
-  rejected: { label: "Recusado", className: "bg-muted text-muted-foreground" },
+  approved: { label: "Aprovada", className: "bg-[#f3e4bd] text-[#5c4210]" },
+  rejected: { label: "Recusada", className: "bg-muted text-muted-foreground" },
   active: { label: "Financeiro gerado", className: "bg-primary text-primary-foreground" },
   closed: { label: "Encerrado", className: "bg-muted text-muted-foreground" },
 };
@@ -78,7 +96,7 @@ export function FinanceAgreements({
   const [downloading, setDownloading] = useState<string | null>(null);
   const [linking, setLinking] = useState<FinanceAgreement | null>(null);
   const isQuote = kind === "quote";
-  const title = isQuote ? "Orçamentos" : "Contratos recorrentes";
+  const title = isQuote ? "Propostas" : "Contratos recorrentes";
   const clientOf = (item: FinanceAgreement) => clients.find((c) => c.id === item.client_id);
   const nameOf = (item: FinanceAgreement) =>
     clientOf(item)?.name ?? savedParty(item)?.name ?? "Cliente removido";
@@ -100,8 +118,8 @@ export function FinanceAgreements({
           : operation === "close"
             ? "Encerrar contrato"
             : operation === "approve"
-              ? "Aprovar orçamento"
-              : "Recusar orçamento",
+              ? "Aprovar proposta"
+              : "Recusar proposta",
       explanation,
       run: () =>
         financeRpc("office_finance_agreement_action", { target: item.id, action: operation }),
@@ -133,7 +151,7 @@ export function FinanceAgreements({
           </p>
         </div>
         <Button className="shrink-0" onClick={() => setDraftId(crypto.randomUUID())}>
-          <Plus /> {isQuote ? "Novo orçamento" : "Novo contrato"}
+          <Plus /> {isQuote ? "Nova proposta" : "Novo contrato"}
         </Button>
       </div>
 
@@ -141,7 +159,7 @@ export function FinanceAgreements({
         <dl className="grid grid-cols-3 divide-x rounded-lg border bg-muted/30">
           {[
             ["Aguardando resposta", String(waiting.length)],
-            ["Aprovados", String(approved.length)],
+            ["Aprovadas", String(approved.length)],
             ["Em negociação", currency(waiting.reduce((sum, item) => sum + item.amount_cents, 0))],
           ].map(([label, value]) => (
             <div key={label} className="min-w-0 px-3 py-2.5 sm:px-4">
@@ -155,7 +173,7 @@ export function FinanceAgreements({
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          aria-label="Buscar orçamento ou contrato"
+          aria-label="Buscar proposta ou contrato"
           className="pl-9"
           placeholder="Buscar por descrição ou cliente"
           value={search}
@@ -169,12 +187,12 @@ export function FinanceAgreements({
             {own.length
               ? "Nenhum resultado para essa busca."
               : isQuote
-                ? "Nenhum orçamento ainda. Ao criar o primeiro, a proposta em PDF fica pronta e o lead entra em Novos Leads no CRM."
+                ? "Nenhuma proposta ainda. Ao criar a primeira, o PDF fica pronto e o lead entra em Novos Leads no CRM."
                 : "Nenhum contrato recorrente cadastrado."}
           </p>
           {!own.length && (
             <Button variant="outline" onClick={() => setDraftId(crypto.randomUUID())}>
-              <Plus /> {isQuote ? "Criar orçamento" : "Criar contrato"}
+              <Plus /> {isQuote ? "Criar proposta" : "Criar contrato"}
             </Button>
           )}
         </div>
@@ -221,14 +239,16 @@ export function FinanceAgreements({
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
                   <p className="text-2xl font-semibold tabular-nums tracking-tight text-primary">
-                    {currency(item.amount_cents)}
+                    {currency(monthlyOf(item) ?? item.amount_cents)}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {isQuote
-                      ? item.periods === 1
-                        ? `À vista em ${displayDate(item.first_due)}`
-                        : `${item.periods} parcelas a partir de ${displayDate(item.first_due)}`
-                      : `por mês, ${item.periods} meses desde ${displayDate(item.first_due)}`}
+                    {isQuote && monthlyOf(item) !== null
+                      ? `por mês, ${item.periods} meses desde ${displayDate(item.first_due)}`
+                      : isQuote
+                        ? item.periods === 1
+                          ? `À vista em ${displayDate(item.first_due)}`
+                          : `${item.periods} parcelas a partir de ${displayDate(item.first_due)}`
+                        : `por mês, ${item.periods} meses desde ${displayDate(item.first_due)}`}
                   </p>
                 </div>
                 {item.notes && (
@@ -423,14 +443,43 @@ function QuoteEditor({
   const [scopeEdited, setScopeEdited] = useState(false);
   const [exclusions, setExclusions] = useState(defaultExclusions.join("\n"));
   const [feeModel, setFeeModel] = useState<ProposalFeeModel>("fixed");
+  const [others, setOthers] = useState<Record<"name" | "document" | "address", string>[]>([]);
+  const [useWages, setUseWages] = useState(false);
+  const [wages, setWages] = useState("2");
+  const [wageValue, setWageValue] = useState(brlInput(minimumWageCents));
+  const [judicial, setJudicial] = useState<Record<"title" | "basis" | "percent", string>[]>([]);
+  const [highlights, setHighlights] = useState<Record<"title" | "text", string>[]>([]);
+  const [extras, setExtras] = useState<Record<"title" | "description" | "amount", string>[]>([]);
   const client = clients.find((item) => item.id === clientId);
+  const wageAmount = Math.round(decimal(wages) * proposalMoneyCents(wageValue)) || 0;
 
   const mutation = useMutation({
     mutationFn: async (form: FormData) => {
       const value = (name: string) => String(form.get(name) ?? "").trim();
-      const amount = financeCents(value("amount"));
+      const amount = useWages ? wageAmount : proposalMoneyCents(value("amount"));
       const periods = Number(value("periods"));
-      if (!amount || amount < periods) throw new Error("Confira o valor e as parcelas.");
+      const ledger = proposalLedgerCents({ fee_model: feeModel, amount_cents: amount, periods });
+      if (!amount || ledger < periods) throw new Error("Confira o valor e as parcelas.");
+      const judicialFees = judicial
+        .filter((row) => row.title.trim())
+        .map((row) => ({
+          title: row.title.trim(),
+          basis: row.basis.trim(),
+          percent: row.percent.trim() ? decimal(row.percent) || null : null,
+        }));
+      if (
+        judicialFees.some((row) => row.percent !== null && !(row.percent > 0 && row.percent <= 50))
+      )
+        throw new Error("O êxito dos processos cobrados à parte deve ficar entre 0,1% e 50%.");
+      const options = extras
+        .filter((row) => row.title.trim())
+        .map((row) => ({
+          title: row.title.trim(),
+          description: row.description.trim(),
+          amount_cents: proposalMoneyCents(row.amount),
+        }));
+      if (options.some((row) => !row.amount_cents))
+        throw new Error("Informe o valor de cada ampliação opcional.");
       const scopeItems = proposalLines(scope);
       if (!scopeItems.length) throw new Error("Descreva ao menos uma atividade no escopo.");
       const success =
@@ -469,6 +518,24 @@ function QuoteEditor({
             : proposalParty(client),
         contact_email: value("contact_email") || null,
         contact_phone: value("contact_phone") || null,
+        issued_city: value("issued_city") || null,
+        other_clients: others
+          .filter((row) => row.name.trim())
+          .map((row) => ({
+            name: row.name.trim(),
+            document: row.document.trim() || null,
+            address: row.address.trim() || null,
+          })),
+        minimum_wages: useWages ? decimal(wages) : null,
+        minimum_wage_cents: useWages ? proposalMoneyCents(wageValue) : null,
+        fee_caption: value("fee_caption") || null,
+        fee_note: value("fee_note") || null,
+        judicial_fees: judicialFees,
+        highlights_title: highlights.length ? value("highlights_title") || null : null,
+        highlights: highlights
+          .filter((row) => row.title.trim() || row.text.trim())
+          .map((row) => ({ title: row.title.trim(), text: row.text.trim() })),
+        options,
       };
       await financeRpc("office_finance_save_agreement", {
         target: id,
@@ -477,7 +544,7 @@ function QuoteEditor({
           description: proposal.title,
           client_id: clientMode === "new" ? "" : clientId,
           process_id: clientMode === "new" ? "" : processId,
-          amount_cents: amount,
+          amount_cents: ledger,
           periods,
           first_due: proposal.first_due,
           competence_date: value("competence"),
@@ -493,7 +560,7 @@ function QuoteEditor({
     onSuccess: async (proposal) => {
       await refresh();
       close();
-      toast.success("Orçamento criado e enviado para Novos Leads no CRM.", {
+      toast.success("Proposta criada e enviada para Novos Leads no CRM.", {
         action: { label: "Baixar PDF", onClick: () => void downloadProposal(proposal) },
       });
     },
@@ -509,7 +576,7 @@ function QuoteEditor({
     >
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Novo orçamento</DialogTitle>
+          <DialogTitle>Nova proposta</DialogTitle>
           <DialogDescription>
             Os campos abaixo formam a proposta de honorários em PDF. Ao salvar, o cliente entra como
             lead em Novos Leads no CRM.
@@ -587,13 +654,35 @@ function QuoteEditor({
                 </p>
               </div>
             )}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">
+                Outras empresas ou unidades atendidas{" "}
+                <span className="font-normal text-muted-foreground">(opcional)</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Para propostas que atendem mais de uma empresa, filial ou pessoa. Cada uma aparece
+                como contratante no PDF e assina a proposta.
+              </p>
+              <ProposalRows
+                rows={others}
+                setRows={setOthers}
+                itemLabel="Contratante"
+                addLabel="Adicionar empresa ou unidade"
+                empty={{ name: "", document: "", address: "" }}
+                fields={[
+                  { key: "name", label: "Nome ou razão social", wide: true, required: true },
+                  { key: "document", label: "CPF ou CNPJ", inputMode: "numeric" },
+                  { key: "address", label: "Cidade ou endereço", placeholder: "Ex.: Juína/MT" },
+                ]}
+              />
+            </div>
             <label className={fieldClass}>
               Objeto da proposta
               <Input
                 name="description"
                 required
                 maxLength={180}
-                placeholder="Ex.: Ação revisional de contrato bancário"
+                placeholder="Ex.: Assessoria jurídica empresarial mensal"
               />
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -644,14 +733,14 @@ function QuoteEditor({
                 name="context"
                 rows={2}
                 maxLength={1500}
-                placeholder="Resumo do que o cliente relatou e do objetivo pretendido"
+                placeholder="Resumo do que o cliente relatou, do objetivo pretendido ou da apresentação da proposta"
               />
             </label>
           </Section>
 
           <Section
             title="Escopo"
-            hint="Uma atividade por linha. Os itens aparecem como lista no PDF."
+            hint="Uma atividade por linha. Para destacar o nome do serviço, use “Título: descrição”, por exemplo “Trabalhista: contratações, rescisões e acordos”."
           >
             <label className={fieldClass}>
               O que está incluído
@@ -678,18 +767,9 @@ function QuoteEditor({
             <div
               role="radiogroup"
               aria-label="Modalidade de honorários"
-              className="grid gap-2 sm:grid-cols-2"
+              className="grid gap-2 sm:grid-cols-3"
             >
-              {(
-                [
-                  ["fixed", "Valor fixo", "Honorários definidos, à vista ou parcelados."],
-                  [
-                    "fixed_success",
-                    "Fixo + êxito",
-                    "Valor inicial mais percentual sobre o resultado.",
-                  ],
-                ] as const
-              ).map(([value, label, hint]) => (
+              {(Object.keys(proposalFeeModels) as ProposalFeeModel[]).map((value) => (
                 <button
                   key={value}
                   type="button"
@@ -703,19 +783,80 @@ function QuoteEditor({
                       : "hover:bg-muted/50",
                   )}
                 >
-                  <span className="block text-sm font-medium">{label}</span>
-                  <span className="block text-xs text-muted-foreground">{hint}</span>
+                  <span className="block text-sm font-medium">
+                    {proposalFeeModels[value].label}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    {proposalFeeModels[value].hint}
+                  </span>
                 </button>
               ))}
             </div>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 accent-[#591b20]"
+                checked={useWages}
+                onChange={(event) => setUseWages(event.target.checked)}
+              />
+              <span>
+                <span className="block font-medium">Valor em salários mínimos</span>
+                <span className="block text-xs text-muted-foreground">
+                  O PDF mostra a quantidade de salários e informa que o valor acompanha o salário
+                  mínimo vigente.
+                </span>
+              </span>
+            </label>
+            {useWages && (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className={fieldClass}>
+                  Quantidade de salários
+                  <Input
+                    value={wages}
+                    onChange={(event) => setWages(event.target.value)}
+                    inputMode="decimal"
+                    required
+                  />
+                </label>
+                <label className={fieldClass}>
+                  Salário mínimo em R$
+                  <Input
+                    value={wageValue}
+                    onChange={(event) => setWageValue(event.target.value)}
+                    inputMode="decimal"
+                    required
+                  />
+                </label>
+                <div className={fieldClass}>
+                  {feeModel === "monthly" ? "Mensalidade" : "Valor"}
+                  <p className="flex h-10 items-center rounded-md border bg-muted/40 px-3 font-semibold tabular-nums text-primary">
+                    {currency(wageAmount)}
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-3">
+              {!useWages && (
+                <label className={fieldClass}>
+                  {feeModel === "fixed_success"
+                    ? "Valor inicial em R$"
+                    : feeModel === "monthly"
+                      ? "Mensalidade em R$"
+                      : "Valor total em R$"}
+                  <Input name="amount" required inputMode="decimal" placeholder="0,00" />
+                </label>
+              )}
               <label className={fieldClass}>
-                {feeModel === "fixed_success" ? "Valor inicial em R$" : "Valor total em R$"}
-                <Input name="amount" required inputMode="decimal" placeholder="0,00" />
-              </label>
-              <label className={fieldClass}>
-                Parcelas
-                <Input name="periods" type="number" required min={1} max={120} defaultValue={1} />
+                {feeModel === "monthly" ? "Meses previstos" : "Parcelas"}
+                <Input
+                  key={feeModel === "monthly" ? "months" : "installments"}
+                  name="periods"
+                  type="number"
+                  required
+                  min={1}
+                  max={120}
+                  defaultValue={feeModel === "monthly" ? 12 : 1}
+                />
               </label>
               <label className={fieldClass}>
                 Primeiro vencimento
@@ -738,10 +879,158 @@ function QuoteEditor({
                 </select>
               </label>
             </div>
+            {feeModel === "monthly" && (
+              <p className="text-xs text-muted-foreground">
+                Os meses previstos só servem para gerar as mensalidades no financeiro quando a
+                proposta for aprovada; o PDF mostra o valor por mês.
+              </p>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={fieldClass}>
+                <span>
+                  Destaque do valor{" "}
+                  <span className="font-normal text-muted-foreground">(opcional)</span>
+                </span>
+                <Input
+                  name="fee_caption"
+                  maxLength={120}
+                  placeholder={
+                    useWages
+                      ? "Automático: 2 salários mínimos por mês"
+                      : "Ex.: 2 salários mínimos por mês"
+                  }
+                />
+              </label>
+              <label className={fieldClass}>
+                <span>
+                  Observação do valor{" "}
+                  <span className="font-normal text-muted-foreground">(opcional)</span>
+                </span>
+                <Input
+                  name="fee_note"
+                  maxLength={200}
+                  placeholder="Ex.: atende as duas empresas juntas"
+                />
+              </label>
+            </div>
+          </Section>
+
+          <Section
+            title="Processos judiciais cobrados à parte"
+            hint="Opcional. Para mensalidades ou valores fixos em que o processo judicial é cobrado separadamente, por exemplo só no êxito."
+          >
+            <ProposalRows
+              rows={judicial}
+              setRows={setJudicial}
+              itemLabel="Processo"
+              addLabel="Adicionar processo"
+              empty={{ title: "", basis: "", percent: "" }}
+              fields={[
+                {
+                  key: "title",
+                  label: "Processo",
+                  placeholder: "Ex.: Cobrança judicial de dívidas",
+                  required: true,
+                },
+                {
+                  key: "percent",
+                  label: "Êxito em % (opcional)",
+                  inputMode: "decimal",
+                  placeholder: "Ex.: 20",
+                },
+                {
+                  key: "basis",
+                  label: "Como é cobrado",
+                  multiline: true,
+                  placeholder:
+                    "Ex.: Somente se houver êxito, sobre o valor efetivamente recebido. Sem êxito, a empresa não paga honorários.",
+                },
+              ]}
+            />
+          </Section>
+
+          <Section
+            title="Ampliação opcional"
+            hint="Opcional. Algo que o cliente pode incluir depois, como outra unidade, com o valor acrescido."
+          >
+            <ProposalRows
+              rows={extras}
+              setRows={setExtras}
+              itemLabel="Ampliação"
+              addLabel="Adicionar ampliação"
+              empty={{ title: "", description: "", amount: "" }}
+              fields={[
+                {
+                  key: "title",
+                  label: "Título",
+                  placeholder: "Ex.: Matriz de Juara",
+                  required: true,
+                },
+                {
+                  key: "amount",
+                  label: "Valor acrescido em R$",
+                  inputMode: "decimal",
+                  placeholder: "0,00",
+                  required: true,
+                },
+                {
+                  key: "description",
+                  label: "Descrição",
+                  multiline: true,
+                  placeholder: "Ex.: A matriz pode ser incluída nas mesmas condições.",
+                },
+              ]}
+            />
+          </Section>
+
+          <Section
+            title="Diferenciais"
+            hint="Opcional. Argumentos que aparecem em destaque no PDF, como proximidade e nota fiscal."
+          >
+            {highlights.length > 0 && (
+              <label className={fieldClass}>
+                Título da seção
+                <Input
+                  name="highlights_title"
+                  maxLength={120}
+                  defaultValue="Por que a Magalhães Advocacia"
+                />
+              </label>
+            )}
+            <ProposalRows
+              rows={highlights}
+              setRows={setHighlights}
+              itemLabel="Diferencial"
+              addLabel="Adicionar diferencial"
+              empty={{ title: "", text: "" }}
+              fields={[
+                {
+                  key: "title",
+                  label: "Título",
+                  wide: true,
+                  placeholder: "Ex.: Custo fixo e previsível",
+                },
+                { key: "text", label: "Texto", multiline: true },
+              ]}
+            />
+            {highlights.length === 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setHighlights(defaultHighlights.map((item) => ({ ...item })))}
+              >
+                Usar os diferenciais padrão da Magalhães
+              </Button>
+            )}
           </Section>
 
           <Section title="Validade e contato">
             <div className="grid gap-3 sm:grid-cols-3">
+              <label className={fieldClass}>
+                Cidade da proposta
+                <Input name="issued_city" maxLength={80} defaultValue="Juara/MT" />
+              </label>
               <label className={fieldClass}>
                 Validade em dias
                 <Input name="validity" type="number" min={1} max={180} defaultValue={15} />
@@ -798,7 +1087,7 @@ function QuoteEditor({
               Cancelar
             </Button>
             <Button disabled={mutation.isPending}>
-              {mutation.isPending ? "Salvando…" : "Salvar orçamento"}
+              {mutation.isPending ? "Salvando…" : "Salvar proposta"}
             </Button>
           </div>
         </form>
@@ -981,7 +1270,7 @@ function LinkClientDialog({
         <DialogHeader>
           <DialogTitle>Cadastrar cliente</DialogTitle>
           <DialogDescription>
-            Para gerar as parcelas, o orçamento “{item.description}” precisa de um cliente
+            Para gerar as parcelas, a proposta “{item.description}” precisa de um cliente
             cadastrado. O lead do CRM também passa a apontar para ele.
           </DialogDescription>
         </DialogHeader>

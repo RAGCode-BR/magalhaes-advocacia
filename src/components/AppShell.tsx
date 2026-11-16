@@ -44,7 +44,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AnimatePresence, LayoutGroup, MotionConfig, motion, useAnimationControls } from "motion/react";
+import {
+  AnimatePresence,
+  LayoutGroup,
+  MotionConfig,
+  motion,
+  useAnimationControls,
+} from "motion/react";
 import { TOP_NAV_ITEM_CLASS, TopNavBadge, TopNavItemContent } from "@/components/TopNavItem";
 import {
   OPEN_OVERLAY_SELECTOR,
@@ -96,7 +102,7 @@ const allNav: readonly NavItem[] = [
   { to: "/meetings", label: "Reuniões", icon: Handshake },
   { to: "/clients", label: "Clientes", icon: Building2 },
   { to: "/crm", label: "CRM", icon: ContactRound },
-  { to: "/orcamentos", label: "Orçamentos", icon: FileSignature, adminOnly: true },
+  { to: "/orcamentos", label: "Propostas", icon: FileSignature, adminOnly: true },
   { to: "/financeiro", label: "Financeiro", icon: CircleDollarSign, adminOnly: true },
   { to: "/reports", label: "Relatórios", icon: BarChart3 },
   { to: "/agenda", label: "Agenda", icon: CalendarDays },
@@ -187,7 +193,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     () =>
       nav.map((n) =>
         n.to === "/portal"
-          ? { to: canAccessDeliveries ? "/portal/entregas" : "/portal/financeiro", match: "/portal/", label: n.label, icon: n.icon }
+          ? {
+              to: canAccessDeliveries ? "/portal/entregas" : "/portal/financeiro",
+              match: "/portal/",
+              label: n.label,
+              icon: n.icon,
+            }
           : { to: n.to, match: n.to, label: n.label, icon: n.icon },
       ),
     [nav, canAccessDeliveries],
@@ -204,9 +215,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
       if (!window.matchMedia("(min-width: 768px)").matches) return;
-      if (isArrowNavigationBlocked(event, document.querySelector(OPEN_OVERLAY_SELECTOR) != null)) return;
+      if (isArrowNavigationBlocked(event, document.querySelector(OPEN_OVERLAY_SELECTOR) != null))
+        return;
       const direction = event.key === "ArrowRight" ? 1 : -1;
-      const index = adjacentScreenIndex(pathname, screens.map((screen) => screen.match), direction);
+      const index = adjacentScreenIndex(
+        pathname,
+        screens.map((screen) => screen.match),
+        direction,
+      );
       event.preventDefault();
       if (index === null) {
         // First/last screen: a short elastic nudge says there is nothing further.
@@ -231,245 +247,287 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <MotionConfig reducedMotion="user">
-    <div className="flex h-dvh flex-col overflow-hidden app-canvas">
-      {/* Desktop top bar. Hiding it shrinks the whole bar into a floating glass
+      <div className="flex h-dvh flex-col overflow-hidden app-canvas">
+        {/* Desktop top bar. Hiding it shrinks the whole bar into a floating glass
           pill with the firm's logo; clicking the logo grows it back. */}
-      <span className="sr-only" aria-live="polite">
-        {screenFlash ? `Tela: ${screenFlash.label}` : ""}
-      </span>
-      <motion.div
-        className="relative z-40 hidden shrink-0 md:block"
-        initial={false}
-        animate={{ height: topbarHidden ? 54 : 56 }}
-        transition={TOPBAR_SPRING}
-      >
+        <span className="sr-only" aria-live="polite">
+          {screenFlash ? `Tela: ${screenFlash.label}` : ""}
+        </span>
         <motion.div
-          animate={edgeBump}
-          className={`absolute inset-x-0 top-0 flex ${topbarHidden ? "pointer-events-none justify-center pt-[3px]" : ""}`}
+          className="relative z-40 hidden shrink-0 md:block"
+          initial={false}
+          animate={{ height: topbarHidden ? 54 : 56 }}
+          transition={TOPBAR_SPRING}
         >
-          <motion.header
-            layout
-            initial={false}
-            transition={TOPBAR_SPRING}
-            animate={{ borderRadius: topbarHidden ? 24 : 0 }}
-            className={`glass-wine pointer-events-auto flex items-center overflow-hidden ${
-              topbarHidden ? "h-12 gap-2 pl-3.5 pr-2" : "h-14 w-full gap-3 px-3 lg:px-4"
-            }`}
+          <motion.div
+            animate={edgeBump}
+            className={`absolute inset-x-0 top-0 flex ${topbarHidden ? "pointer-events-none justify-center pt-[3px]" : ""}`}
           >
-            <motion.div
+            <motion.header
               layout
+              initial={false}
               transition={TOPBAR_SPRING}
-              role={topbarHidden ? "button" : undefined}
-              tabIndex={topbarHidden ? 0 : undefined}
-              aria-label={topbarHidden ? "Mostrar barra de navegação. Use as setas esquerda e direita para trocar de tela." : undefined}
-              title={topbarHidden ? "Mostrar barra · use ← → para trocar de tela" : undefined}
-              onClick={topbarHidden ? () => setTopbarHidden(false) : undefined}
-              onKeyDown={
-                topbarHidden
-                  ? (event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setTopbarHidden(false);
-                      }
-                    }
-                  : undefined
-              }
-              className={`group/logo flex shrink-0 items-center gap-1.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring ${topbarHidden ? "cursor-pointer" : ""}`}
+              animate={{ borderRadius: topbarHidden ? 24 : 0 }}
+              className={`glass-wine pointer-events-auto flex items-center overflow-hidden ${
+                topbarHidden ? "h-12 gap-2 pl-3.5 pr-2" : "h-14 w-full gap-3 px-3 lg:px-4"
+              }`}
             >
-              <BrandWordmark className={`brand-glow ${topbarHidden ? "h-10" : "h-[50px]"}`} />
-              <AnimatePresence initial={false} mode="popLayout" custom={screenFlash?.direction ?? 1}>
-                {topbarHidden && screenFlash && (
+              <motion.div
+                layout
+                transition={TOPBAR_SPRING}
+                role={topbarHidden ? "button" : undefined}
+                tabIndex={topbarHidden ? 0 : undefined}
+                aria-label={
+                  topbarHidden
+                    ? "Mostrar barra de navegação. Use as setas esquerda e direita para trocar de tela."
+                    : undefined
+                }
+                title={topbarHidden ? "Mostrar barra · use ← → para trocar de tela" : undefined}
+                onClick={topbarHidden ? () => setTopbarHidden(false) : undefined}
+                onKeyDown={
+                  topbarHidden
+                    ? (event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setTopbarHidden(false);
+                        }
+                      }
+                    : undefined
+                }
+                className={`group/logo flex shrink-0 items-center gap-1.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring ${topbarHidden ? "cursor-pointer" : ""}`}
+              >
+                <BrandWordmark className={`brand-glow ${topbarHidden ? "h-10" : "h-[50px]"}`} />
+                <AnimatePresence
+                  initial={false}
+                  mode="popLayout"
+                  custom={screenFlash?.direction ?? 1}
+                >
+                  {topbarHidden && screenFlash && (
+                    <motion.span
+                      key={screenFlash.id}
+                      layout
+                      custom={screenFlash.direction}
+                      variants={SCREEN_FLASH_VARIANTS}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={TOPBAR_SPRING}
+                      className="topnav-pill flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full pl-2 pr-2.5 text-[13px] font-semibold leading-none tracking-[-0.01em] text-sidebar-foreground"
+                    >
+                      <screenFlash.icon className="h-3.5 w-3.5 shrink-0 text-sidebar-primary" />
+                      {screenFlash.label}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+                {topbarHidden && (
                   <motion.span
-                    key={screenFlash.id}
-                    layout
-                    custom={screenFlash.direction}
-                    variants={SCREEN_FLASH_VARIANTS}
-                    initial="enter"
-                    animate="center"
-                    exit="exit"
-                    transition={TOPBAR_SPRING}
-                    className="topnav-pill flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full pl-2 pr-2.5 text-[13px] font-semibold leading-none tracking-[-0.01em] text-sidebar-foreground"
+                    layout="position"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0, transition: { delay: 0.15 } }}
+                    className="relative grid h-6 w-6 place-items-center rounded-full bg-white/10 text-sidebar-foreground/80 transition group-hover/logo:translate-y-0.5 group-hover/logo:bg-white/20"
                   >
-                    <screenFlash.icon className="h-3.5 w-3.5 shrink-0 text-sidebar-primary" />
-                    {screenFlash.label}
+                    <ChevronDown className="h-3.5 w-3.5" />
+                    {unreadTotal > 0 && (
+                      <span
+                        className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-400 ring-2 ring-[#4a1418]"
+                        aria-label="Há itens não lidos"
+                      />
+                    )}
                   </motion.span>
                 )}
-              </AnimatePresence>
-              {topbarHidden && (
-                <motion.span
-                  layout="position"
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0, transition: { delay: 0.15 } }}
-                  className="relative grid h-6 w-6 place-items-center rounded-full bg-white/10 text-sidebar-foreground/80 transition group-hover/logo:translate-y-0.5 group-hover/logo:bg-white/20"
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                  {unreadTotal > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-400 ring-2 ring-[#4a1418]" aria-label="Há itens não lidos" />
-                  )}
-                </motion.span>
-              )}
-              {!topbarHidden && isLocalDatabase && (
-                <span className="hidden rounded-full border border-sidebar-primary/40 px-2 py-0.5 text-[10px] uppercase tracking-widest text-sidebar-primary xl:inline">
-                  Local
-                </span>
-              )}
-            </motion.div>
-            <AnimatePresence initial={false} mode="popLayout">
-              {!topbarHidden && (
-                <motion.div
-                  key="topbar-content"
-                  layout="position"
-                  className="flex min-w-0 flex-1 items-center gap-3"
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0, transition: { delay: 0.22, duration: 0.25 } }}
-                  exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                >
-                <span className="h-6 w-px shrink-0 bg-sidebar-foreground/15" aria-hidden="true" />
-                <TooltipProvider delayDuration={150}>
-                  <LayoutGroup id="top-nav">
-                    <nav
-                      aria-label="Navegação principal"
-                      className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                    >
-                      {nav.map((n) => {
-                        if (n.to === "/clients") return <ClientsNavGroup key={`${activeWorkspace?.id}:clients`} expanded={false} active={pathname.startsWith("/clients")} />;
-                        if (n.to === "/portal")
-                          return (
-                            <PortalNavGroup
-                              key={n.to}
-                              expanded={false}
-                              active={pathname.startsWith("/portal/")}
-                              pathname={pathname}
-                              canAccessDeliveries={canAccessDeliveries}
-                              canAccessFinance={canAccessFinance}
-                            />
-                          );
-                        const active = pathname === n.to || pathname.startsWith(n.to + "/");
-                        const badge =
-                          n.to === "/mural" ? (
-                            <TopNavBadge count={muralUnreadCount} />
-                          ) : n.to === "/conversations" ? (
-                            <TopNavBadge count={conversationsUnread} tone="info" />
-                          ) : undefined;
-                        return (
-                          <Tooltip key={n.to}>
-                            <TooltipTrigger asChild>
-                              <Link to={n.to} className={TOP_NAV_ITEM_CLASS} aria-current={active ? "page" : undefined}>
-                                <TopNavItemContent active={active} icon={n.icon} label={n.label} badge={badge} />
-                              </Link>
-                            </TooltipTrigger>
-                            {!active && <TooltipContent side="bottom">{n.label}</TooltipContent>}
-                          </Tooltip>
-                        );
-                      })}
-                    </nav>
-                  </LayoutGroup>
-                </TooltipProvider>
-                <div className="glass-wine-actions flex shrink-0 items-center gap-1">
-                  <UpdateCenter />
-                  {canSwitchEnvironments && workspaces.length > 1 && (
-                    <Button
-                      asChild
-                      variant="ghost"
-                      className="h-9 gap-2 rounded-full px-3 text-sm"
-                      title="Trocar ambiente"
-                    >
-                      <Link to="/ambientes">
-                        <Layers3 className="h-4 w-4" />
-                        <span>{activeWorkspace?.name ?? "Ambiente"}</span>
-                      </Link>
-                    </Button>
-                  )}
-                  <NotificationBell />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="rounded-full p-0.5 outline-none ring-1 ring-sidebar-primary/40 transition hover:ring-sidebar-primary focus-visible:ring-2"
-                        aria-label="Conta e preferências"
-                        title={profile?.full_name || user?.email || "Conta"}
-                      >
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage
-                            src={profile?.avatar_url || undefined}
-                            alt={profile?.full_name || user?.email || "Usuário"}
-                          />
-                          <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
-                            {initials}
-                          </AvatarFallback>
-                        </Avatar>
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" sideOffset={10} className="w-64 rounded-2xl p-1.5">
-                      <div className="px-2 py-1.5">
-                        <p className="truncate text-sm font-medium">{profile?.full_name || user?.email}</p>
-                        <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
-                      </div>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => toggle()}>
-                        {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                        {theme === "dark" ? "Modo claro" : "Modo escuro"}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setTopbarHidden(true)}>
-                        <ChevronUp className="h-4 w-4" />
-                        Ocultar barra
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => void signOut()}>
-                        <LogOut className="h-4 w-4" />
-                        Sair
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 rounded-full text-sidebar-foreground/75"
-                    onClick={() => setTopbarHidden(true)}
-                    aria-label="Ocultar barra de navegação"
-                    title="Ocultar barra para ganhar espaço"
+                {!topbarHidden && isLocalDatabase && (
+                  <span className="hidden rounded-full border border-sidebar-primary/40 px-2 py-0.5 text-[10px] uppercase tracking-widest text-sidebar-primary xl:inline">
+                    Local
+                  </span>
+                )}
+              </motion.div>
+              <AnimatePresence initial={false} mode="popLayout">
+                {!topbarHidden && (
+                  <motion.div
+                    key="topbar-content"
+                    layout="position"
+                    className="flex min-w-0 flex-1 items-center gap-3"
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0, transition: { delay: 0.22, duration: 0.25 } }}
+                    exit={{ opacity: 0, transition: { duration: 0.12 } }}
                   >
-                    <ChevronUp className="h-4 w-4" />
-                  </Button>
-                </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.header>
+                    <span
+                      className="h-6 w-px shrink-0 bg-sidebar-foreground/15"
+                      aria-hidden="true"
+                    />
+                    <TooltipProvider delayDuration={150}>
+                      <LayoutGroup id="top-nav">
+                        <nav
+                          aria-label="Navegação principal"
+                          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                        >
+                          {nav.map((n) => {
+                            if (n.to === "/clients")
+                              return (
+                                <ClientsNavGroup
+                                  key={`${activeWorkspace?.id}:clients`}
+                                  expanded={false}
+                                  active={pathname.startsWith("/clients")}
+                                />
+                              );
+                            if (n.to === "/portal")
+                              return (
+                                <PortalNavGroup
+                                  key={n.to}
+                                  expanded={false}
+                                  active={pathname.startsWith("/portal/")}
+                                  pathname={pathname}
+                                  canAccessDeliveries={canAccessDeliveries}
+                                  canAccessFinance={canAccessFinance}
+                                />
+                              );
+                            const active = pathname === n.to || pathname.startsWith(n.to + "/");
+                            const badge =
+                              n.to === "/mural" ? (
+                                <TopNavBadge count={muralUnreadCount} />
+                              ) : n.to === "/conversations" ? (
+                                <TopNavBadge count={conversationsUnread} tone="info" />
+                              ) : undefined;
+                            return (
+                              <Tooltip key={n.to}>
+                                <TooltipTrigger asChild>
+                                  <Link
+                                    to={n.to}
+                                    className={TOP_NAV_ITEM_CLASS}
+                                    aria-current={active ? "page" : undefined}
+                                  >
+                                    <TopNavItemContent
+                                      active={active}
+                                      icon={n.icon}
+                                      label={n.label}
+                                      badge={badge}
+                                    />
+                                  </Link>
+                                </TooltipTrigger>
+                                {!active && (
+                                  <TooltipContent side="bottom">{n.label}</TooltipContent>
+                                )}
+                              </Tooltip>
+                            );
+                          })}
+                        </nav>
+                      </LayoutGroup>
+                    </TooltipProvider>
+                    <div className="glass-wine-actions flex shrink-0 items-center gap-1">
+                      <UpdateCenter />
+                      {canSwitchEnvironments && workspaces.length > 1 && (
+                        <Button
+                          asChild
+                          variant="ghost"
+                          className="h-9 gap-2 rounded-full px-3 text-sm"
+                          title="Trocar ambiente"
+                        >
+                          <Link to="/ambientes">
+                            <Layers3 className="h-4 w-4" />
+                            <span>{activeWorkspace?.name ?? "Ambiente"}</span>
+                          </Link>
+                        </Button>
+                      )}
+                      <NotificationBell />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="rounded-full p-0.5 outline-none ring-1 ring-sidebar-primary/40 transition hover:ring-sidebar-primary focus-visible:ring-2"
+                            aria-label="Conta e preferências"
+                            title={profile?.full_name || user?.email || "Conta"}
+                          >
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage
+                                src={profile?.avatar_url || undefined}
+                                alt={profile?.full_name || user?.email || "Usuário"}
+                              />
+                              <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
+                                {initials}
+                              </AvatarFallback>
+                            </Avatar>
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          sideOffset={10}
+                          className="w-64 rounded-2xl p-1.5"
+                        >
+                          <div className="px-2 py-1.5">
+                            <p className="truncate text-sm font-medium">
+                              {profile?.full_name || user?.email}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+                          </div>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onSelect={() => toggle()}>
+                            {theme === "dark" ? (
+                              <Sun className="h-4 w-4" />
+                            ) : (
+                              <Moon className="h-4 w-4" />
+                            )}
+                            {theme === "dark" ? "Modo claro" : "Modo escuro"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => setTopbarHidden(true)}>
+                            <ChevronUp className="h-4 w-4" />
+                            Ocultar barra
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onSelect={() => void signOut()}>
+                            <LogOut className="h-4 w-4" />
+                            Sair
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 rounded-full text-sidebar-foreground/75"
+                        onClick={() => setTopbarHidden(true)}
+                        aria-label="Ocultar barra de navegação"
+                        title="Ocultar barra para ganhar espaço"
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.header>
+          </motion.div>
         </motion.div>
-      </motion.div>
 
-      {/* Mobile sidebar toggle header */}
-      <div className="glass-wine glass-wine-actions fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between gap-2 px-3 md:hidden">
-        <Button
-          size="icon"
-          variant="ghost"
-          aria-label="Abrir menu"
-          aria-expanded={mobileMenuOpen}
-          onClick={() => setMobileMenuOpen(true)}
-        >
-          <PanelLeft className="h-5 w-5" />
-        </Button>
-        <span className="min-w-0 truncate font-semibold">Magalhães Advocacia</span>
-        <div className="flex shrink-0 items-center gap-1">
-          <UpdateCenter />
-          {canSwitchEnvironments && workspaces.length > 1 && (
-            <Button asChild variant="ghost" size="icon" title="Trocar ambiente">
-              <Link to="/ambientes">
-                <Layers3 className="h-5 w-5" />
-              </Link>
-            </Button>
-          )}
-          <NotificationBell />
+        {/* Mobile sidebar toggle header */}
+        <div className="glass-wine glass-wine-actions fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between gap-2 px-3 md:hidden">
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Abrir menu"
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen(true)}
+          >
+            <PanelLeft className="h-5 w-5" />
+          </Button>
+          <span className="min-w-0 truncate font-semibold">Magalhães Advocacia</span>
+          <div className="flex shrink-0 items-center gap-1">
+            <UpdateCenter />
+            {canSwitchEnvironments && workspaces.length > 1 && (
+              <Button asChild variant="ghost" size="icon" title="Trocar ambiente">
+                <Link to="/ambientes">
+                  <Layers3 className="h-5 w-5" />
+                </Link>
+              </Button>
+            )}
+            <NotificationBell />
+          </div>
         </div>
-      </div>
 
-      {/* Mobile overlay sidebar */}
-      <div
-        className={`fixed inset-0 z-50 flex md:hidden ${mobileMenuOpen ? "" : "pointer-events-none"}`}
-        aria-hidden={!mobileMenuOpen}
-        inert={!mobileMenuOpen}
-      >
+        {/* Mobile overlay sidebar */}
+        <div
+          className={`fixed inset-0 z-50 flex md:hidden ${mobileMenuOpen ? "" : "pointer-events-none"}`}
+          aria-hidden={!mobileMenuOpen}
+          inert={!mobileMenuOpen}
+        >
           <div
             className={`flex w-[min(18rem,calc(100vw-3rem))] min-w-0 flex-col border-r bg-background transition-transform duration-300 ease-in-out motion-reduce:transition-none ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
             style={{ background: "var(--gradient-sidebar)" }}
@@ -477,12 +535,24 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="px-5 py-4">
               <div className="flex flex-col items-center gap-3">
                 <BrandLogo className="h-28 w-full max-w-60" />
-                {isLocalDatabase && <span className="text-xs uppercase tracking-widest">Ambiente local de testes</span>}
+                {isLocalDatabase && (
+                  <span className="text-xs uppercase tracking-widest">
+                    Ambiente local de testes
+                  </span>
+                )}
               </div>
             </div>
             <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3">
               {nav.map((n) => {
-                if (n.to === "/clients") return <ClientsNavGroup key={`${activeWorkspace?.id}:clients-mobile`} expanded active={pathname.startsWith('/clients')} onNavigate={() => setMobileMenuOpen(false)} />;
+                if (n.to === "/clients")
+                  return (
+                    <ClientsNavGroup
+                      key={`${activeWorkspace?.id}:clients-mobile`}
+                      expanded
+                      active={pathname.startsWith("/clients")}
+                      onNavigate={() => setMobileMenuOpen(false)}
+                    />
+                  );
                 if (n.to === "/portal")
                   return (
                     <PortalNavGroup
@@ -582,14 +652,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
         </div>
 
-      <RecurringMeetingReminderPopup />
-      <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pt-14 md:pt-0">
-        {children}
-      </main>
-      <AssignmentPopup />
-      {!isClient && neonAuthIssuer() && <AskClaudeButton />}
-      {isWorkspaceTransitioning && <WorkspaceLoadingScreen workspaceName={activeWorkspace?.name} />}
-    </div>
+        <RecurringMeetingReminderPopup />
+        <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pt-14 md:pt-0">
+          {children}
+        </main>
+        <AssignmentPopup />
+        {!isClient && neonAuthIssuer() && <AskClaudeButton />}
+        {isWorkspaceTransitioning && (
+          <WorkspaceLoadingScreen workspaceName={activeWorkspace?.name} />
+        )}
+      </div>
     </MotionConfig>
   );
 }
@@ -621,7 +693,12 @@ function PortalNavGroup({
             <ChevronDown className="relative ml-1 h-3 w-3 opacity-70" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="bottom" align="start" sideOffset={10} className="min-w-56 rounded-2xl p-1.5">
+        <DropdownMenuContent
+          side="bottom"
+          align="start"
+          sideOffset={10}
+          className="min-w-56 rounded-2xl p-1.5"
+        >
           {canAccessDeliveries && (
             <DropdownMenuItem asChild>
               <Link

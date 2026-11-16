@@ -31,15 +31,15 @@ function QuotesPage({ userId }: { userId: string }) {
         <p className="text-xs font-semibold uppercase tracking-widest text-primary">
           Magalhães Advocacia
         </p>
-        <h1 className="text-2xl font-semibold">Orçamentos</h1>
+        <h1 className="text-2xl font-semibold">Propostas</h1>
         <p className="text-sm text-muted-foreground">
           Propostas de honorários em PDF, com o lead criado no CRM.
         </p>
       </header>
-      {agreements.isPending && <p role="status">Carregando os orçamentos…</p>}
+      {agreements.isPending && <p role="status">Carregando as propostas…</p>}
       {agreements.isError && (
         <Card className="flex flex-wrap items-center gap-3 p-4" role="alert">
-          Não foi possível carregar os orçamentos.
+          Não foi possível carregar as propostas.
           <Button variant="outline" onClick={() => void agreements.refetch()}>
             Tentar novamente
           </Button>

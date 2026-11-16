@@ -1,5 +1,5 @@
 import { addDays, format, parseISO } from "date-fns";
-import { financeInstallments } from "./office-finance";
+import { financeCents, financeInstallments } from "./office-finance";
 
 /**
  * Proposta de honorários advocatícios.
@@ -12,7 +12,7 @@ import { financeInstallments } from "./office-finance";
  */
 
 export type ProposalPractice = "contencioso" | "consultivo";
-export type ProposalFeeModel = "fixed" | "fixed_success";
+export type ProposalFeeModel = "fixed" | "fixed_success" | "monthly";
 export type ProposalPayment = "pix" | "boleto" | "transfer" | "card";
 
 export type ProposalParty = {
@@ -24,6 +24,13 @@ export type ProposalParty = {
   phone?: string | null;
   responsible?: string | null;
 };
+
+/** Processo judicial cobrado à parte (ex.: cobrança judicial, 20% no êxito). */
+export type ProposalJudicialFee = { title: string; basis: string; percent: number | null };
+/** Argumento de venda em destaque (ex.: Proximidade, Com nota fiscal). */
+export type ProposalHighlight = { title: string; text: string };
+/** Ampliação opcional que o cliente pode incluir (ex.: outra unidade). */
+export type ProposalOption = { title: string; description: string; amount_cents: number };
 
 export type ProposalDocument = {
   version: 1;
@@ -47,7 +54,92 @@ export type ProposalDocument = {
   client: ProposalParty;
   contact_email?: string | null;
   contact_phone?: string | null;
+  /** Campos opcionais acrescentados depois; propostas antigas não os têm. */
+  issued_city?: string | null;
+  other_clients?: ProposalParty[];
+  /** Mensalidade expressa em salários mínimos (ex.: 2), com o valor do salário usado. */
+  minimum_wages?: number | null;
+  minimum_wage_cents?: number | null;
+  fee_caption?: string | null;
+  fee_note?: string | null;
+  judicial_fees?: ProposalJudicialFee[];
+  highlights_title?: string | null;
+  highlights?: ProposalHighlight[];
+  options?: ProposalOption[];
 };
+
+/** Salário mínimo nacional de 2026, usado como sugestão no formulário. */
+export const minimumWageCents = 162100;
+
+export const proposalFeeModels: Record<ProposalFeeModel, { label: string; hint: string }> = {
+  fixed: { label: "Valor fixo", hint: "Honorários definidos, à vista ou parcelados." },
+  fixed_success: {
+    label: "Fixo + êxito",
+    hint: "Valor inicial mais percentual sobre o resultado.",
+  },
+  monthly: {
+    label: "Mensalidade",
+    hint: "Assessoria com valor mensal fixo, inclusive em salários mínimos.",
+  },
+};
+
+export const defaultHighlights: ProposalHighlight[] = [
+  {
+    title: "Proximidade",
+    text: "Escritório em Juara: reuniões presenciais, documentos analisados com agilidade e resposta rápida pelo WhatsApp.",
+  },
+  {
+    title: "Advogada e contadora",
+    text: "OAB/MT 37.449 e CRC/MT 020747/O-5: cada orientação já considera o efeito jurídico, trabalhista e tributário.",
+  },
+  {
+    title: "Com nota fiscal",
+    text: "Honorários faturados com nota fiscal, dedutíveis como despesa operacional no Lucro Real (Decreto nº 9.580/2018, art. 311).",
+  },
+];
+
+/** Valor digitado em reais; aceita separador de milhar ("3.242,00"). */
+export function proposalMoneyCents(value: string) {
+  const clean = value.replace(/^\s*R\$\s*/i, "").trim();
+  return financeCents(clean.includes(",") ? clean.replace(/\./g, "") : clean);
+}
+
+/** Todas as contratantes: a principal e as demais empresas ou unidades. */
+export function proposalClients(doc: Pick<ProposalDocument, "client" | "other_clients">) {
+  return [doc.client, ...(doc.other_clients ?? []).filter((party) => party.name?.trim())];
+}
+
+/** "Título: descrição" vira serviço com nome em destaque; sem dois-pontos, só texto. */
+export function proposalItem(line: string): { title: string | null; text: string } {
+  const match = /^([^:]{2,70}):\s+(.+)$/.exec(line.trim());
+  return match
+    ? { title: match[1].trim(), text: match[2].trim() }
+    : { title: null, text: line.trim() };
+}
+
+/** Valor mensal da proposta (na mensalidade, amount_cents já é o valor de um mês). */
+export function proposalMonthlyCents(doc: Pick<ProposalDocument, "fee_model" | "amount_cents">) {
+  return doc.fee_model === "monthly" ? doc.amount_cents : null;
+}
+
+/** Total lançado no financeiro: na mensalidade, valor do mês vezes os meses previstos. */
+export function proposalLedgerCents(
+  doc: Pick<ProposalDocument, "fee_model" | "amount_cents" | "periods">,
+) {
+  return doc.fee_model === "monthly" ? doc.amount_cents * doc.periods : doc.amount_cents;
+}
+
+export function proposalFeeCaption(
+  doc: Pick<ProposalDocument, "fee_model" | "fee_caption" | "minimum_wages">,
+) {
+  if (doc.fee_caption?.trim()) return doc.fee_caption.trim();
+  if (doc.minimum_wages) {
+    const n = String(doc.minimum_wages).replace(".", ",");
+    const unit = doc.minimum_wages === 1 ? "salário mínimo" : "salários mínimos";
+    return `${n} ${unit}${doc.fee_model === "monthly" ? " por mês" : ""}`;
+  }
+  return null;
+}
 
 export const proposalAreas = [
   "Cível",
@@ -116,7 +208,7 @@ export function proposalValidUntil(doc: Pick<ProposalDocument, "issued_on" | "va
 }
 
 export function proposalInstallments(doc: ProposalDocument) {
-  return financeInstallments(doc.amount_cents, doc.periods, doc.first_due);
+  return financeInstallments(proposalLedgerCents(doc), doc.periods, doc.first_due);
 }
 
 type ClientLike = {

@@ -1581,6 +1581,42 @@ function CrmColumnOrderPreview() {
     </PreviewGrid>
   );
 }
+function MagalhaesProposalRetainerPreview() {
+  return (
+    <PreviewGrid label="Prévia da proposta de assessoria mensal para duas empresas">
+      <div className="space-y-2 rounded-xl border bg-background p-3 text-[10px]" data-proposal-retainer-form>
+        <p className="font-semibold text-primary">Honorários</p>
+        <div className="grid grid-cols-3 gap-1">
+          <span className="rounded border px-1.5 py-1 text-muted-foreground">Valor fixo</span>
+          <span className="rounded border px-1.5 py-1 text-muted-foreground">Fixo + êxito</span>
+          <span className="rounded border border-primary bg-primary/5 px-1.5 py-1 font-semibold">Mensalidade</span>
+        </div>
+        <p className="rounded border px-2 py-1">☑ Valor em salários mínimos · 2 × R$ 1.621,00</p>
+        <p className="rounded bg-muted px-2 py-1">Contratante 2 · Empresa Exemplo Filial</p>
+        <p className="rounded bg-muted px-2 py-1">Processo à parte · Cobrança judicial · 20%</p>
+        <p className="rounded bg-muted px-2 py-1">Ampliação · Outra unidade · + R$ 1.000,00</p>
+      </div>
+      <div className="overflow-hidden rounded-xl border bg-white text-[10px] text-[#301b1d] shadow-sm" data-proposal-retainer-pdf>
+        <div className="flex items-center justify-between bg-[#591b20] px-3 py-2 text-[#fff9ed]">
+          <span className="font-serif text-xs italic text-[#ddbc70]">Magalhães</span>
+          <span className="text-[8px] text-[#ddbc70]">Proposta de honorários</span>
+        </div>
+        <div className="h-0.5 bg-[#ddbc70]" />
+        <div className="space-y-1.5 p-3">
+          <div className="grid grid-cols-2 gap-1">
+            <p className="rounded border-l-2 border-[#ddbc70] bg-[#fbf6f0] px-1.5 py-1">Contratante 1</p>
+            <p className="rounded border-l-2 border-[#ddbc70] bg-[#fbf6f0] px-1.5 py-1">Contratante 2</p>
+          </div>
+          <p><strong className="text-[#591b20]">Trabalhista</strong> · contratações e rescisões</p>
+          <p className="rounded bg-[#591b20] px-2 py-1 font-serif font-semibold text-[#fff9ed]">
+            Honorário mensal · 2 salários mínimos por mês
+          </p>
+          <p className="flex justify-between border-b pb-0.5"><span>Cobrança judicial</span><strong className="text-[#96702c]">20%</strong></p>
+        </div>
+      </div>
+    </PreviewGrid>
+  );
+}
 function MagalhaesQuoteProposalCrmPreview() {
   return (
     <PreviewGrid label="Prévia da proposta de honorários em PDF e do lead criado no CRM">
@@ -1614,6 +1650,7 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-proposal-retainer": MagalhaesProposalRetainerPreview,
   "crm-column-order": CrmColumnOrderPreview,
   "magalhaes-quote-proposal-crm": MagalhaesQuoteProposalCrmPreview,
   "magalhaes-finance-orders": () => (

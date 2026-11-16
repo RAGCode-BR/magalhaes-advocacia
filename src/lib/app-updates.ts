@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-proposal-retainer"
   | "crm-column-order"
   | "magalhaes-quote-proposal-crm"
   | "magalhaes-finance-orders"
@@ -81,6 +82,22 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-proposta-mensalidade-2026-11-16",
+    title: "Orçamentos agora são Propostas, com assessoria mensal",
+    date: "2026-11-16",
+    preview: "magalhaes-proposal-retainer",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "A aba Orçamentos passou a se chamar Propostas, com Nova proposta, Salvar proposta, Aprovar e Recusar proposta. As propostas já criadas continuam lá, e o endereço da página é o mesmo.",
+      "Na nova proposta há a modalidade Mensalidade. O valor pode ser informado em salários mínimos: o sistema calcula a mensalidade e o PDF informa que ela acompanha o salário mínimo vigente.",
+      "Uma proposta pode atender mais de uma empresa ou unidade. Cada uma aparece como contratante no PDF e tem sua linha de assinatura.",
+      "No escopo, escreva “Título: descrição” para o nome do serviço sair em destaque, como “Trabalhista: contratações e rescisões”.",
+      "Novas seções opcionais: processos judiciais cobrados à parte, com o percentual de êxito de cada um; ampliação opcional, com o novo total por mês; e diferenciais do escritório, com textos padrão da Magalhães para usar ou editar.",
+      "O PDF também traz a cidade da proposta e o endereço, os contatos e a assinatura da Dra. Ana Paula Magalhães.",
+    ],
+  },
   {
     id: "crm-ordem-das-colunas-2026-11-10",
     title: "Escolha a ordem das colunas do CRM",

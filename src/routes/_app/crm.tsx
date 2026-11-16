@@ -1044,12 +1044,14 @@ function CrmPage() {
 function ProposalPanel({ doc }: { doc: ProposalDocument }) {
   const [busy, setBusy] = useState(false);
   const plan =
-    doc.periods === 1
-      ? `À vista em ${brDate(doc.first_due)}`
-      : `${doc.periods} parcelas a partir de ${brDate(doc.first_due)}`;
+    doc.fee_model === "monthly"
+      ? `Mensal a partir de ${brDate(doc.first_due)}`
+      : doc.periods === 1
+        ? `À vista em ${brDate(doc.first_due)}`
+        : `${doc.periods} parcelas a partir de ${brDate(doc.first_due)}`;
   return (
     <section
-      aria-label="Orçamento vinculado"
+      aria-label="Proposta vinculada"
       className="overflow-hidden rounded-xl border bg-muted/30"
     >
       <div aria-hidden className="h-1 bg-[#ddbc70]" />
@@ -1078,10 +1080,19 @@ function ProposalPanel({ doc }: { doc: ProposalDocument }) {
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-xs text-muted-foreground">
-              {doc.fee_model === "fixed_success" ? "Valor inicial" : "Honorários"}
+              {doc.fee_model === "fixed_success"
+                ? "Valor inicial"
+                : doc.fee_model === "monthly"
+                  ? "Mensalidade"
+                  : "Honorários"}
             </dt>
             <dd className="font-semibold tabular-nums text-primary">
               {money(doc.amount_cents / 100)}
+              {doc.minimum_wages ? (
+                <span className="block text-xs font-normal text-muted-foreground">
+                  {String(doc.minimum_wages).replace(".", ",")} salário(s) mínimo(s)
+                </span>
+              ) : null}
             </dd>
           </div>
           <div>

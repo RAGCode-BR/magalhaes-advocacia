@@ -5,6 +5,16 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates the monthly retainer proposal for two companies without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-proposal-retainer" }));
+    expect(html).toContain("data-proposal-retainer-form");
+    expect(html).toContain("data-proposal-retainer-pdf");
+    expect(html).toContain("Mensalidade");
+    expect(html).toContain("2 salários mínimos por mês");
+    expect(html).toContain("Contratante 2");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
   it("illustrates dragging CRM columns and the position buttons without real actions", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "crm-column-order" }));
     expect(html).toContain("data-crm-column-drag");

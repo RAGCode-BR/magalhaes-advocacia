@@ -338,7 +338,7 @@ const entityNames: Record<string, string> = {
   office_finance_settlements: "Baixa",
   office_finance_accounts: "Conta",
   office_finance_registers: "Cadastro",
-  office_finance_agreements: "Orçamento ou contrato",
+  office_finance_agreements: "Proposta ou contrato",
   office_finance_transfers: "Transferência",
   office_finance_services: "Serviço",
   office_finance_orders: "Pedido de serviço ou compra",
