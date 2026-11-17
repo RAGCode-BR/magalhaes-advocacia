@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-finance-recurrence"
   | "magalhaes-contaazul-history"
   | "crm-commercial-report"
   | "magalhaes-finance-dashboard"
@@ -87,6 +88,19 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-finance-recurrence-2026-11-17",
+    title: "Receitas e despesas recorrentes",
+    date: "2026-11-17",
+    preview: "magalhaes-finance-recurrence",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "Em Nova receita ou Nova despesa, escolha Recorrente. O valor informado se repete integralmente em cada ocorrência, sem ser dividido em parcelas.",
+      "Escolha frequência semanal, a cada 14 dias, mensal, trimestral ou anual. Termine por quantidade ou data, com até 120 ocorrências, e confira os vencimentos e o total na prévia.",
+      "Ao salvar, todas as ocorrências do período entram em Contas a receber ou Contas a pagar. A competência acompanha a frequência. O cadastro não paga contas nem emite boletos automaticamente.",
+    ],
+  },
   {
     id: "magalhaes-contaazul-history-2026-11-17",
     title: "Histórico financeiro do Conta Azul",

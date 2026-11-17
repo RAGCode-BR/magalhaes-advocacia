@@ -6,6 +6,7 @@ import {
   type FinanceRegister as PlanItem,
   financeCents,
   financeInstallments,
+  financeRecurrences,
   financeStatus,
   financeTotals,
   financeOrderTotal,
@@ -223,5 +224,33 @@ describe("bank descriptions", () => {
       title: "Resgate RDC automático",
       detail: "",
     });
+  });
+});
+
+describe("recurring finance schedules", () => {
+  const base = { cents: 10000, frequency: "monthly" as const, dueDate: "2026-01-31", competenceDate: "2026-01-15", count: 3 };
+  it("repeats full amounts and anchors month ends without date drift", () => {
+    const rows = financeRecurrences(base);
+    expect(rows.map(row => row.amount_cents)).toEqual([10000,10000,10000]);
+    expect(rows.map(row => row.due_date)).toEqual(["2026-01-31","2026-02-28","2026-03-31"]);
+    expect(rows.map(row => row.competence_date)).toEqual(["2026-01-15","2026-02-15","2026-03-15"]);
+    expect(rows[2]).toMatchObject({ installment: 3, installment_count: 3, recurrence_frequency: "monthly" });
+  });
+  it("includes the end date and stops before the following occurrence", () => {
+    expect(financeRecurrences({...base, count: undefined, until: "2026-03-30"})).toHaveLength(2);
+    expect(financeRecurrences({...base, count: undefined, until: "2026-03-31"})).toHaveLength(3);
+  });
+  it("supports weekly, fortnightly, quarterly and yearly schedules", () => {
+    expect(financeRecurrences({...base, frequency: "weekly"})[1].due_date).toBe("2026-02-07");
+    expect(financeRecurrences({...base, frequency: "fortnightly"})[1].due_date).toBe("2026-02-14");
+    expect(financeRecurrences({...base, frequency: "quarterly"})[1].due_date).toBe("2026-04-30");
+    expect(financeRecurrences({...base, frequency: "yearly", dueDate: "2024-02-29", count: 5})[4].due_date).toBe("2028-02-29");
+  });
+  it("rejects invalid dates, amounts, limits and reversed ranges", () => {
+    for (const extra of [{cents: 0}, {cents: 1.5}, {count: 121}, {count: 0}, {count: 2.5},
+      {dueDate: "2026-02-30"}, {competenceDate: "bad"}, {until: "2026-01-01"},
+      {until: "2050-01-01"}, {frequency: "unknown"}]) {
+      expect(() => financeRecurrences({...base, ...extra} as typeof base)).toThrow();
+    }
   });
 });

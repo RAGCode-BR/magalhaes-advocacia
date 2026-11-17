@@ -1650,6 +1650,20 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-finance-recurrence": () => (
+    <PreviewGrid label="Prévia ilustrativa de receitas e despesas recorrentes">
+      <div className="space-y-2 rounded-xl border bg-card p-3 text-[10px]">
+        <p className="font-semibold">Nova receita ou despesa</p>
+        <p className="rounded-lg bg-primary/10 p-2">Recorrente · Mensal</p>
+        <p>Valor por ocorrência: R$ 500,00</p><p>Terminar após 3 ocorrências</p>
+      </div>
+      <div className="space-y-2 rounded-xl border bg-card p-3 text-[10px]">
+        <p className="font-semibold">Prévia dos vencimentos</p>
+        {["10/12", "10/01", "10/02"].map(date => <p key={date} className="flex justify-between rounded border p-2"><span>{date}</span><span>R$ 500,00</span></p>)}
+        <p className="font-semibold">Total: R$ 1.500,00</p>
+      </div>
+    </PreviewGrid>
+  ),
   "magalhaes-contaazul-history": () => (
     <PreviewGrid label="Prévia ilustrativa do histórico financeiro importado">
       <div className="space-y-2 rounded-xl border bg-card p-3 text-[10px]">

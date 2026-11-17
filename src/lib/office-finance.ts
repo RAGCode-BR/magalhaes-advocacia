@@ -1,4 +1,4 @@
-import { addMonths, format, parseISO } from "date-fns";
+import { addDays, addMonths, format, parseISO } from "date-fns";
 
 export type FinanceKind = "income" | "expense";
 
@@ -11,6 +11,7 @@ export type FinanceEntry = {
   notes: string | null;
   client_id: string | null;
   process_id: string | null;
+  recurrence_frequency?: FinanceFrequency | null;
   installment: number;
   installment_count: number;
   competence_date: string;
@@ -60,6 +61,47 @@ export function financeInstallments(cents: number, count: number, dueDate: strin
     installment_count: count,
     amount_cents: base + Number(index < cents % count),
     due_date: format(addMonths(parseISO(dueDate), index), "yyyy-MM-dd"),
+  }));
+}
+
+export const financeFrequencies = {
+  weekly: "Semanal", fortnightly: "A cada 14 dias", monthly: "Mensal",
+  quarterly: "Trimestral", yearly: "Anual",
+} as const;
+export type FinanceFrequency = keyof typeof financeFrequencies;
+
+export function financeRecurrences(options: {
+  cents: number; frequency: FinanceFrequency; dueDate: string; competenceDate: string;
+  count?: number; until?: string;
+}) {
+  const { cents, frequency, dueDate, competenceDate, count, until } = options;
+  const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && !Number.isNaN(parseISO(value).getTime())
+    && format(parseISO(value), "yyyy-MM-dd") === value;
+  if (!Number.isInteger(cents) || cents < 1 || cents > 2147483647)
+    throw new Error("Informe um valor válido por ocorrência.");
+  if (!Object.hasOwn(financeFrequencies, frequency) || !validDate(dueDate) || !validDate(competenceDate))
+    throw new Error("Confira a frequência, a competência e o primeiro vencimento.");
+  if (until ? (!validDate(until) || until < dueDate) : (!Number.isInteger(count) || count! < 1 || count! > 120))
+    throw new Error("Defina de 1 a 120 ocorrências ou uma data final a partir do primeiro vencimento.");
+  const advance = (date: string, index: number) => {
+    const start = parseISO(date);
+    const next = frequency === "weekly" || frequency === "fortnightly"
+      ? addDays(start, index * (frequency === "weekly" ? 7 : 14))
+      : addMonths(start, index * (frequency === "monthly" ? 1 : frequency === "quarterly" ? 3 : 12));
+    return format(next, "yyyy-MM-dd");
+  };
+  const dates: string[] = [];
+  for (let index = 0; index < (until ? 121 : count!); index++) {
+    const date = advance(dueDate, index);
+    if (until && date > until) break;
+    dates.push(date);
+  }
+  if (dates.length > 120) throw new Error("Use um período de até 120 ocorrências.");
+  return dates.map((date, index) => ({
+    installment: index + 1, installment_count: dates.length,
+    amount_cents: cents, due_date: date,
+    competence_date: advance(competenceDate, index), recurrence_frequency: frequency,
   }));
 }
 

@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { testBankStatement } from "./test-bank-statement-db.mjs";
 import { testBoletos } from "./test-boletos-db.mjs";
+import { testFinanceRecurrence } from "./test-finance-recurrence-db.mjs";
 import { testContaAzul } from "./test-contaazul-db.mjs";
 import { testBankConnector } from "./test-bank-connector-db.mjs";
 
@@ -152,12 +153,14 @@ try {
     "20261117200000_finance_delete_proposal.sql",
     "20261117210000_bank_create_entry_reconcile.sql",
     "20261117220000_contaazul_finance_import.sql",
+    "20261117230000_finance_entry_recurrence.sql",
   ]) {
     await owner.query(await readFile(join(root, "supabase/migrations", filename), "utf8"));
   }
   const admin = await connection();
   const other = await connection();
   const outsider = await connection(outsiderId);
+  await testFinanceRecurrence({ admin, outsider });
   await testContaAzul({ owner, admin, outsider, adminId });
   await testBankStatement({ owner, admin, outsider });
   await testBankConnector({ owner, admin, other, outsider, connection, clientId });

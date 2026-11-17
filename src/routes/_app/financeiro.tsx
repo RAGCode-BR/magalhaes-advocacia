@@ -21,6 +21,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   financeCents,
   financeInstallments,
+  financeRecurrences,
+  financeFrequencies,
+  type FinanceFrequency,
   financeStatus,
   financeLedgerBuckets,
   financeSettlementAmounts,
@@ -475,9 +478,9 @@ function FinancePage({ userId }: { userId: string }) {
                       <td className="min-w-52">
                         <p className="font-medium">
                           {entry.description}
-                          {entry.installment_count > 1 && (
+                          {(entry.installment_count > 1 || entry.recurrence_frequency) && (
                             <span className="ml-1 text-xs font-normal text-muted-foreground">
-                              {entry.installment}/{entry.installment_count}
+                              {entry.recurrence_frequency ? `${financeFrequencies[entry.recurrence_frequency]} · Ocorrência ` : ""}{entry.installment}/{entry.installment_count}
                             </span>
                           )}
                         </p>
@@ -665,6 +668,21 @@ type EditorProps = {
 function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }: EditorProps) {
   const [clientId, setClientId] = useState("");
   const [processId, setProcessId] = useState("");
+  const [recurring, setRecurring] = useState(false);
+  const [ending, setEnding] = useState("count");
+  const [frequency, setFrequency] = useState<FinanceFrequency>("monthly");
+  const [count, setCount] = useState("12");
+  const [until, setUntil] = useState("");
+  const [amount, setAmount] = useState("");
+  const [due, setDue] = useState(today);
+  const [competence, setCompetence] = useState(today);
+  let preview: ReturnType<typeof financeRecurrences> = [];
+  let previewError = "";
+  if (recurring) {
+    try { preview = financeRecurrences({ cents: financeCents(amount), frequency, dueDate: due,
+      competenceDate: competence, ...(ending === "count" ? { count: Number(count) } : { until: until || "invalid" }) }); }
+    catch (error) { previewError = (error as Error).message; }
+  }
   const income = draft.kind === "income";
   const plan = financePlanOptions(registers, draft.kind);
   const centers = registers
@@ -677,11 +695,12 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
       const category = value("category");
       if (!description || !category)
         throw new Error("Informe a descrição e a conta do plano de contas.");
-      const installments = financeInstallments(
-        financeCents(value("amount")),
-        Number(value("count")),
-        value("due"),
-      );
+      const installments = recurring
+        ? financeRecurrences({ cents: financeCents(value("amount")), frequency,
+            dueDate: value("due"), competenceDate: value("competence"),
+            ...(ending === "count" ? { count: Number(count) } : { until: until || "invalid" }) })
+        : financeInstallments(financeCents(value("amount")), Number(value("count")), value("due"))
+            .map((item) => ({ ...item, competence_date: value("competence"), recurrence_frequency: null }));
       const rows = installments.map((installment) => ({
         ...installment,
         group_id: draft.id,
@@ -693,7 +712,6 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
         process_id: income ? processId || null : null,
         supplier: income ? null : value("supplier") || null,
         notes: value("notes") || null,
-        competence_date: value("competence"),
       }));
       const { error } = await table("office_finance_entries").upsert(rows as never, {
         onConflict: "group_id,installment",
@@ -722,7 +740,7 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
           <DialogDescription>
             {income
               ? "Honorário de cliente ou receita avulsa (rendimento, reembolso, venda). O cliente é opcional."
-              : "O valor total será distribuído entre as parcelas mensais."}
+              : "Registre uma despesa avulsa, parcelada ou recorrente."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -732,6 +750,14 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
             if (!save.isPending) save.mutate(new FormData(event.currentTarget));
           }}
         >
+          <label className={fieldClass}>
+            Tipo de lançamento
+            <select className={selectClass} value={recurring ? "recurring" : "single"}
+              disabled={save.isPending} onChange={(event) => setRecurring(event.target.value === "recurring")}>
+              <option value="single">Avulso ou parcelado</option>
+              <option value="recurring">Recorrente</option>
+            </select>
+          </label>
           <label className={fieldClass}>
             Descrição
             <Input name="description" required maxLength={200} />
@@ -807,22 +833,52 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
               </>
             )}
             <label className={fieldClass}>
-              Valor total em R$
-              <Input name="amount" required inputMode="decimal" placeholder="0,00" />
+              {recurring ? "Valor de cada ocorrência em R$" : "Valor total em R$"}
+              <Input name="amount" required inputMode="decimal" placeholder="0,00" value={amount} onChange={(event) => setAmount(event.target.value)} />
             </label>
-            <label className={fieldClass}>
+            {!recurring && <label className={fieldClass}>
               Parcelas
               <Input name="count" type="number" required min={1} max={120} defaultValue={1} />
-            </label>
+            </label>}
+            {recurring && <>
+              <label className={fieldClass}>Frequência
+                <select className={selectClass} value={frequency} onChange={(event) => setFrequency(event.target.value as FinanceFrequency)}>
+                  {Object.entries(financeFrequencies).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
+              </label>
+              <label className={fieldClass}>Terminar
+                <select className={selectClass} value={ending} onChange={(event) => setEnding(event.target.value)}>
+                  <option value="count">Após uma quantidade</option><option value="date">Em uma data</option>
+                </select>
+              </label>
+              {ending === "count" ? <label className={fieldClass}>Quantidade de ocorrências
+                <Input type="number" min={1} max={120} required value={count} onChange={(event) => setCount(event.target.value)} />
+              </label> : <label className={fieldClass}>Data final (inclusive)
+                <Input type="date" min={due} required value={until} onChange={(event) => setUntil(event.target.value)} />
+              </label>}
+            </>}
             <label className={fieldClass}>
               Competência
-              <Input name="competence" required type="date" defaultValue={today} />
+              <Input name="competence" required type="date" value={competence} onChange={(event) => setCompetence(event.target.value)} />
             </label>
             <label className={fieldClass}>
               Primeiro vencimento
-              <Input name="due" required type="date" defaultValue={today} />
+              <Input name="due" required type="date" value={due} onChange={(event) => setDue(event.target.value)} />
             </label>
           </div>
+          {recurring && <div className="rounded-xl border bg-muted/30 p-3 text-sm" aria-live="polite">
+            <p className="font-medium">Prévia da recorrência</p>
+            {preview.length ? <>
+              <p>{preview.length} ocorrência(s) de {currency(preview[0].amount_cents)} · Total {currency(preview.length * preview[0].amount_cents)}</p>
+              <p>De {displayDate(preview[0].due_date)} até {displayDate(preview[preview.length - 1].due_date)}</p>
+              <details className="mt-2"><summary className="cursor-pointer">Conferir vencimentos</summary>
+                <ol className="mt-2 max-h-36 overflow-auto">{preview.map((item) => <li key={item.installment}>
+                  {item.installment}. {displayDate(item.due_date)} · {currency(item.amount_cents)}
+                </li>)}</ol>
+              </details>
+            </> : <p>{previewError}</p>}
+            <p className="mt-2 text-xs text-muted-foreground">O valor se repete integralmente. Todos os lançamentos do período serão criados ao salvar, com competência acompanhando a frequência. Não há pagamento ou emissão de boleto automática.</p>
+          </div>}
           <label className={fieldClass}>
             Centro de custo
             {centers.length ? (
@@ -867,7 +923,7 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
             <Button type="button" variant="outline" disabled={save.isPending} onClick={close}>
               Cancelar
             </Button>
-            <Button disabled={save.isPending}>
+            <Button disabled={save.isPending || (recurring && !preview.length)}>
               {save.isPending ? "Salvando…" : "Salvar lançamento"}
             </Button>
           </div>
@@ -966,6 +1022,7 @@ function EntryDetails({
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{entry.description}</DialogTitle>
+          {entry.recurrence_frequency && <p className="text-sm text-muted-foreground">{financeFrequencies[entry.recurrence_frequency]} · Ocorrência {entry.installment}/{entry.installment_count}</p>}
           <DialogDescription>
             Competência {displayDate(entry.competence_date)} · Vencimento{" "}
             {displayDate(entry.due_date)}
