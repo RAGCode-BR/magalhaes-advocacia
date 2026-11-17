@@ -1650,6 +1650,46 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "crm-commercial-report": () => (
+    <div
+      role="img"
+      aria-label="Prévia ilustrativa do relatório comercial do CRM com indicadores, funil e conversão por origem"
+      data-crm-report-preview
+      className="space-y-2 rounded-xl border bg-card p-3 text-[10px] text-card-foreground"
+    >
+      <p className="font-semibold">CRM · Relatório</p>
+      <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border bg-border">
+        {[
+          ["Novos leads", "12"],
+          ["Conversão", "25%"],
+          ["Em negociação", "R$ 40 mil"],
+        ].map(([label, value]) => (
+          <div key={label} className="bg-card p-1.5">
+            <p className="text-muted-foreground">{label}</p>
+            <p className="font-semibold tabular-nums">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-1 rounded-lg border p-2">
+        {[
+          ["Novos Leads", 90, "#3278d4"],
+          ["Proposta", 60, "#d97706"],
+          ["Negociação", 40, "#db2777"],
+          ["Finalizado", 25, "#059669"],
+        ].map(([label, width, color]) => (
+          <div key={label as string}>
+            <p>{label}</p>
+            <div className="h-1.5 rounded-full bg-muted">
+              <div className="h-full rounded-full" style={{ width: `${width}%`, background: color as string }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="rounded-lg border px-2 py-1">
+        Indicação · <strong>33% de conversão</strong>
+      </p>
+    </div>
+  ),
   "magalhaes-finance-dashboard": () => (
     <div
       role="img"

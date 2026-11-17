@@ -179,7 +179,23 @@ describe("chart of accounts and DRE", () => {
   });
 
   it("groups bank descriptions by their first words", () => {
-    expect(bankHistoryGroup("PIX RECEBIDO 12/11 FULANO")).toBe("Pix recebido");
+    expect(bankHistoryGroup("PIX RECEBIDO 12/11 FULANO")).toBe("PIX recebido");
+    expect(bankHistoryGroup("APLICAÇÃO RDC")).toBe("Aplicação RDC");
     expect(bankHistoryGroup("123")).toBe("Sem histórico");
+  });
+});
+
+describe("bank descriptions", () => {
+  it("turns raw Sicoob histories into a readable title and counterpart", async () => {
+    const { bankDescriptionParts } = await import("./office-bank");
+    expect(
+      bankDescriptionParts(
+        "PIX RECEBIDO - OUTRA IF · Recebimento Pix|@ANA PAULA DA CRUZ MAGALHAES|@***.661.831-**|@",
+      ),
+    ).toEqual({ title: "PIX recebido - outra IF", detail: "Ana Paula da Cruz Magalhaes" });
+    expect(bankDescriptionParts("RESGATE RDC AUTOMÁTICO")).toEqual({
+      title: "Resgate RDC automático",
+      detail: "",
+    });
   });
 });

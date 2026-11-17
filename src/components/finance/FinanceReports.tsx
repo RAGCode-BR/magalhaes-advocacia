@@ -23,7 +23,7 @@ import {
   type OfficeFinanceData,
   type FinanceHistory,
 } from "@/lib/office-finance-data";
-import { Amount, KpiStrip, Sheet, SheetGutter } from "./FinanceSheet";
+import { Amount, DetailRows, KpiStrip, Sheet, SheetGutter, type DetailRow } from "./FinanceSheet";
 import { FinanceFlowChart, FinanceShareBars } from "./FinanceBalanceChart";
 import { ptBR } from "date-fns/locale";
 
@@ -127,6 +127,60 @@ export function FinanceReports({ ledger }: { ledger: OfficeFinanceData }) {
   const dreIncome = sum(dre.income.total);
   const percentOf = (value: number) =>
     dreIncome ? `${Math.round((value / dreIncome) * 1000) / 10}%` : "–";
+  // Records behind the month indicators, following the chosen basis.
+  const monthRows = (kind: "income" | "expense"): DetailRow[] =>
+    basis === "cash"
+      ? ledger.settlements
+          .filter((item) => !item.reversed_at && item.settled_on.startsWith(month))
+          .flatMap((item) => {
+            const entry = entriesById.get(item.entry_id);
+            return entry && entry.kind === kind
+              ? [
+                  {
+                    key: item.id,
+                    date: item.settled_on,
+                    title: entry.description,
+                    subtitle: [clientNames.get(entry.client_id ?? ""), entry.category]
+                      .filter(Boolean)
+                      .join(" · "),
+                    value: currency(item.amount_cents),
+                  },
+                ]
+              : [];
+          })
+          .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+      : ledger.entries
+          .filter(
+            (entry) =>
+              entry.kind === kind && !entry.cancelled_at && entry.competence_date.startsWith(month),
+          )
+          .sort((a, b) => a.competence_date.localeCompare(b.competence_date))
+          .map((entry) => ({
+            key: entry.id,
+            date: entry.competence_date,
+            title: entry.description,
+            subtitle: [clientNames.get(entry.client_id ?? ""), entry.category]
+              .filter(Boolean)
+              .join(" · "),
+            value: currency(entry.amount_cents),
+          }));
+  const openReceivableRows: DetailRow[] = ledger.entries
+    .filter(
+      (entry) =>
+        entry.kind === "income" && !entry.cancelled_at && entry.amount_cents > entry.settled_cents,
+    )
+    .sort((a, b) => a.due_date.localeCompare(b.due_date))
+    .map((entry) => ({
+      key: entry.id,
+      date: entry.due_date,
+      title: entry.description,
+      subtitle: `${clientNames.get(entry.client_id ?? "") ?? "Sem cliente"}${entry.due_date < isoToday() ? " · vencido" : ""}`,
+      value: currency(entry.amount_cents - entry.settled_cents),
+    }));
+  const basisNote =
+    basis === "cash"
+      ? "Regime de caixa: baixas registradas no mês."
+      : "Regime de competência: lançamentos cuja competência é o mês, recebidos ou não.";
   const pct = (value: number | null) => (value === null ? "—" : `${value > 0 ? "+" : ""}${value}%`);
   return (
     <div className="space-y-4">
@@ -171,24 +225,53 @@ export function FinanceReports({ ledger }: { ledger: OfficeFinanceData }) {
               value: currency(current.income),
               tone: "income",
               hint: `${pct(incomeChange)} vs. mês anterior`,
+              summary: `${basisNote} A variação compara com ${currency(previous.income)} do mês anterior.`,
+              detail: () => (
+                <DetailRows rows={monthRows("income")} total={currency(current.income)} />
+              ),
             },
             {
               label: `Despesas · ${monthLabel(month)}`,
               value: currency(current.expense),
               tone: "expense",
               hint: `Mês anterior: ${currency(previous.expense)}`,
+              summary: basisNote,
+              detail: () => (
+                <DetailRows rows={monthRows("expense")} total={currency(current.expense)} />
+              ),
             },
             {
               label: "Resultado do mês",
               value: currency(current.balance),
               tone: current.balance < 0 ? "expense" : "balance",
               hint: margin === null ? "Sem receitas no mês" : `Margem de ${margin}%`,
+              summary: `Receitas menos despesas do mês, agrupadas por ${groupName}. A margem é o resultado dividido pelas receitas.`,
+              detail: () => (
+                <DetailRows
+                  rows={groupedRows.map(([name, totals]) => ({
+                    key: name,
+                    title: name,
+                    subtitle: `Receitas ${currency(totals.income)} · Despesas ${currency(totals.expense)}`,
+                    value: <Amount cents={totals.income - totals.expense} />,
+                  }))}
+                  total={<Amount cents={current.balance} />}
+                />
+              ),
             },
             {
               label: "A receber em aberto",
               value: currency(openReceivable),
               tone: overdueReceivable ? "alert" : "neutral",
               hint: `${currency(overdueReceivable)} vencido`,
+              summary:
+                "Tudo o que ainda falta receber, de todos os meses, ordenado por vencimento. Os vencidos estão marcados.",
+              detail: () => (
+                <DetailRows
+                  rows={openReceivableRows}
+                  total={currency(openReceivable)}
+                  empty="Nada a receber em aberto."
+                />
+              ),
             },
           ]}
         />
@@ -555,13 +638,72 @@ export function FinanceStatement({
       <KpiStrip
         items={[
           ...(account
-            ? [{ label: "Saldo inicial", value: currency(opening), tone: "neutral" as const }]
+            ? [
+                {
+                  label: "Saldo inicial",
+                  value: currency(opening),
+                  tone: "neutral" as const,
+                  summary: `Saldo da conta no fim do mês anterior: abertura da conta mais todas as baixas e transferências até ${displayDate(previousDay)}.`,
+                },
+              ]
             : []),
-          { label: "Entradas", value: currency(credits), tone: "income" },
-          { label: "Saídas", value: currency(-debits), tone: "expense" },
+          {
+            label: "Entradas",
+            value: currency(credits),
+            tone: "income",
+            summary: "Recebimentos e transferências recebidas no mês.",
+            detail: () => (
+              <DetailRows
+                rows={movements
+                  .filter((item) => item.amount > 0)
+                  .map((item) => ({
+                    key: item.id,
+                    date: item.date,
+                    title: item.description,
+                    subtitle: [item.category, accountId ? "" : item.account]
+                      .filter(Boolean)
+                      .join(" · "),
+                    value: currency(Math.abs(item.amount)),
+                  }))}
+                total={currency(credits)}
+              />
+            ),
+          },
+          {
+            label: "Saídas",
+            value: currency(-debits),
+            tone: "expense",
+            summary: "Pagamentos e transferências enviadas no mês.",
+            detail: () => (
+              <DetailRows
+                rows={movements
+                  .filter((item) => item.amount < 0)
+                  .map((item) => ({
+                    key: item.id,
+                    date: item.date,
+                    title: item.description,
+                    subtitle: [item.category, accountId ? "" : item.account]
+                      .filter(Boolean)
+                      .join(" · "),
+                    value: currency(Math.abs(item.amount)),
+                  }))}
+                total={currency(-debits)}
+              />
+            ),
+          },
           account
-            ? { label: "Saldo final", value: currency(opening + credits + debits), tone: "balance" }
-            : { label: "Resultado do mês", value: currency(credits + debits), tone: "balance" },
+            ? {
+                label: "Saldo final",
+                value: currency(opening + credits + debits),
+                tone: "balance",
+                summary: `Saldo inicial ${currency(opening)} + entradas ${currency(credits)} − saídas ${currency(-debits)}.`,
+              }
+            : {
+                label: "Resultado do mês",
+                value: currency(credits + debits),
+                tone: "balance",
+                summary: `Entradas ${currency(credits)} − saídas ${currency(-debits)} em todas as contas.`,
+              },
         ]}
       />
       {movements.length ? (
@@ -692,7 +834,11 @@ export function FinanceHistoryPanel({
           <li key={item.id} className="space-y-1 py-3">
             <p className="font-medium">
               {entityNames[item.entity_type] ?? "Registro"} ·{" "}
-              {item.action === "INSERT" ? "Criação" : "Alteração"}
+              {item.action === "INSERT"
+                ? "Criação"
+                : item.action === "DELETE"
+                  ? "Exclusão"
+                  : "Alteração"}
             </p>
             <p>
               {new Intl.DateTimeFormat("pt-BR", {

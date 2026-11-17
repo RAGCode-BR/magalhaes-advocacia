@@ -11,8 +11,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { currency, displayDate, financeRpc, isoToday } from "@/lib/office-finance-data";
 import {
+  currency,
+  displayDate,
+  fieldClass,
+  financeRpc,
+  isoToday,
+  loadOfficeFinance,
+  selectClass,
+} from "@/lib/office-finance-data";
+import { financePlanDepth, financePlanOptions } from "@/lib/office-finance";
+import { useClients } from "@/hooks/use-data";
+import { ClientPicker } from "@/components/ClientPicker";
+import {
+  bankDescriptionParts,
   loadBankOverview,
   synchronizeBank,
   type BankCandidate,
@@ -20,7 +32,15 @@ import {
   type BankTransaction,
 } from "@/lib/office-bank";
 import { FinanceActionDialog, type FinanceAction } from "./FinanceActionDialog";
-import { Amount, KpiStrip, Sheet, SheetGutter, SicoobLogo, StatusChip } from "./FinanceSheet";
+import {
+  Amount,
+  DetailRows,
+  KpiStrip,
+  Sheet,
+  SheetGutter,
+  SicoobLogo,
+  StatusChip,
+} from "./FinanceSheet";
 
 const timestamp = (value: string) =>
   new Intl.DateTimeFormat("pt-BR", {
@@ -136,16 +156,65 @@ export function FinanceBank({ userId }: { userId: string }) {
               hint: balance
                 ? `Consultado em ${timestamp(balance.observed_at)} · sem limite de crédito`
                 : undefined,
+              summary:
+                "Saldo informado pela API do Sicoob na última consulta. O limite de crédito não é somado. Pode diferir do saldo no sistema quando há movimentações sem baixa.",
             },
             {
               label: "Entradas no mês",
               value: currency(data.totals?.credits ?? 0),
               tone: "income",
+              summary: "Créditos do extrato no mês selecionado. A lista mostra a página carregada.",
+              detail: () => (
+                <DetailRows
+                  rows={rows
+                    .filter((row) => row.amount_cents > 0)
+                    .map((row) => ({
+                      key: row.id,
+                      date: row.booked_on,
+                      title: bankDescriptionParts(row.description).title,
+                      subtitle: bankDescriptionParts(row.description).detail,
+                      value: currency(Math.abs(row.amount_cents)),
+                    }))}
+                />
+              ),
             },
-            { label: "Saídas no mês", value: currency(data.totals?.debits ?? 0), tone: "expense" },
+            {
+              label: "Saídas no mês",
+              value: currency(data.totals?.debits ?? 0),
+              tone: "expense",
+              summary: "Débitos do extrato no mês selecionado. A lista mostra a página carregada.",
+              detail: () => (
+                <DetailRows
+                  rows={rows
+                    .filter((row) => row.amount_cents < 0)
+                    .map((row) => ({
+                      key: row.id,
+                      date: row.booked_on,
+                      title: bankDescriptionParts(row.description).title,
+                      subtitle: bankDescriptionParts(row.description).detail,
+                      value: currency(Math.abs(row.amount_cents)),
+                    }))}
+                />
+              ),
+            },
             {
               label: "Conciliação do mês",
               value: total ? `${reconciledShare}%` : "—",
+              summary: `${total - pending} de ${total} movimentações do mês estão vinculadas a uma baixa do financeiro. Use Conciliar na tabela para vincular as pendentes.`,
+              detail: () => (
+                <DetailRows
+                  rows={rows
+                    .filter((row) => !row.settlement_id)
+                    .map((row) => ({
+                      key: row.id,
+                      date: row.booked_on,
+                      title: bankDescriptionParts(row.description).title,
+                      subtitle: bankDescriptionParts(row.description).detail,
+                      value: <Amount cents={row.amount_cents} />,
+                    }))}
+                  empty="Nenhuma pendência na página carregada."
+                />
+              ),
               tone: pending ? "alert" : "income",
               hint: (
                 <span className="block">
@@ -238,10 +307,22 @@ export function FinanceBank({ userId }: { userId: string }) {
               ]}
             >
               {rows.map((row, index) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  onClick={row.settlement_id ? undefined : () => setSelected(row)}
+                  className={row.settlement_id ? "" : "cursor-pointer"}
+                  title={row.settlement_id ? undefined : "Clique para conciliar"}
+                >
                   <SheetGutter n={pages.length * 50 + index + 1} />
                   <td className="whitespace-nowrap">{displayDate(row.booked_on)}</td>
-                  <td className="min-w-48 max-w-md break-words">{row.description}</td>
+                  <td className="min-w-48 max-w-md" title={row.description}>
+                    <p className="break-words">{bankDescriptionParts(row.description).title}</p>
+                    {bankDescriptionParts(row.description).detail && (
+                      <p className="break-words text-xs text-muted-foreground">
+                        {bankDescriptionParts(row.description).detail}
+                      </p>
+                    )}
+                  </td>
                   <td className="whitespace-nowrap text-right font-medium">
                     {row.amount_cents > 0 && <Amount cents={row.amount_cents} abs />}
                   </td>
@@ -280,7 +361,10 @@ export function FinanceBank({ userId }: { userId: string }) {
                           size="sm"
                           variant="outline"
                           className="h-7 px-2 text-xs"
-                          onClick={() => setSelected(row)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelected(row);
+                          }}
                         >
                           Conciliar
                         </Button>
@@ -369,7 +453,11 @@ export function FinanceBank({ userId }: { userId: string }) {
   );
 }
 
-function ReconcileDialog({
+/**
+ * Reconcile a bank movement: link it to an existing settlement, or create the entry
+ * (receita/despesa) from the movement itself, settled and reconciled in one step.
+ */
+export function ReconcileDialog({
   transaction,
   userId,
   close,
@@ -380,7 +468,23 @@ function ReconcileDialog({
   close: () => void;
   refresh: () => Promise<void>;
 }) {
+  const queryClient = useQueryClient();
+  const income = transaction.amount_cents > 0;
+  const kind = income ? "income" : "expense";
+  const parts = bankDescriptionParts(transaction.description);
   const [settlement, setSettlement] = useState("");
+  const [mode, setMode] = useState<"link" | "create" | null>(null);
+  const [clientId, setClientId] = useState("");
+  const [ids] = useState(() => ({ entry: crypto.randomUUID(), settlement: crypto.randomUUID() }));
+  const { data: clients = [] } = useClients();
+  const ledger = useQuery({
+    queryKey: ["office-finance", userId],
+    queryFn: loadOfficeFinance,
+    staleTime: 30000,
+  });
+  const registers = ledger.data?.registers ?? [];
+  const plan = financePlanOptions(registers, kind);
+  const centers = registers.filter((item) => item.kind === "cost_center" && item.active);
   const candidates = useQuery({
     queryKey: ["office-bank-candidates", userId, transaction.id],
     queryFn: async () =>
@@ -388,85 +492,247 @@ function ReconcileDialog({
         p_transaction: transaction.id,
       })) as unknown as BankCandidate[],
   });
-  const mutation = useMutation({
+  // Without matching settlements, start directly on "create".
+  const current = mode ?? (candidates.data && !candidates.data.length ? "create" : "link");
+  const done = async (message: string) => {
+    await Promise.all([
+      refresh(),
+      queryClient.invalidateQueries({ queryKey: ["office-finance", userId] }),
+      queryClient.invalidateQueries({ queryKey: ["office-bank-report-rows", userId] }),
+    ]);
+    close();
+    toast.success(message);
+  };
+  const link = useMutation({
     mutationFn: () =>
       financeRpc("office_bank_reconcile", {
         p_transaction: transaction.id,
         p_settlement: settlement,
       }),
-    onSuccess: async () => {
-      await refresh();
-      close();
-      toast.success("Conciliação registrada.");
-    },
+    onSuccess: () => done("Conciliação registrada."),
     onError: (error: Error) => toast.error(error.message || "Não foi possível conciliar."),
   });
+  const create = useMutation({
+    mutationFn: (form: FormData) => {
+      const value = (key: string) => String(form.get(key) ?? "").trim();
+      return financeRpc("office_bank_create_and_reconcile", {
+        p_transaction: transaction.id,
+        p_entry: ids.entry,
+        p_settlement: ids.settlement,
+        data: {
+          description: value("description"),
+          category: value("category"),
+          cost_center: value("cost_center"),
+          supplier: value("supplier"),
+          notes: value("notes"),
+          client_id: income ? clientId : "",
+        },
+      });
+    },
+    onSuccess: () => done(income ? "Receita criada e conciliada." : "Despesa criada e conciliada."),
+    onError: (error: Error) => toast.error(error.message || "Não foi possível criar o lançamento."),
+  });
+  const busy = link.isPending || create.isPending;
   return (
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !mutation.isPending) close();
+        if (!open && !busy) close();
       }}
     >
-      <DialogContent className="max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Conciliar movimentação</DialogTitle>
           <DialogDescription>
-            Escolha a baixa do financeiro que corresponde a esta movimentação. O vínculo não gera um
-            novo recebimento ou pagamento.
+            Vincule a uma baixa já registrada ou crie o lançamento agora a partir do banco.
           </DialogDescription>
         </DialogHeader>
-        <div className="rounded-lg bg-muted/40 p-3 text-sm">
-          <p className="break-words font-medium">{transaction.description}</p>
-          <p className="mt-1">
-            {displayDate(transaction.booked_on)} · {currency(transaction.amount_cents)}
+        <div className="flex items-center gap-3 rounded-xl border bg-muted/30 p-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-medium">{parts.title}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {displayDate(transaction.booked_on)}
+              {parts.detail ? ` · ${parts.detail}` : ""}
+            </p>
+          </div>
+          <p
+            className={`shrink-0 text-lg font-semibold tabular-nums ${income ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}
+          >
+            {income ? "+" : "−"}
+            {currency(Math.abs(transaction.amount_cents))}
           </p>
         </div>
-        {candidates.isPending && <p role="status">Buscando baixas compatíveis…</p>}
-        {candidates.isError && (
-          <p role="alert">Não foi possível consultar as baixas. Feche e tente novamente.</p>
-        )}
-        {candidates.data?.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma baixa com a mesma conta, valor e tipo foi encontrada. Em Lançamentos, cadastre o
-            recebimento ou despesa e registre a baixa na conta Sicoob. Depois, volte para conciliar.
-          </p>
-        )}
-        {!!candidates.data?.length && (
-          <fieldset className="grid gap-2">
-            <legend className="mb-2 text-sm font-medium">
-              Baixas compatíveis — confira a descrição e a data
-            </legend>
-            {candidates.data.map((candidate) => (
-              <label key={candidate.id} className="flex gap-3 rounded-lg border p-3 text-sm">
-                <input
-                  className="mt-1"
-                  type="radio"
-                  name="bank-settlement"
-                  checked={settlement === candidate.id}
-                  onChange={() => setSettlement(candidate.id)}
-                />
-                <span className="min-w-0 break-words">
-                  <strong>{candidate.description}</strong>
-                  {candidate.client_name && (
-                    <span className="block text-muted-foreground">{candidate.client_name}</span>
-                  )}
-                  <span className="block">
-                    {displayDate(candidate.settled_on)} · {currency(candidate.amount_cents)}
-                  </span>
-                </span>
+        <div
+          className="grid grid-cols-2 rounded-lg border bg-muted/40 p-1"
+          role="group"
+          aria-label="Forma de conciliar"
+        >
+          {(
+            [
+              ["link", `Baixa existente${candidates.data ? ` (${candidates.data.length})` : ""}`],
+              ["create", income ? "Criar receita" : "Criar despesa"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={current === value}
+              onClick={() => setMode(value)}
+              className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                current === value
+                  ? "bg-card font-semibold shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {current === "link" ? (
+          <>
+            {candidates.isPending && <p role="status">Buscando baixas compatíveis…</p>}
+            {candidates.isError && (
+              <p role="alert">Não foi possível consultar as baixas. Feche e tente novamente.</p>
+            )}
+            {candidates.data?.length === 0 && (
+              <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                Nenhuma baixa com a mesma conta, valor e tipo. Use{" "}
+                {income ? "Criar receita" : "Criar despesa"} para lançar e conciliar de uma vez.
+              </p>
+            )}
+            {!!candidates.data?.length && (
+              <fieldset className="grid gap-2">
+                <legend className="mb-2 text-sm font-medium">Escolha a baixa correspondente</legend>
+                {candidates.data.map((candidate) => (
+                  <label
+                    key={candidate.id}
+                    className={`flex cursor-pointer gap-3 rounded-lg border p-3 text-sm transition-colors hover:bg-muted/40 ${settlement === candidate.id ? "border-primary ring-1 ring-primary" : ""}`}
+                  >
+                    <input
+                      className="mt-1"
+                      type="radio"
+                      name="bank-settlement"
+                      checked={settlement === candidate.id}
+                      onChange={() => setSettlement(candidate.id)}
+                    />
+                    <span className="min-w-0 break-words">
+                      <strong>{candidate.description}</strong>
+                      {candidate.client_name && (
+                        <span className="block text-muted-foreground">{candidate.client_name}</span>
+                      )}
+                      <span className="block">
+                        {displayDate(candidate.settled_on)} · {currency(candidate.amount_cents)}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" disabled={busy} onClick={close}>
+                Voltar
+              </Button>
+              <Button disabled={!settlement || busy} onClick={() => link.mutate()}>
+                {link.isPending ? "Conciliando…" : "Confirmar conciliação"}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <form
+            className="space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!busy) create.mutate(new FormData(event.currentTarget));
+            }}
+          >
+            <label className={fieldClass}>
+              Descrição
+              <Input
+                name="description"
+                required
+                maxLength={200}
+                defaultValue={[parts.title, parts.detail].filter(Boolean).join(" · ").slice(0, 200)}
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={fieldClass}>
+                Conta do plano
+                {plan.length ? (
+                  <select name="category" required className={selectClass} defaultValue="">
+                    <option value="">Selecione</option>
+                    {plan.map((item) => (
+                      <option key={item.id} value={item.name}>
+                        {"\u00a0\u00a0".repeat(financePlanDepth(item.code))}
+                        {item.code ? `${item.code} ` : ""}
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    name="category"
+                    required
+                    maxLength={100}
+                    defaultValue={income ? "Honorários" : ""}
+                  />
+                )}
               </label>
-            ))}
-          </fieldset>
+              <label className={fieldClass}>
+                Centro de custo
+                {centers.length ? (
+                  <select name="cost_center" className={selectClass} defaultValue="">
+                    <option value="">Sem centro de custo</option>
+                    {centers.map((item) => (
+                      <option key={item.id} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input name="cost_center" maxLength={160} />
+                )}
+              </label>
+              {income ? (
+                <div className={`${fieldClass} sm:col-span-2`}>
+                  Cliente
+                  <ClientPicker
+                    aria-label="Cliente"
+                    clients={clients}
+                    value={clientId}
+                    emptyLabel="Sem cliente (receita avulsa)"
+                    onChange={setClientId}
+                  />
+                </div>
+              ) : (
+                <label className={`${fieldClass} sm:col-span-2`}>
+                  Fornecedor
+                  <Input
+                    name="supplier"
+                    maxLength={160}
+                    defaultValue={parts.detail.slice(0, 160)}
+                  />
+                </label>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              O lançamento é criado com a data e o valor do banco, recebe a baixa na conta Sicoob e
+              fica conciliado com esta movimentação.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={busy} onClick={close}>
+                Voltar
+              </Button>
+              <Button disabled={busy}>
+                {create.isPending
+                  ? "Salvando…"
+                  : income
+                    ? "Criar receita e conciliar"
+                    : "Criar despesa e conciliar"}
+              </Button>
+            </div>
+          </form>
         )}
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" disabled={mutation.isPending} onClick={close}>
-            Voltar
-          </Button>
-          <Button disabled={!settlement || mutation.isPending} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? "Conciliando…" : "Confirmar conciliação"}
-          </Button>
-        </div>
       </DialogContent>
     </Dialog>
   );

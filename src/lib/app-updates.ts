@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "crm-commercial-report"
   | "magalhaes-finance-dashboard"
   | "magalhaes-sicoob-boletos"
   | "magalhaes-sicoob"
@@ -86,8 +87,23 @@ export type AppUpdate = {
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
   {
+    id: "crm-relatorio-comercial-2026-11-17",
+    title: "Relatório comercial no CRM",
+    date: "2026-11-17",
+    preview: "crm-commercial-report",
+    audience: "all",
+    workspaces: ["consultoria", "marketing"],
+    details: [
+      "A nova aba Relatório do CRM mostra novos leads, taxa de conversão, ticket médio dos leads finalizados e o valor em negociação, com a previsão de fechamento para os próximos 30 dias. Escolha o período: 30 dias, 90 dias, 12 meses ou tudo.",
+      "Veja o funil com a quantidade e o valor em cada etapa, o gráfico de leads por mês e a conversão por origem.",
+      "Os indicadores do relatório são clicáveis e mostram a lista de leads por trás de cada número.",
+      "Em Precisam de atenção aparecem os leads abertos com previsão de fechamento vencida ou sem atualização há 14 dias ou mais. Clique em um lead para abri-lo.",
+      "No lead criado por uma proposta, Visualizar abre o PDF dentro do sistema, sem precisar baixar. Em Empresa cadastrada, digite parte do nome para encontrar o cliente; acentos são ignorados.",
+    ],
+  },
+  {
     id: "magalhaes-financeiro-painel-plano-de-contas-2026-11-17",
-    title: "Financeiro com painel, plano de contas e relatórios do Sicoob",
+    title: "Financeiro com painel, plano de contas, relatórios do Sicoob e exclusão de propostas",
     date: "2026-11-17",
     preview: "magalhaes-finance-dashboard",
     audience: "admin",
@@ -98,8 +114,13 @@ export const APP_UPDATES: readonly AppUpdate[] = [
       "Plano de contas com códigos (como 2.3.01), natureza de receita ou despesa e um plano sugerido para escritório de advocacia. Os centros de custo são escolhidos em lista. Os lançamentos já cadastrados continuam iguais.",
       "Lançamentos ganharam abas-resumo clicáveis (Vencidos, Vencem hoje, A vencer, Recebidos ou Pagos e Total) e tabela em formato de planilha, com conta do plano, centro de custo e totais.",
       "Extrato, Sicoob e Contas viraram uma única aba, Contas e extratos: escolha a conta para ver o extrato com saldo acumulado. Na conta Sicoob, alterne entre o extrato do banco e as baixas no sistema.",
+      "Todos os indicadores do Painel, de Contas e extratos e dos Relatórios são clicáveis: abrem um resumo com o cálculo e a lista de registros por trás do número e, quando cabe, um atalho para os lançamentos.",
+      "Clique em qualquer movimentação pendente do Sicoob, no extrato ou nos relatórios, para conciliar na hora. Se não houver baixa correspondente, crie a receita ou a despesa ali mesmo, com conta do plano, centro de custo e cliente: o lançamento já fica pago na conta Sicoob e conciliado.",
+      "O Detalhe do mês do Sicoob virou uma lista no estilo de extrato bancário, com o histórico legível e o nome de quem pagou ou recebeu. Filtre por Maiores, Para conciliar, Todas ou por tipo de histórico, e clique numa movimentação para ver os detalhes.",
       "Relatórios abrem no Banco Sicoob, com gráfico de entradas e saídas, ticket médio, comparação banco × sistema e pendências de conciliação. O Resultado do escritório traz a DRE gerencial pelo plano de contas, com análise vertical.",
       "Contratos, Serviços, Ordens de serviço e Compras saíram do menu do Financeiro. Os registros existentes foram preservados.",
+      "Em Propostas, use Excluir para remover uma proposta que ainda não gerou lançamentos. O lead continua no CRM, sem o PDF da proposta, e a exclusão fica no Histórico. Propostas que já geraram Contas a receber não podem ser excluídas.",
+      "Em Propostas, Visualizar abre o PDF dentro do sistema, com opções para baixar ou abrir em nova aba. Os campos de cliente de Propostas e Lançamentos agora aceitam busca: digite parte do nome e escolha com clique ou Enter.",
     ],
   },
   {

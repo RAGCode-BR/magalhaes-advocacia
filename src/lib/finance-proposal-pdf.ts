@@ -576,3 +576,9 @@ export async function downloadProposalPdf(doc: ProposalDocument) {
   const pdf = await buildProposalPdf(doc);
   pdf.save(proposalFileName(doc));
 }
+
+/** The proposal PDF as a Blob, for viewing inside the app. */
+export async function proposalPdfBlob(doc: ProposalDocument) {
+  const pdf = await buildProposalPdf(doc);
+  return pdf.output("blob");
+}

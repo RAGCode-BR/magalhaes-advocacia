@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ReconcileDialog } from "./FinanceBank";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,9 +10,31 @@ import {
   isoToday,
   type OfficeFinanceData,
 } from "@/lib/office-finance-data";
-import { bankHistoryGroup, loadBankOverview, type BankTransaction } from "@/lib/office-bank";
+import {
+  bankDescriptionParts,
+  bankHistoryGroup,
+  loadBankOverview,
+  type BankTransaction,
+} from "@/lib/office-bank";
+import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FinanceFlowChart } from "./FinanceBalanceChart";
-import { Amount, KpiStrip, Sheet, SheetGutter, SicoobLogo, StatusChip } from "./FinanceSheet";
+import {
+  Amount,
+  DetailRows,
+  KpiStrip,
+  Sheet,
+  SheetGutter,
+  SicoobLogo,
+  StatusChip,
+} from "./FinanceSheet";
 
 // Reports built only from what the Sicoob connector already stores (read-only RPCs).
 
@@ -43,10 +66,15 @@ async function loadMonthRows(month: string) {
 export function FinanceBankReports({
   userId,
   ledger,
+  openStatement,
 }: {
   userId: string;
   ledger: OfficeFinanceData;
+  /** Opens the Sicoob statement in Contas e extratos (to reconcile). */
+  openStatement?: () => void;
 }) {
+  const [historyFilter, setHistoryFilter] = useState<string | null>(null);
+  const [detailView, setDetailView] = useState<"largest" | "pending" | "all">("largest");
   const today = isoToday();
   const [month, setMonth] = useState(today.slice(0, 7));
   const periods = useQuery({
@@ -162,7 +190,7 @@ export function FinanceBankReports({
   const pendingTotal = pending.reduce((s, r) => s + Math.abs(r.amount_cents), 0);
   const largest = [...monthRows]
     .sort((a, b) => Math.abs(b.amount_cents) - Math.abs(a.amount_cents))
-    .slice(0, 5);
+    .slice(0, 8);
 
   return (
     <div className="space-y-4">
@@ -188,24 +216,49 @@ export function FinanceBankReports({
                 monthVariation === null
                   ? "Sem base no mês anterior"
                   : `${monthVariation > 0 ? "+" : ""}${monthVariation}% vs. mês anterior`,
+              summary:
+                "Todos os créditos do extrato do Sicoob no mês, inclusive resgates de aplicação e transferências entre contas.",
+              detail: () => (
+                <TransactionList userId={userId} rows={incoming} openStatement={openStatement} />
+              ),
             },
             {
               label: "Ticket médio de entrada",
               value: currency(averageIn),
               tone: "neutral",
               hint: `${incomingCount} ${incomingCount === 1 ? "entrada" : "entradas"} no mês`,
+              summary: `Total de entradas (${currency(monthCredits)}) dividido pela quantidade de entradas (${incomingCount}).`,
+              detail: () => (
+                <TransactionList userId={userId} rows={incoming} openStatement={openStatement} />
+              ),
             },
             {
               label: "Maior entrada do mês",
               value: currency(largestIn),
               tone: "income",
               hint: largestInName,
+              summary: "As cinco maiores entradas do mês no extrato do Sicoob.",
+              detail: () => (
+                <TransactionList
+                  userId={userId}
+                  rows={[...incoming].sort((a, b) => b.amount_cents - a.amount_cents).slice(0, 5)}
+                  openStatement={openStatement}
+                />
+              ),
             },
             {
               label: "Saídas sobre entradas",
               value: monthCredits ? `${Math.round((monthDebits / monthCredits) * 100)}%` : "—",
               tone: monthDebits > monthCredits ? "expense" : "balance",
               hint: `${currency(monthDebits)} de saídas no mês`,
+              summary: `Saídas (${currency(monthDebits)}) divididas pelas entradas (${currency(monthCredits)}). Acima de 100%, saiu mais dinheiro do que entrou.`,
+              detail: () => (
+                <TransactionList
+                  userId={userId}
+                  rows={monthRows.filter((row) => row.amount_cents < 0)}
+                  openStatement={openStatement}
+                />
+              ),
             },
           ]}
         />
@@ -215,22 +268,77 @@ export function FinanceBankReports({
               label: `Entradas · ${flow.length} meses`,
               value: currency(sum.credits),
               tone: "income",
+              summary: "Créditos do extrato em cada mês consultado no Sicoob.",
+              detail: () => (
+                <DetailRows
+                  rows={flow.map((f) => ({
+                    key: f.month,
+                    title: monthLabel(f.month),
+                    subtitle: `${f.count} movimentações`,
+                    value: currency(f.credits),
+                  }))}
+                  total={currency(sum.credits)}
+                />
+              ),
             },
             {
               label: `Saídas · ${flow.length} meses`,
               value: currency(sum.debits),
               tone: "expense",
+              summary: "Débitos do extrato em cada mês consultado no Sicoob.",
+              detail: () => (
+                <DetailRows
+                  rows={flow.map((f) => ({
+                    key: f.month,
+                    title: monthLabel(f.month),
+                    value: currency(f.debits),
+                  }))}
+                  total={currency(sum.debits)}
+                />
+              ),
             },
             {
               label: "Resultado no período",
               value: currency(sum.credits - sum.debits),
               tone: "balance",
+              summary: "Entradas menos saídas no extrato, mês a mês.",
+              detail: () => (
+                <DetailRows
+                  rows={flow.map((f) => ({
+                    key: f.month,
+                    title: monthLabel(f.month),
+                    subtitle: `Entradas ${currency(f.credits)} · Saídas ${currency(f.debits)}`,
+                    value: <Amount cents={f.credits - f.debits} />,
+                  }))}
+                  total={<Amount cents={sum.credits - sum.debits} />}
+                />
+              ),
             },
             {
               label: "Não conciliadas",
               value: String(sum.pending),
               tone: sum.pending ? "alert" : "income",
               hint: `de ${sum.count} movimentações`,
+              summary:
+                "Movimentações do extrato ainda sem vínculo com uma baixa do financeiro. Abaixo, as pendências do mês selecionado no detalhe.",
+              onClick: openStatement,
+              actionLabel: "Conciliar no extrato",
+              detail: () => (
+                <>
+                  <DetailRows
+                    rows={flow
+                      .filter((f) => f.pending)
+                      .map((f) => ({
+                        key: f.month,
+                        title: monthLabel(f.month),
+                        subtitle: `de ${f.count} movimentações`,
+                        value: `${f.pending} pendentes`,
+                      }))}
+                    empty="Tudo conciliado nos meses consultados."
+                  />
+                  <TransactionList userId={userId} rows={pending} openStatement={openStatement} />
+                </>
+              ),
             },
           ]}
         />
@@ -364,9 +472,14 @@ export function FinanceBankReports({
         </p>
       </Card>
 
-      <Card className="space-y-4 p-4">
+      <Card className="space-y-5 p-4 md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="font-semibold">Detalhe do mês</h3>
+          <div>
+            <h3 className="font-semibold">Detalhe de {monthLabel(month)}</h3>
+            <p className="text-sm text-muted-foreground">
+              {monthRows.length} movimentações · {pending.length} para conciliar
+            </p>
+          </div>
           <Input
             type="month"
             className="w-auto"
@@ -386,86 +499,108 @@ export function FinanceBankReports({
           </p>
         )}
         {!!monthRows.length && (
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section className="space-y-2">
+          <div className="grid gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
+            <section className="space-y-3">
               <h4 className="text-sm font-medium">Por tipo de histórico</h4>
-              <ul className="space-y-3 rounded-xl border p-4">
+              <ul className="space-y-1">
                 {grouped.map(([name, g]) => {
-                  const cents = g.credits || -g.debits;
-                  const income = g.credits >= -g.debits;
+                  const net = g.credits + g.debits;
+                  const income = net >= 0;
+                  const size = Math.max(g.credits, -g.debits);
                   return (
-                    <li key={name} className="text-sm">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="min-w-0 truncate">
-                          {name} <span className="text-xs text-muted-foreground">· {g.count}×</span>
+                    <li key={name}>
+                      <button
+                        type="button"
+                        onClick={() => setHistoryFilter(name)}
+                        className={`w-full rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${historyFilter === name ? "bg-muted" : ""}`}
+                      >
+                        <span className="flex items-baseline justify-between gap-3">
+                          <span className="min-w-0 truncate">
+                            {name}{" "}
+                            <span className="text-xs text-muted-foreground">· {g.count}×</span>
+                          </span>
+                          <span
+                            className={`shrink-0 font-medium tabular-nums ${income ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}
+                          >
+                            {income ? "+" : "−"}
+                            {currency(Math.abs(net))}
+                          </span>
                         </span>
-                        <span
-                          className={`shrink-0 font-medium tabular-nums ${income ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}
-                        >
-                          {income ? "+" : "−"}
-                          {currency(Math.abs(g.credits + g.debits) || cents)}
+                        <span className="mt-1.5 block h-1.5 rounded-full bg-muted">
+                          <span
+                            className={`block h-full rounded-full ${income ? "bg-emerald-600 dark:bg-emerald-400" : "bg-destructive"}`}
+                            style={{ width: `${Math.max(2, (size / maxGroup) * 100)}%` }}
+                          />
                         </span>
-                      </div>
-                      <div className="mt-1.5 h-1.5 rounded-full bg-muted">
-                        <div
-                          className={`h-full rounded-full ${income ? "bg-emerald-600 dark:bg-emerald-400" : "bg-destructive"}`}
-                          style={{ width: `${Math.max(2, (cents / maxGroup) * 100)}%` }}
-                        />
-                      </div>
+                      </button>
                     </li>
                   );
                 })}
               </ul>
             </section>
-            <section className="space-y-2">
-              <h4 className="text-sm font-medium">Maiores movimentações</h4>
-              <Sheet
-                label="Maiores movimentações"
-                maxHeight=""
-                columns={[
-                  { label: "Data" },
-                  { label: "Histórico" },
-                  { label: "Valor", align: "right" },
-                ]}
-              >
-                {largest.map((row, i) => (
-                  <tr key={row.id}>
-                    <SheetGutter n={i + 1} />
-                    <td className="whitespace-nowrap">{displayDate(row.booked_on)}</td>
-                    <td className="min-w-32 break-words">{row.description}</td>
-                    <td className="whitespace-nowrap text-right">
-                      <Amount cents={row.amount_cents} />
-                    </td>
-                  </tr>
-                ))}
-              </Sheet>
-              <h4 className="pt-2 text-sm font-medium">
-                Pendências de conciliação · {pending.length} ({currency(pendingTotal)})
-              </h4>
-              {pending.length ? (
-                <Sheet
-                  label="Pendências de conciliação"
-                  maxHeight="max-h-72"
-                  columns={[
-                    { label: "Data" },
-                    { label: "Histórico" },
-                    { label: "Valor", align: "right" },
-                  ]}
+            <section className="min-w-0 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div
+                  className="flex rounded-lg border bg-muted/40 p-1"
+                  role="group"
+                  aria-label="Movimentações"
                 >
-                  {pending.map((row, i) => (
-                    <tr key={row.id}>
-                      <SheetGutter n={i + 1} />
-                      <td className="whitespace-nowrap">{displayDate(row.booked_on)}</td>
-                      <td className="min-w-32 break-words">{row.description}</td>
-                      <td className="whitespace-nowrap text-right">
-                        <Amount cents={row.amount_cents} />
-                      </td>
-                    </tr>
+                  {(
+                    [
+                      ["largest", "Maiores"],
+                      ["pending", `Para conciliar (${pending.length})`],
+                      ["all", "Todas"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={detailView === value && !historyFilter}
+                      onClick={() => {
+                        setDetailView(value);
+                        setHistoryFilter(null);
+                      }}
+                      className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        detailView === value && !historyFilter
+                          ? "bg-card font-semibold shadow-sm ring-1 ring-border"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                    </button>
                   ))}
-                </Sheet>
-              ) : (
-                <p className="text-sm text-emerald-700 dark:text-emerald-400">
-                  Todas as movimentações deste mês estão conciliadas.
+                </div>
+                {historyFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setHistoryFilter(null)}
+                    className="rounded-full border px-2.5 py-1 text-xs hover:bg-muted"
+                  >
+                    {historyFilter} ✕
+                  </button>
+                )}
+              </div>
+              <TransactionList
+                userId={userId}
+                rows={
+                  historyFilter
+                    ? monthRows.filter((row) => bankHistoryGroup(row.description) === historyFilter)
+                    : detailView === "largest"
+                      ? largest
+                      : detailView === "pending"
+                        ? pending
+                        : [...monthRows].sort((x, y) => x.booked_on.localeCompare(y.booked_on))
+                }
+                openStatement={openStatement}
+                empty={
+                  detailView === "pending"
+                    ? "Todas as movimentações deste mês estão conciliadas."
+                    : "Nenhuma movimentação."
+                }
+              />
+              {detailView === "pending" && !historyFilter && pending.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {currency(pendingTotal)} em movimentações sem baixa vinculada.
                 </p>
               )}
             </section>
@@ -473,5 +608,131 @@ export function FinanceBankReports({
         )}
       </Card>
     </div>
+  );
+}
+
+/** Bank-app style list: direction icon, readable history, counterpart and amount. */
+function TransactionList({
+  rows,
+  userId,
+  openStatement,
+  empty = "Nenhuma movimentação.",
+}: {
+  rows: BankTransaction[];
+  userId: string;
+  openStatement?: () => void;
+  empty?: string;
+}) {
+  const queryClient = useQueryClient();
+  const [selected, setSelected] = useState<BankTransaction | null>(null);
+  const [reconciling, setReconciling] = useState<BankTransaction | null>(null);
+  if (!rows.length)
+    return (
+      <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+        {empty}
+      </p>
+    );
+  const parts = selected ? bankDescriptionParts(selected.description) : null;
+  return (
+    <>
+      <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+        {rows.map((row) => {
+          const { title, detail } = bankDescriptionParts(row.description);
+          const income = row.amount_cents > 0;
+          const Icon = income ? ArrowDownLeft : ArrowUpRight;
+          return (
+            <li key={row.id}>
+              <button
+                type="button"
+                onClick={() => (row.settlement_id ? setSelected(row) : setReconciling(row))}
+                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                <span
+                  aria-hidden
+                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${income ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-destructive/10 text-destructive"}`}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{title}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {displayDate(row.booked_on)}
+                    {detail ? ` · ${detail}` : ""}
+                  </span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span
+                    className={`block text-sm font-semibold tabular-nums ${income ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}
+                  >
+                    {income ? "+" : "−"}
+                    {currency(Math.abs(row.amount_cents))}
+                  </span>
+                  {!row.settlement_id && (
+                    <span className="text-[11px] text-amber-700 dark:text-amber-300">
+                      Para conciliar
+                    </span>
+                  )}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {reconciling && (
+        <ReconcileDialog
+          key={reconciling.id}
+          transaction={reconciling}
+          userId={userId}
+          close={() => setReconciling(null)}
+          refresh={async () => {
+            await queryClient.invalidateQueries({ queryKey: ["office-bank", userId] });
+            await queryClient.invalidateQueries({ queryKey: ["office-bank-periods", userId] });
+          }}
+        />
+      )}
+      {selected && parts && (
+        <Dialog open onOpenChange={(open) => !open && setSelected(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{parts.title}</DialogTitle>
+              <DialogDescription>
+                {parts.detail || "Movimentação do extrato Sicoob"}
+              </DialogDescription>
+            </DialogHeader>
+            <p
+              className={`text-3xl font-semibold tabular-nums ${selected.amount_cents > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}
+            >
+              {selected.amount_cents > 0 ? "+" : "−"}
+              {currency(Math.abs(selected.amount_cents))}
+            </p>
+            <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 text-sm">
+              <dt className="text-muted-foreground">Data</dt>
+              <dd>{displayDate(selected.booked_on)}</dd>
+              <dt className="text-muted-foreground">Tipo</dt>
+              <dd>{selected.amount_cents > 0 ? "Entrada" : "Saída"}</dd>
+              <dt className="text-muted-foreground">Conciliação</dt>
+              <dd>
+                <StatusChip status={selected.settlement_id ? "Conciliada" : "Pendente"} />
+              </dd>
+              <dt className="text-muted-foreground">Histórico do banco</dt>
+              <dd className="break-words text-xs text-muted-foreground">{selected.description}</dd>
+            </dl>
+            {openStatement && (
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelected(null);
+                    openStatement();
+                  }}
+                >
+                  Abrir no extrato
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }

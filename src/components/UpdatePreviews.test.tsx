@@ -5,6 +5,14 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates the CRM commercial report without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "crm-commercial-report" }));
+    expect(html).toContain("data-crm-report-preview");
+    expect(html).toContain("Conversão");
+    expect(html).toContain("Negociação");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
   it("illustrates the finance dashboard and chart of accounts without real actions", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-finance-dashboard" }));
     expect(html).toContain("data-finance-dashboard-preview");

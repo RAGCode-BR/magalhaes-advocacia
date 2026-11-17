@@ -77,7 +77,73 @@ export function bankHistoryGroup(description: string) {
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
-    .join(" ")
-    .toLocaleLowerCase("pt-BR");
-  return words ? words[0].toLocaleUpperCase("pt-BR") + words.slice(1) : "Sem histórico";
+    .join(" ");
+  return words ? sentence(words) : "Sem histórico";
+}
+
+const KEEP_UPPER = new Set([
+  "PIX",
+  "TED",
+  "DOC",
+  "RDC",
+  "IF",
+  "IOF",
+  "CDB",
+  "LTDA",
+  "ME",
+  "EPP",
+  "S/A",
+  "SA",
+  "INSS",
+  "FGTS",
+  "DARF",
+  "GPS",
+]);
+const sentence = (text: string) => {
+  const words = text.toLocaleLowerCase("pt-BR").split(/\s+/).filter(Boolean);
+  return words
+    .map((word, index) => {
+      const upper = word.toLocaleUpperCase("pt-BR");
+      if (KEEP_UPPER.has(upper.replace(/[^\p{L}/]/gu, ""))) return upper;
+      return index === 0 ? word.charAt(0).toLocaleUpperCase("pt-BR") + word.slice(1) : word;
+    })
+    .join(" ");
+};
+const titleCase = (text: string) =>
+  text
+    .toLocaleLowerCase("pt-BR")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) =>
+      ["da", "de", "do", "das", "dos", "e"].includes(word)
+        ? word
+        : KEEP_UPPER.has(word.toLocaleUpperCase("pt-BR"))
+          ? word.toLocaleUpperCase("pt-BR")
+          : word.charAt(0).toLocaleUpperCase("pt-BR") + word.slice(1),
+    )
+    .join(" ");
+
+/**
+ * Splits a raw bank description such as
+ * "PIX RECEBIDO - OUTRA IF · Recebimento Pix|@ANA PAULA DA CRUZ|@***.661.831-**|@"
+ * into a readable title ("PIX recebido - outra IF") and the counterpart name
+ * ("Ana Paula da Cruz"). Masked document numbers and repeated words are dropped.
+ */
+export function bankDescriptionParts(description: string) {
+  const [head, ...rest] = description.split(/\s+·\s+|\|/);
+  const title = sentence(head.trim()) || "Movimentação";
+  const seen = new Set([head.trim().toLocaleLowerCase("pt-BR")]);
+  const details = rest
+    .flatMap((part) => part.split("@"))
+    .map((part) => part.trim())
+    .filter((part) => part && !/[*]/.test(part) && !/^\d[\d./-]*$/.test(part))
+    .filter((part) => !/^recebimento pix$|^pagamento pix$/i.test(part))
+    .filter((part) => {
+      const key = part.toLocaleLowerCase("pt-BR");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((part) => (/^[\p{Lu}\s.&-]+$/u.test(part) ? titleCase(part) : part));
+  return { title, detail: details.join(" · ") };
 }

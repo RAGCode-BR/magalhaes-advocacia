@@ -148,6 +148,8 @@ try {
     "20261117120000_sicoob_connector.sql",
     "20261117160000_sicoob_history_boletos.sql",
     "20261117190000_finance_chart_of_accounts.sql",
+    "20261117200000_finance_delete_proposal.sql",
+    "20261117210000_bank_create_entry_reconcile.sql",
   ]) {
     await owner.query(await readFile(join(root, "supabase/migrations", filename), "utf8"));
   }
@@ -366,6 +368,51 @@ try {
     { code: "42501" },
   );
 
+  // Proposals without generated finance can be deleted; the CRM lead stays without
+  // the document, the deletion is audited and a retry is harmless.
+  const doomed = randomUUID();
+  await admin.query("SELECT public.office_finance_save_agreement($1,'quote',$2)", [
+    doomed,
+    payload({ workspace_id: workspaceId, proposal: { client: { name: "Excluir" } } }),
+  ]);
+  await assert.rejects(
+    outsider.query("SELECT public.office_finance_delete_proposal($1)", [doomed]),
+    { code: "42501" },
+  );
+  const doomedLead = (
+    await admin.query("SELECT id FROM public.crm_opportunities WHERE finance_agreement_id=$1", [
+      doomed,
+    ])
+  ).rows[0].id;
+  for (let attempt = 0; attempt < 2; attempt += 1)
+    await admin.query("SELECT public.office_finance_delete_proposal($1)", [doomed]);
+  assert.equal(
+    (
+      await admin.query(
+        "SELECT count(*)::int n FROM public.office_finance_agreements WHERE id=$1",
+        [doomed],
+      )
+    ).rows[0].n,
+    0,
+  );
+  const keptLead = (
+    await owner.query(
+      "SELECT proposal,finance_agreement_id FROM public.crm_opportunities WHERE id=$1",
+      [doomedLead],
+    )
+  ).rows[0];
+  assert.equal(keptLead.proposal, null);
+  assert.equal(keptLead.finance_agreement_id, null);
+  assert.equal(
+    (
+      await owner.query(
+        "SELECT count(*)::int n FROM public.office_finance_history WHERE entity_id=$1 AND action='DELETE'",
+        [doomed],
+      )
+    ).rows[0].n,
+    1,
+  );
+
   // A quote can target a new contact without a client record. The lead goes to
   // the active workspace; generating finance requires linking a client first.
   const prospectQuote = randomUUID();
@@ -440,6 +487,10 @@ try {
   await admin.query("SELECT public.office_finance_agreement_action($1,'generate')", [
     prospectQuote,
   ]);
+  await assert.rejects(
+    admin.query("SELECT public.office_finance_delete_proposal($1)", [prospectQuote]),
+    /já gerou lançamentos/,
+  );
   assert.equal(
     (
       await admin.query(

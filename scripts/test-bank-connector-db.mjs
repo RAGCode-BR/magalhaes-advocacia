@@ -143,6 +143,68 @@ export async function testBankConnector({ owner, admin, other, outsider, connect
     ).rows[0].n,
     2,
   );
+  // Create an entry straight from a bank movement: entry + settlement + reconciliation
+  // in one call, idempotent, admin-only, and refused when already reconciled.
+  const fresh = overview.rows[2].id;
+  const newEntry = randomUUID(),
+    newSettlement = randomUUID();
+  const createData = {
+    description: "Consulta avulsa",
+    category: "Honorários",
+    cost_center: "Administrativo",
+    client_id: "",
+  };
+  await assert.rejects(
+    outsider.query("SELECT public.office_bank_create_and_reconcile($1,$2,$3,$4)", [
+      fresh,
+      newEntry,
+      newSettlement,
+      createData,
+    ]),
+    { code: "42501" },
+  );
+  await assert.rejects(
+    admin.query("SELECT public.office_bank_create_and_reconcile($1,$2,$3,$4)", [
+      fresh,
+      randomUUID(),
+      randomUUID(),
+      { ...createData, category: "" },
+    ]),
+    /plano de contas/,
+  );
+  for (let attempt = 0; attempt < 2; attempt += 1)
+    await admin.query("SELECT public.office_bank_create_and_reconcile($1,$2,$3,$4)", [
+      fresh,
+      newEntry,
+      newSettlement,
+      createData,
+    ]);
+  const created = (
+    await owner.query(
+      "SELECT e.kind,e.amount_cents,e.settled_cents,e.client_id,e.cost_center,s.account_id,r.settlement_id FROM public.office_finance_entries e JOIN public.office_finance_settlements s ON s.entry_id=e.id JOIN public.office_bank_reconciliations r ON r.settlement_id=s.id WHERE e.id=$1",
+      [newEntry],
+    )
+  ).rows;
+  assert.equal(created.length, 1);
+  assert.deepEqual(created[0], {
+    kind: "income",
+    amount_cents: 10000,
+    settled_cents: 10000,
+    client_id: null,
+    cost_center: "Administrativo",
+    account_id: account,
+    settlement_id: newSettlement,
+  });
+  await assert.rejects(
+    admin.query("SELECT public.office_bank_create_and_reconcile($1,$2,$3,$4)", [
+      fresh,
+      randomUUID(),
+      randomUUID(),
+      createData,
+    ]),
+    /já está conciliada/,
+  );
+
   await release();
   lease = await claim();
   await importer.query(

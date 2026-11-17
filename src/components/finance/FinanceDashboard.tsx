@@ -14,7 +14,16 @@ import {
 import { currency, displayDate, isoToday, type OfficeFinanceData } from "@/lib/office-finance-data";
 import { loadBankOverview } from "@/lib/office-bank";
 import { FinanceBalanceChart, FinanceFlowChart, FinanceShareBars } from "./FinanceBalanceChart";
-import { KpiStrip, Sheet, SheetGutter, SicoobLogo, StatusChip } from "./FinanceSheet";
+import {
+  Amount,
+  DetailRows,
+  KpiStrip,
+  Sheet,
+  SheetGutter,
+  SicoobLogo,
+  StatusChip,
+  type DetailRow,
+} from "./FinanceSheet";
 
 const monthLabel = (period: string) =>
   format(parseISO(period + "-01"), "MMM/yy", { locale: ptBR }).replace(/^./, (c) =>
@@ -118,6 +127,49 @@ export function FinanceDashboard({
     .sort((a, b) => b.cents - a.cents)
     .slice(0, 6);
 
+  // Records behind the month indicators (cash basis: settlements of the month).
+  const settledRows = (kind: FinanceKind): DetailRow[] =>
+    ledger.settlements
+      .filter((item) => !item.reversed_at && item.settled_on.startsWith(month))
+      .flatMap((item) => {
+        const entry = kinds.get(item.entry_id);
+        if (!entry || entry.kind !== kind) return [];
+        return [
+          {
+            key: item.id,
+            date: item.settled_on,
+            title: entry.description,
+            subtitle: [clientNames.get(entry.client_id ?? "") ?? entry.supplier, entry.category]
+              .filter(Boolean)
+              .join(" · "),
+            value: currency(item.amount_cents),
+          },
+        ];
+      })
+      .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+  const byPlan = new Map<string, number>();
+  for (const item of ledger.settlements) {
+    const entry = kinds.get(item.entry_id);
+    if (!entry || item.reversed_at || !item.settled_on.startsWith(month)) continue;
+    byPlan.set(
+      entry.category,
+      (byPlan.get(entry.category) ?? 0) +
+        (entry.kind === "income" ? item.amount_cents : -item.amount_cents),
+    );
+  }
+  const overdueRows: DetailRow[] = open
+    .filter((entry) => entry.kind === "income" && entry.due_date < today)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date))
+    .map((entry) => ({
+      key: entry.id,
+      date: entry.due_date,
+      title: entry.description,
+      subtitle: `${clientNames.get(entry.client_id ?? "") ?? "Sem cliente"} · vencido há ${Math.round(
+        (Date.parse(today) - Date.parse(entry.due_date)) / 86400000,
+      )} dias`,
+      value: currency(entry.amount_cents - entry.settled_cents),
+    }));
+
   const connection = bank.data?.connection;
   const bankBalance = bank.data?.balances?.ledger;
   const bankTotals = bank.data?.totals;
@@ -168,6 +220,12 @@ export function FinanceDashboard({
             value: currency(current.income),
             tone: "income",
             onClick: () => navigate("entries", { kind: "income", quick: "settled" }),
+            actionLabel: "Ver contas recebidas",
+            summary:
+              "Soma das baixas de recebimento registradas neste mês, em todas as contas. Comparação com o total recebido no mês anterior.",
+            detail: () => (
+              <DetailRows rows={settledRows("income")} total={currency(current.income)} />
+            ),
             hint:
               variation === null
                 ? "Sem base no mês anterior"
@@ -178,6 +236,11 @@ export function FinanceDashboard({
             value: currency(current.expense),
             tone: "expense",
             onClick: () => navigate("entries", { kind: "expense", quick: "settled" }),
+            actionLabel: "Ver contas pagas",
+            summary: "Soma das baixas de pagamento registradas neste mês, em todas as contas.",
+            detail: () => (
+              <DetailRows rows={settledRows("expense")} total={currency(current.expense)} />
+            ),
             hint: `Mês anterior: ${currency(previous.expense)}`,
           },
           {
@@ -185,6 +248,21 @@ export function FinanceDashboard({
             value: currency(current.balance),
             tone: current.balance < 0 ? "expense" : "balance",
             onClick: () => navigate("reports"),
+            actionLabel: "Abrir relatórios",
+            summary:
+              "Recebido menos pago no mês. A margem é o resultado dividido pelo recebido. Abaixo, o resultado de cada conta do plano.",
+            detail: () => (
+              <DetailRows
+                rows={[...byPlan.entries()]
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([name, cents]) => ({
+                    key: name,
+                    title: name,
+                    value: <Amount cents={cents} />,
+                  }))}
+                total={<Amount cents={current.balance} />}
+              />
+            ),
             hint: margin === null ? "Sem receitas no mês" : `Margem de ${margin}%`,
           },
           {
@@ -192,6 +270,16 @@ export function FinanceDashboard({
             value: currency(receivable.overdue),
             tone: receivable.overdue ? "alert" : "income",
             onClick: () => navigate("entries", { kind: "income", quick: "overdue" }),
+            actionLabel: "Ver recebimentos vencidos",
+            summary:
+              "Valores a receber com vencimento anterior a hoje e ainda sem baixa total, do mais antigo para o mais recente.",
+            detail: () => (
+              <DetailRows
+                rows={overdueRows}
+                total={currency(receivable.overdue)}
+                empty="Nenhum recebimento vencido."
+              />
+            ),
             hint: receivable.overdueCount
               ? `${receivable.overdueCount} ${receivable.overdueCount === 1 ? "recebimento vencido" : "recebimentos vencidos"}`
               : "Nenhum recebimento vencido",

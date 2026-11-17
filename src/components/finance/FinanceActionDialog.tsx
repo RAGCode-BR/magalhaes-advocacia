@@ -15,6 +15,10 @@ export type FinanceAction = {
   title: string;
   explanation: string;
   needsReason?: boolean;
+  /** Button text, e.g. "Excluir proposta"; defaults to Confirmar. */
+  confirmLabel?: string;
+  destructive?: boolean;
+  successMessage?: string;
   run: (reason: string) => Promise<unknown>;
 };
 
@@ -33,7 +37,7 @@ export function FinanceActionDialog({
     onSuccess: async () => {
       await refresh();
       close();
-      toast.success("Operação registrada.");
+      toast.success(action.successMessage ?? "Operação registrada.");
     },
     onError: (error: Error) =>
       toast.error(error.message || "Não foi possível concluir a operação."),
@@ -72,8 +76,11 @@ export function FinanceActionDialog({
             <Button type="button" variant="outline" disabled={mutation.isPending} onClick={close}>
               Voltar
             </Button>
-            <Button disabled={mutation.isPending || (action.needsReason && !reason.trim())}>
-              {mutation.isPending ? "Registrando…" : "Confirmar"}
+            <Button
+              variant={action.destructive ? "destructive" : "default"}
+              disabled={mutation.isPending || (action.needsReason && !reason.trim())}
+            >
+              {mutation.isPending ? "Registrando…" : (action.confirmLabel ?? "Confirmar")}
             </Button>
           </div>
         </form>

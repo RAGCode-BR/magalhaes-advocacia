@@ -123,28 +123,45 @@ export function FinanceFlowChart({
   label,
   incomeLabel = "Entradas",
   expenseLabel = "Saídas",
+  format = currency,
+  axisFormat = (value: number) => compact.format(value / 100),
+  showResult = true,
+  incomeColor = "bg-emerald-600 dark:bg-emerald-400",
+  expenseColor = "bg-destructive",
+  integer = false,
 }: {
   data: { key: string; label: string; income: number; expense: number }[];
   label: string;
   incomeLabel?: string;
   expenseLabel?: string;
+  /** Value formatter; defaults to cents as BRL. Pass one for counts. */
+  format?: (value: number) => string;
+  axisFormat?: (value: number) => string;
+  /** Shows "Resultado" (first minus second series) in the tooltip. */
+  showResult?: boolean;
+  incomeColor?: string;
+  expenseColor?: string;
+  /** Whole-number series (counts): gridlines land on integers. */
+  integer?: boolean;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(1, ...data.flatMap((d) => [d.income, d.expense]));
   // Round the axis up to a clean value: 1, 2 or 5 × 10ⁿ, split in quarters.
   const magnitude = 10 ** Math.floor(Math.log10(max));
-  const top = ([1, 2, 5, 10].find((f) => f * magnitude >= max) ?? 10) * magnitude;
+  const top = integer
+    ? Math.max(4, Math.ceil(max / 4) * 4)
+    : ([1, 2, 5, 10].find((f) => f * magnitude >= max) ?? 10) * magnitude;
   const grid = [top, top * 0.75, top * 0.5, top * 0.25, 0];
   return (
     <figure className="min-w-0">
       <figcaption className="sr-only">{label}</figcaption>
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-emerald-600 dark:bg-emerald-400" />
+          <span className={`h-2.5 w-2.5 rounded-sm ${incomeColor}`} />
           {incomeLabel}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-destructive" />
+          <span className={`h-2.5 w-2.5 rounded-sm ${expenseColor}`} />
           {expenseLabel}
         </span>
       </div>
@@ -159,7 +176,7 @@ export function FinanceFlowChart({
               className="relative border-t border-dashed border-border/70 first:border-transparent last:border-solid last:border-border"
             >
               <span className="absolute -left-14 -top-2 w-12 text-right text-[10px] tabular-nums text-muted-foreground">
-                {compact.format(value / 100)}
+                {axisFormat(value)}
               </span>
             </div>
           ))}
@@ -175,11 +192,11 @@ export function FinanceFlowChart({
               className={`flex flex-1 items-end justify-center gap-[2px] rounded-md transition-colors ${hover === i ? "bg-muted/60" : ""}`}
             >
               <span
-                className="w-full max-w-4 rounded-t bg-emerald-600 dark:bg-emerald-400"
+                className={`w-full max-w-4 rounded-t ${incomeColor}`}
                 style={{ height: `${(d.income / top) * 100}%` }}
               />
               <span
-                className="w-full max-w-4 rounded-t bg-destructive"
+                className={`w-full max-w-4 rounded-t ${expenseColor}`}
                 style={{ height: `${(d.expense / top) * 100}%` }}
               />
             </div>
@@ -195,16 +212,18 @@ export function FinanceFlowChart({
                 <p className="mb-1 font-medium">{d.label}</p>
                 <p className="flex justify-between gap-2">
                   <span className="text-muted-foreground">{incomeLabel}</span>
-                  <span className="tabular-nums">{currency(d.income)}</span>
+                  <span className="tabular-nums">{format(d.income)}</span>
                 </p>
                 <p className="flex justify-between gap-2">
                   <span className="text-muted-foreground">{expenseLabel}</span>
-                  <span className="tabular-nums">{currency(d.expense)}</span>
+                  <span className="tabular-nums">{format(d.expense)}</span>
                 </p>
-                <p className="mt-1 flex justify-between gap-2 border-t pt-1 font-medium">
-                  <span>Resultado</span>
-                  <span className="tabular-nums">{currency(d.income - d.expense)}</span>
-                </p>
+                {showResult && (
+                  <p className="mt-1 flex justify-between gap-2 border-t pt-1 font-medium">
+                    <span>Resultado</span>
+                    <span className="tabular-nums">{format(d.income - d.expense)}</span>
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -224,8 +243,8 @@ export function FinanceFlowChart({
           {data.map((d) => (
             <tr key={d.key}>
               <td>{d.label}</td>
-              <td>{currency(d.income)}</td>
-              <td>{currency(d.expense)}</td>
+              <td>{format(d.income)}</td>
+              <td>{format(d.expense)}</td>
             </tr>
           ))}
         </tbody>

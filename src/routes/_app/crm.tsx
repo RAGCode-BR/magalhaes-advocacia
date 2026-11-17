@@ -2,9 +2,11 @@ import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  BarChart3,
   Building2,
   CalendarDays,
   ChevronLeft,
+  Eye,
   ChevronRight,
   FileDown,
   FileText,
@@ -20,8 +22,11 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CrmReport } from "@/components/crm/CrmReport";
+import { ProposalPdfViewer } from "@/components/finance/ProposalPdfViewer";
 import { useAuth } from "@/hooks/use-auth";
 import { useClients } from "@/hooks/use-data";
+import { ClientPicker } from "@/components/ClientPicker";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import {
@@ -116,7 +121,7 @@ function CrmPage() {
   const workspaceId = activeWorkspace?.id;
   const queryKey = ["crm-opportunities", workspaceId];
   const stagesQueryKey = ["crm-pipeline-stages", workspaceId];
-  const [tab, setTab] = useState<"pipeline" | "origins">("pipeline");
+  const [tab, setTab] = useState<"pipeline" | "origins" | "report">("pipeline");
   const [search, setSearch] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Opportunity | null>(null);
@@ -425,6 +430,13 @@ function CrmPage() {
         >
           <MapPin className="h-4 w-4" /> Origem de Leads
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("report")}
+          className={`flex items-center gap-2 border-b-2 px-1 pb-3 ${tab === "report" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
+        >
+          <BarChart3 className="h-4 w-4" /> Relatório
+        </button>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2 text-xs">
@@ -677,6 +689,19 @@ function CrmPage() {
             );
           })}
         </div>
+      ) : tab === "report" ? (
+        <CrmReport
+          leads={all}
+          stages={stages}
+          clientNames={clientNames}
+          today={new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Sao_Paulo" }).format(
+            new Date(),
+          )}
+          openLead={(id) => {
+            const lead = all.find((item) => item.id === id);
+            if (lead) openEdit(lead);
+          }}
+        />
       ) : (
         <div className="rounded-xl border bg-card p-5">
           <h2 className="text-lg font-semibold">Origem de Leads</h2>
@@ -850,32 +875,20 @@ function CrmPage() {
               {form.company_mode === "registered" ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="crm-client">Selecionar cliente cadastrado</Label>
-                  <Select
+                  <ClientPicker
+                    id="crm-client"
+                    clients={clients.data ?? []}
                     value={form.client_id}
-                    onValueChange={(clientId) => {
-                      const selected = clients.data?.find((client) => client.id === clientId);
+                    placeholder="Digite o nome da empresa cadastrada"
+                    disabled={clients.isLoading || clients.isError}
+                    onChange={(clientId, selected) =>
                       setForm({
                         ...form,
                         client_id: clientId,
                         company_name: selected?.name ?? form.company_name,
-                      });
-                    }}
-                    disabled={clients.isLoading || clients.isError}
-                  >
-                    <SelectTrigger id="crm-client">
-                      <SelectValue placeholder="Selecione uma empresa cadastrada" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(clients.data ?? [])
-                        .filter((client) => client.is_active || client.id === form.client_id)
-                        .map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.name}
-                            {client.is_active ? "" : " (inativa)"}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                      })
+                    }
+                  />
                   {clients.isLoading && (
                     <p className="text-xs text-muted-foreground">Carregando empresas…</p>
                   )}
@@ -1043,6 +1056,7 @@ function CrmPage() {
 
 function ProposalPanel({ doc }: { doc: ProposalDocument }) {
   const [busy, setBusy] = useState(false);
+  const [viewing, setViewing] = useState(false);
   const plan =
     doc.fee_model === "monthly"
       ? `Mensal a partir de ${brDate(doc.first_due)}`
@@ -1064,18 +1078,25 @@ function ProposalPanel({ doc }: { doc: ProposalDocument }) {
               {doc.area}, {doc.practice === "consultivo" ? "consultivo" : "contencioso"}
             </p>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              await downloadLeadProposal(doc);
-              setBusy(false);
-            }}
-          >
-            <FileDown className="h-4 w-4" /> {busy ? "Gerando…" : "Baixar PDF"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" onClick={() => setViewing(true)}>
+              <Eye className="h-4 w-4" /> Visualizar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                await downloadLeadProposal(doc);
+                setBusy(false);
+              }}
+            >
+              <FileDown className="h-4 w-4" /> {busy ? "Gerando…" : "Baixar PDF"}
+            </Button>
+          </div>
+          {viewing && <ProposalPdfViewer doc={doc} close={() => setViewing(false)} />}
         </div>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
           <div>

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileDown, KanbanSquare, Plus, Search, UserPlus } from "lucide-react";
+import { Eye, FileDown, KanbanSquare, Plus, Search, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useClients, useTasks } from "@/hooks/use-data";
+import { ClientPicker } from "@/components/ClientPicker";
 import { cn } from "@/lib/utils";
 import { financeCents, type FinanceAgreement } from "@/lib/office-finance";
 import {
@@ -47,6 +48,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { FinanceActionDialog, type FinanceAction } from "./FinanceActionDialog";
 import { ProposalRows } from "./ProposalRows";
+import { ProposalPdfViewer } from "./ProposalPdfViewer";
 
 const brlInput = (cents: number) =>
   (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -95,6 +97,7 @@ export function FinanceAgreements({
   const [search, setSearch] = useState("");
   const [downloading, setDownloading] = useState<string | null>(null);
   const [linking, setLinking] = useState<FinanceAgreement | null>(null);
+  const [viewing, setViewing] = useState<ProposalDocument | null>(null);
   const isQuote = kind === "quote";
   const title = isQuote ? "Propostas" : "Contratos recorrentes";
   const clientOf = (item: FinanceAgreement) => clients.find((c) => c.id === item.client_id);
@@ -126,12 +129,16 @@ export function FinanceAgreements({
     });
   }
 
+  function documentOf(item: FinanceAgreement) {
+    const issued = item.created_at?.slice(0, 10) ?? isoToday();
+    const process = tasks.find((task) => task.id === item.process_id)?.title;
+    return proposalFromAgreement(item, clientOf(item), issued, process);
+  }
+
   async function pdf(item: FinanceAgreement) {
     setDownloading(item.id);
     try {
-      const issued = item.created_at?.slice(0, 10) ?? isoToday();
-      const process = tasks.find((task) => task.id === item.process_id)?.title;
-      await downloadProposal(proposalFromAgreement(item, clientOf(item), issued, process));
+      await downloadProposal(documentOf(item));
     } catch (error) {
       toast.error((error as Error).message || "Não foi possível gerar o PDF.");
     } finally {
@@ -258,6 +265,11 @@ export function FinanceAgreements({
                 )}
                 <div className="mt-auto flex flex-wrap items-center gap-2 border-t pt-3">
                   {isQuote && (
+                    <Button size="sm" onClick={() => setViewing(documentOf(item))}>
+                      <Eye /> Visualizar
+                    </Button>
+                  )}
+                  {isQuote && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -313,6 +325,27 @@ export function FinanceAgreements({
                         Gerar financeiro
                       </Button>
                     )}
+                  {isQuote && !item.generated_at && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      aria-label={`Excluir proposta ${item.description}`}
+                      onClick={() =>
+                        setAction({
+                          title: "Excluir proposta",
+                          explanation: `A proposta “${item.description}” será excluída e o PDF deixará de aparecer no lead do CRM. O lead continua no CRM e a exclusão fica registrada no Histórico do financeiro. Esta ação não pode ser desfeita.`,
+                          confirmLabel: "Excluir proposta",
+                          destructive: true,
+                          successMessage: "Proposta excluída.",
+                          run: () =>
+                            financeRpc("office_finance_delete_proposal", { target: item.id }),
+                        })
+                      }
+                    >
+                      <Trash2 /> Excluir
+                    </Button>
+                  )}
                   {item.status === "active" && kind === "recurring" && (
                     <Button
                       variant="outline"
@@ -348,6 +381,7 @@ export function FinanceAgreements({
       {action && (
         <FinanceActionDialog action={action} close={() => setAction(null)} refresh={refresh} />
       )}
+      {viewing && <ProposalPdfViewer doc={viewing} close={() => setViewing(null)} />}
       {linking && (
         <LinkClientDialog item={linking} close={() => setLinking(null)} refresh={refresh} />
       )}
@@ -382,25 +416,19 @@ function ClientProcessFields({
   const { data: tasks = [] } = useTasks();
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <label className={fieldClass}>
+      <div className={fieldClass}>
         Cliente
-        <select
+        <ClientPicker
+          aria-label="Cliente"
           required
-          className={selectClass}
+          clients={clients}
           value={clientId}
-          onChange={(event) => {
-            setClientId(event.target.value);
+          onChange={(id) => {
+            setClientId(id);
             setProcessId("");
           }}
-        >
-          <option value="">Selecione</option>
-          {clients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.name}
-            </option>
-          ))}
-        </select>
-      </label>
+        />
+      </div>
       <label className={fieldClass}>
         Processo
         <select
@@ -1303,19 +1331,12 @@ function LinkClientDialog({
             <span className="block flex-1 space-y-2">
               <span className="block font-medium">Usar um cliente já cadastrado</span>
               {mode === "existing" && (
-                <select
+                <ClientPicker
                   aria-label="Cliente cadastrado"
-                  className={selectClass}
+                  clients={clients}
                   value={existing}
-                  onChange={(event) => setExisting(event.target.value)}
-                >
-                  <option value="">Selecione</option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setExisting}
+                />
               )}
             </span>
           </label>

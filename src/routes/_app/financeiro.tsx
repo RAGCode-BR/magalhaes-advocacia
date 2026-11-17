@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useClients, useTasks } from "@/hooks/use-data";
+import { ClientPicker } from "@/components/ClientPicker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -358,21 +359,16 @@ function FinancePage({ userId }: { userId: string }) {
               })}
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
-              <label className={fieldClass}>
+              <div className={fieldClass}>
                 Cliente
-                <select
-                  className={selectClass}
+                <ClientPicker
+                  aria-label="Filtrar por cliente"
+                  clients={clients}
                   value={clientFilter}
-                  onChange={(event) => setClientFilter(event.target.value)}
-                >
-                  <option value="">Todos os clientes</option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  emptyLabel="Todos os clientes"
+                  onChange={setClientFilter}
+                />
+              </div>
               <label className={fieldClass}>
                 Vencimento inicial
                 <Input
@@ -583,7 +579,14 @@ function FinancePage({ userId }: { userId: string }) {
         <FinanceRegisters registers={ledger.data.registers} refresh={refresh} />
       )}
       {ledger.data && section === "reports" && (
-        <ReportsSection userId={userId} ledger={ledger.data} />
+        <ReportsSection
+          userId={userId}
+          ledger={ledger.data}
+          openStatement={() => {
+            setOpenBank(true);
+            setSection("accounts");
+          }}
+        />
       )}
       {section === "boletos" && (
         <FinanceBoletos
@@ -748,24 +751,19 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
             )}
             {income && (
               <>
-                <label className={fieldClass}>
+                <div className={fieldClass}>
                   Cliente
-                  <select
-                    className={selectClass}
+                  <ClientPicker
+                    aria-label="Cliente"
+                    clients={clients}
                     value={clientId}
-                    onChange={(event) => {
-                      setClientId(event.target.value);
+                    emptyLabel="Sem cliente (receita avulsa)"
+                    onChange={(id) => {
+                      setClientId(id);
                       setProcessId("");
                     }}
-                  >
-                    <option value="">Sem cliente (receita avulsa)</option>
-                    {clients.map((client) => (
-                      <option key={client.id} value={client.id}>
-                        {client.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  />
+                </div>
                 <label className={fieldClass}>
                   Processo
                   <select
@@ -1151,7 +1149,15 @@ function EntryDetails({
   );
 }
 
-function ReportsSection({ userId, ledger }: { userId: string; ledger: OfficeFinanceData }) {
+function ReportsSection({
+  userId,
+  ledger,
+  openStatement,
+}: {
+  userId: string;
+  ledger: OfficeFinanceData;
+  openStatement: () => void;
+}) {
   const [view, setView] = useState<"office" | "bank">("bank");
   return (
     <div className="space-y-4">
@@ -1184,7 +1190,7 @@ function ReportsSection({ userId, ledger }: { userId: string; ledger: OfficeFina
       {view === "office" ? (
         <FinanceReports ledger={ledger} />
       ) : (
-        <FinanceBankReports userId={userId} ledger={ledger} />
+        <FinanceBankReports userId={userId} ledger={ledger} openStatement={openStatement} />
       )}
     </div>
   );
