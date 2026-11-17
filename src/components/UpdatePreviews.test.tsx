@@ -5,6 +5,15 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates the finance dashboard and chart of accounts without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-finance-dashboard" }));
+    expect(html).toContain("data-finance-dashboard-preview");
+    expect(html).toContain("Saldo consolidado");
+    expect(html).toContain("Sicoob");
+    expect(html).toContain("2.2.01");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
   it("illustrates the monthly retainer proposal for two companies without real actions", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-proposal-retainer" }));
     expect(html).toContain("data-proposal-retainer-form");

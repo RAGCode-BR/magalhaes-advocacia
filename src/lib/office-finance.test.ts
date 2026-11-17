@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { bankHistoryGroup } from "./office-bank";
 import {
+  financeDre,
+  financePlanSort,
+  type FinanceRegister as PlanItem,
   financeCents,
   financeInstallments,
   financeStatus,
@@ -102,5 +106,80 @@ describe("finance account balances and exports", () => {
     expect(financeCsv([["=HYPERLINK(1)", "-20,50", 'Nome "citado"']])).toContain(
       '"' + "'=HYPERLINK(1)" + '";"-20,50";"Nome ""citado"""',
     );
+  });
+});
+
+describe("chart of accounts and DRE", () => {
+  const plan = (code: string, name: string, nature: "income" | "expense"): PlanItem => ({
+    id: code,
+    kind: "category",
+    name,
+    code,
+    nature,
+    contact: null,
+    notes: null,
+    active: true,
+  });
+  const registers = [
+    plan("2", "Despesas", "expense"),
+    plan("2.10", "Marketing", "expense"),
+    plan("2.2", "Ocupação", "expense"),
+    plan("2.2.01", "Aluguel", "expense"),
+    plan("1", "Receitas", "income"),
+    plan("1.1", "Honorários", "income"),
+  ];
+
+  it("orders codes numerically, so 2.2 comes before 2.10", () => {
+    expect([...registers].sort(financePlanSort).map((item) => item.code)).toEqual([
+      "1",
+      "1.1",
+      "2",
+      "2.2",
+      "2.2.01",
+      "2.10",
+    ]);
+  });
+
+  it("adds sub-accounts into their group and keeps categories outside the plan", () => {
+    const entry = (id: string, kind: "income" | "expense", category: string, cents: number) => ({
+      id,
+      kind,
+      description: id,
+      category,
+      supplier: null,
+      notes: null,
+      client_id: null,
+      process_id: null,
+      installment: 1,
+      installment_count: 1,
+      competence_date: "2026-11-05",
+      due_date: "2026-11-05",
+      amount_cents: cents,
+      settled_cents: cents,
+    });
+    const entries = [
+      entry("a", "income", "Honorários", 10000),
+      entry("b", "expense", "Aluguel", 3000),
+      entry("c", "expense", "Cafezinho", 500),
+    ];
+    const settlements = entries.map((e) => ({
+      id: "s" + e.id,
+      entry_id: e.id,
+      amount_cents: e.amount_cents,
+      settled_on: "2026-11-05",
+    }));
+    const dre = financeDre(entries, settlements, registers, ["2026-10", "2026-11"], "cash");
+    expect(dre.income.total).toEqual([0, 10000]);
+    expect(dre.expense.rows.map((row) => [row.name, row.group, row.values[1]])).toEqual([
+      ["Ocupação", true, 3000],
+      ["Aluguel", false, 3000],
+      ["Cafezinho", false, 500],
+    ]);
+    expect(dre.result).toEqual([0, 6500]);
+  });
+
+  it("groups bank descriptions by their first words", () => {
+    expect(bankHistoryGroup("PIX RECEBIDO 12/11 FULANO")).toBe("Pix recebido");
+    expect(bankHistoryGroup("123")).toBe("Sem histórico");
   });
 });

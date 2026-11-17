@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { ArrowLeftRight, Layers, Pencil, Plus, Wallet } from "lucide-react";
+import { FinanceBalanceChart } from "./FinanceBalanceChart";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,7 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { financeCents, financeAccountBalance, type FinanceAccount } from "@/lib/office-finance";
+import {
+  financeBalanceSeries,
+  financeCents,
+  financeAccountBalance,
+  type FinanceAccount,
+} from "@/lib/office-finance";
 import {
   currency,
   displayDate,
@@ -21,84 +28,236 @@ import {
   financeRpc,
   type OfficeFinanceData,
 } from "@/lib/office-finance-data";
+import { isSicoobAccount, loadBankOverview } from "@/lib/office-bank";
+import { FinanceBank } from "./FinanceBank";
+import { FinanceStatement } from "./FinanceReports";
+import { SicoobLogo } from "./FinanceSheet";
 
 export function FinanceAccounts({
   ledger,
+  userId,
   refresh,
+  openBank = false,
 }: {
   ledger: OfficeFinanceData;
+  userId: string;
   refresh: () => Promise<void>;
+  /** Opens the Sicoob statement directly (from the dashboard). */
+  openBank?: boolean;
 }) {
   const [editing, setEditing] = useState<(Partial<FinanceAccount> & { id: string }) | null>(null);
   const [transferId, setTransferId] = useState<string | null>(null);
-  const names = new Map(ledger.accounts.map((account) => [account.id, account.name]));
+  const today = isoToday();
+  // Same query key as the Sicoob view's first page, so this shares its cache.
+  const month = today.slice(0, 7);
+  const bank = useQuery({
+    queryKey: ["office-bank", userId, month, "all", undefined],
+    queryFn: () => loadBankOverview(month, "all"),
+    staleTime: 30000,
+  });
+  const bankAccountId = bank.data?.connection?.account_id;
+  const isBank = (account: FinanceAccount) =>
+    account.id === bankAccountId || isSicoobAccount(account.name);
+  const ordered = [...ledger.accounts].sort(
+    (a, b) =>
+      Number(b.active) - Number(a.active) ||
+      Number(isBank(b)) - Number(isBank(a)) ||
+      a.name.localeCompare(b.name, "pt-BR"),
+  );
+  const [chosenId, setSelectedId] = useState<string | null>(null);
+  // Until the person picks a card, follow the dashboard's request to open Sicoob.
+  const bankDefault = openBank
+    ? (ledger.accounts.find((account) => isBank(account))?.id ?? "")
+    : "";
+  const selectedId = chosenId ?? bankDefault;
+  const selected = ledger.accounts.find((account) => account.id === selectedId);
+  const [view, setView] = useState<"bank" | "system">("bank");
+  const balances = new Map(
+    ledger.accounts.map((account) => [
+      account.id,
+      financeAccountBalance(account, ledger.entries, ledger.settlements, ledger.transfers, today),
+    ]),
+  );
+  const total = ledger.accounts
+    .filter((account) => account.active)
+    .reduce((sum, account) => sum + (balances.get(account.id) ?? 0), 0);
+  const active = ledger.accounts.filter((account) => account.active);
+  const series = financeBalanceSeries(
+    ledger.accounts,
+    ledger.entries,
+    ledger.settlements,
+    ledger.transfers,
+    today,
+  );
+  const monthAgo = series[series.length - 31]?.cents ?? 0;
+  const change = total - monthAgo;
+  const bankBalance = bank.data?.balances?.ledger;
   return (
-    <Card className="space-y-4 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Contas financeiras</h2>
-          <p className="text-sm text-muted-foreground">
-            Saldos calculados pelos registros manuais do escritório.
-          </p>
+    <div className="space-y-4">
+      <Card className="overflow-hidden p-0">
+        <div className="grid gap-6 p-5 md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] md:p-6">
+          <div className="flex min-w-0 flex-col justify-between gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Saldo consolidado</p>
+              <p className="mt-1 break-words text-[2.5rem] font-semibold leading-none tracking-tight tabular-nums">
+                {currency(total)}
+              </p>
+              <p className="mt-2 text-sm">
+                <span
+                  className={`font-medium tabular-nums ${change < 0 ? "text-destructive" : "text-emerald-700 dark:text-emerald-400"}`}
+                >
+                  {change >= 0 ? "+" : "−"}
+                  {currency(Math.abs(change))}
+                </span>{" "}
+                <span className="text-muted-foreground">nos últimos 30 dias</span>
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={active.length < 2}
+                onClick={() => setTransferId(crypto.randomUUID())}
+              >
+                <ArrowLeftRight className="h-3.5 w-3.5" /> Transferir
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setEditing({ id: crypto.randomUUID(), active: true })}
+              >
+                <Plus className="h-3.5 w-3.5" /> Nova conta
+              </Button>
+            </div>
+          </div>
+          <div className="min-w-0">
+            <p className="mb-2 text-xs text-muted-foreground">Evolução do saldo · 90 dias</p>
+            <FinanceBalanceChart points={series} label="Evolução do saldo consolidado" />
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            disabled={ledger.accounts.filter((account) => account.active).length < 2}
-            onClick={() => setTransferId(crypto.randomUUID())}
+        <div className="grid gap-3 border-t bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-4 md:px-6">
+          <button
+            type="button"
+            aria-pressed={!selectedId}
+            onClick={() => setSelectedId("")}
+            className={`flex min-h-28 flex-col justify-between rounded-xl border bg-card p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              !selectedId ? "ring-2 ring-primary" : "hover:border-foreground/20"
+            }`}
           >
-            Registrar transferência
-          </Button>
-          <Button onClick={() => setEditing({ id: crypto.randomUUID(), active: true })}>
-            Nova conta
-          </Button>
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <Layers className="h-4 w-4 text-muted-foreground" /> Todas as contas
+            </span>
+            <span>
+              <span className="block text-xs text-muted-foreground">
+                {active.length} {active.length === 1 ? "conta ativa" : "contas ativas"}
+              </span>
+              <span className="text-lg font-semibold tabular-nums">{currency(total)}</span>
+            </span>
+          </button>
+          {ordered.map((account) => {
+            const balance = balances.get(account.id) ?? 0;
+            const bankAccount = isBank(account);
+            const isSelected = selectedId === account.id;
+            return (
+              <div key={account.id} className="group relative">
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => {
+                    setSelectedId(account.id);
+                    setView(bankAccount ? "bank" : "system");
+                  }}
+                  className={`flex min-h-28 w-full flex-col justify-between rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    bankAccount
+                      ? "border-transparent bg-[linear-gradient(135deg,#003641_0%,#00544f_55%,#00ae9d_130%)] text-white"
+                      : "bg-card"
+                  } ${isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : "hover:border-foreground/20"} ${
+                    account.active ? "" : "opacity-60"
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-2 pr-7 text-sm font-medium">
+                    {bankAccount ? (
+                      <SicoobLogo className="h-3.5" />
+                    ) : (
+                      <Wallet className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="truncate">{account.name}</span>
+                  </span>
+                  <span>
+                    <span
+                      className={`block text-xs ${bankAccount ? "text-white/70" : "text-muted-foreground"}`}
+                    >
+                      {bankAccount && bankBalance
+                        ? `No banco: ${currency(bankBalance.amount_cents)}`
+                        : account.active
+                          ? "Saldo no sistema"
+                          : "Conta inativa"}
+                    </span>
+                    <span
+                      className={`text-lg font-semibold tabular-nums ${balance < 0 && !bankAccount ? "text-destructive" : ""}`}
+                    >
+                      {currency(balance)}
+                    </span>
+                  </span>
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`absolute right-2 top-2 h-7 w-7 ${bankAccount ? "text-white hover:bg-white/15 hover:text-white" : ""}`}
+                  aria-label={`Editar conta ${account.name}`}
+                  onClick={() => setEditing(account)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            );
+          })}
         </div>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {ledger.accounts.map((account) => (
-          <article className="space-y-2 rounded-lg border p-4" key={account.id}>
-            <h3 className="font-medium">
-              {account.name}
-              {!account.active && " · Inativa"}
-            </h3>
-            <p className="text-2xl font-semibold tabular-nums">
-              {currency(
-                financeAccountBalance(
-                  account,
-                  ledger.entries,
-                  ledger.settlements,
-                  ledger.transfers,
-                  isoToday(),
-                ),
-              )}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Abertura {displayDate(account.opening_date)} ·{" "}
-              {currency(Number(account.opening_cents))}
-            </p>
-            <Button variant="outline" size="sm" onClick={() => setEditing(account)}>
-              Editar conta
-            </Button>
-          </article>
-        ))}
-      </div>
-      {!ledger.accounts.length && (
-        <p className="py-5 text-sm text-muted-foreground">
-          Cadastre a conta corrente ou o caixa do escritório.
-        </p>
-      )}
-      <h3 className="font-medium">Transferências registradas</h3>
-      <ul className="divide-y text-sm">
-        {[...ledger.transfers]
-          .sort((a, b) => b.transferred_on.localeCompare(a.transferred_on))
-          .map((transfer) => (
-            <li className="py-3" key={transfer.id}>
-              {displayDate(transfer.transferred_on)} · {names.get(transfer.from_account)} →{" "}
-              {names.get(transfer.to_account)} · {currency(transfer.amount_cents)}
-              <p className="text-muted-foreground">{transfer.description}</p>
-            </li>
-          ))}
-      </ul>
+        {!ledger.accounts.length && (
+          <p className="px-6 pb-5 text-sm text-muted-foreground">
+            Cadastre a conta corrente ou o caixa do escritório para acompanhar os saldos.
+          </p>
+        )}
+      </Card>
+      <Card className="space-y-4 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-semibold">
+            {selected ? `Extrato · ${selected.name}` : "Extrato de todas as contas"}
+          </h3>
+          {selected && isBank(selected) && (
+            <div
+              className="flex rounded-md border p-0.5"
+              role="group"
+              aria-label="Origem do extrato"
+            >
+              {(
+                [
+                  ["bank", "Extrato do banco"],
+                  ["system", "Baixas no sistema"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={view === value}
+                  onClick={() => setView(value)}
+                  className={`rounded px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    view === value
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {selected && isBank(selected) && view === "bank" ? (
+          <FinanceBank userId={userId} />
+        ) : (
+          <FinanceStatement key={selectedId} ledger={ledger} accountId={selectedId} embedded />
+        )}
+      </Card>
       {editing && (
         <AccountEditor
           key={editing.id}
@@ -115,7 +274,7 @@ export function FinanceAccounts({
           refresh={refresh}
         />
       )}
-    </Card>
+    </div>
   );
 }
 

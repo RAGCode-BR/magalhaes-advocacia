@@ -147,6 +147,7 @@ try {
     "20261116120000_bank_statement_foundation.sql",
     "20261117120000_sicoob_connector.sql",
     "20261117160000_sicoob_history_boletos.sql",
+    "20261117190000_finance_chart_of_accounts.sql",
   ]) {
     await owner.query(await readFile(join(root, "supabase/migrations", filename), "utf8"));
   }
@@ -191,6 +192,50 @@ try {
       [randomUUID()],
     ),
     { code: "42501" },
+  );
+
+  // Chart of accounts: hierarchical code and nature, unique code per kind.
+  const revenueGroup = randomUUID();
+  await admin.query("SELECT public.office_finance_save_register($1,'category',$2)", [
+    revenueGroup,
+    { name: "Receitas de teste", code: "9", nature: "income", active: true },
+  ]);
+  await admin.query("SELECT public.office_finance_save_register($1,'category',$2)", [
+    randomUUID(),
+    { name: "Reembolsos de teste", code: "9.1", nature: "income", active: true },
+  ]);
+  const plan = await owner.query(
+    "SELECT code,nature FROM public.office_finance_registers WHERE id=$1",
+    [revenueGroup],
+  );
+  assert.deepEqual(plan.rows[0], { code: "9", nature: "income" });
+  await assert.rejects(
+    admin.query("SELECT public.office_finance_save_register($1,'category',$2)", [
+      randomUUID(),
+      { name: "Código repetido", code: "9.1", nature: "income" },
+    ]),
+    /office_finance_register_code/,
+  );
+  await assert.rejects(
+    admin.query("SELECT public.office_finance_save_register($1,'category',$2)", [
+      randomUUID(),
+      { name: "Código inválido", code: "9..1" },
+    ]),
+    /check constraint/,
+  );
+  // Income without a client (receita avulsa) is accepted; a process still needs its client.
+  await admin.query(
+    `INSERT INTO public.office_finance_entries(id,group_id,installment,installment_count,kind,description,category,competence_date,due_date,amount_cents)
+     VALUES($1,$2,1,1,'income','Rendimento','Reembolsos de teste','2026-01-01','2026-01-31',500)`,
+    [randomUUID(), randomUUID()],
+  );
+  await assert.rejects(
+    admin.query(
+      `INSERT INTO public.office_finance_entries(id,group_id,installment,installment_count,kind,description,category,process_id,competence_date,due_date,amount_cents)
+       VALUES($1,$2,1,1,'income','Sem cliente','Reembolsos de teste',$3,'2026-01-01','2026-01-31',500)`,
+      [randomUUID(), randomUUID(), processId],
+    ),
+    /row-level security/,
   );
 
   const paidEntry = await entry(admin);

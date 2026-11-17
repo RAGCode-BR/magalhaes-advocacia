@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { addMonths, format, parseISO } from "date-fns";
+import { addDays, addMonths, format, parseISO } from "date-fns";
 import { useClients, useProfiles } from "@/hooks/use-data";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  financeAccountBalance,
   financeCsv,
+  financeDre,
   financeDailyFlow,
   financeTotals,
   type FinanceEntry,
@@ -21,6 +23,9 @@ import {
   type OfficeFinanceData,
   type FinanceHistory,
 } from "@/lib/office-finance-data";
+import { Amount, KpiStrip, Sheet, SheetGutter } from "./FinanceSheet";
+import { FinanceFlowChart, FinanceShareBars } from "./FinanceBalanceChart";
+import { ptBR } from "date-fns/locale";
 
 export function FinanceReports({ ledger }: { ledger: OfficeFinanceData }) {
   const [month, setMonth] = useState(isoToday().slice(0, 7));
@@ -84,147 +89,374 @@ export function FinanceReports({ ledger }: { ledger: OfficeFinanceData }) {
       `financeiro-${month}.csv`,
     );
   }
+  const current = monthly.at(-1) ?? { income: 0, expense: 0, balance: 0 };
+  const previous = monthly.at(-2) ?? { income: 0, expense: 0, balance: 0 };
+  const margin = current.income ? Math.round((current.balance / current.income) * 100) : null;
+  const incomeChange = previous.income
+    ? Math.round(((current.income - previous.income) / previous.income) * 100)
+    : null;
+  const yearIncome = monthly.reduce((sum, item) => sum + item.income, 0);
+  const yearExpense = monthly.reduce((sum, item) => sum + item.expense, 0);
+  const openReceivable = ledger.entries
+    .filter((entry) => entry.kind === "income" && !entry.cancelled_at)
+    .reduce((sum, entry) => sum + entry.amount_cents - entry.settled_cents, 0);
+  const overdueReceivable = ledger.entries
+    .filter(
+      (entry) => entry.kind === "income" && !entry.cancelled_at && entry.due_date < isoToday(),
+    )
+    .reduce((sum, entry) => sum + entry.amount_cents - entry.settled_cents, 0);
+  const monthLabel = (period: string) =>
+    format(parseISO(period + "-01"), "MMM/yy", { locale: ptBR }).replace(/^./, (c) =>
+      c.toUpperCase(),
+    );
+  const share = (kind: "income" | "expense") =>
+    groupedRows
+      .map(([name, totals]) => ({ name, cents: totals[kind] }))
+      .filter((row) => row.cents > 0)
+      .sort((x, y) => y.cents - x.cents)
+      .slice(0, 8);
+  const groupName =
+    group === "category"
+      ? "conta do plano"
+      : group === "cost_center"
+        ? "centro de custo"
+        : "cliente";
+  const dreMonths = months.slice(-6);
+  const dre = financeDre(ledger.entries, ledger.settlements, ledger.registers, dreMonths, basis);
+  const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+  const dreIncome = sum(dre.income.total);
+  const percentOf = (value: number) =>
+    dreIncome ? `${Math.round((value / dreIncome) * 1000) / 10}%` : "–";
+  const pct = (value: number | null) => (value === null ? "—" : `${value > 0 ? "+" : ""}${value}%`);
   return (
-    <Card className="space-y-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">Resultados e fluxo financeiro</h2>
-        <Button variant="outline" onClick={exportReport}>
-          Exportar relatório CSV
-        </Button>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Input
-          className="w-auto"
-          type="month"
-          aria-label="Mês final do relatório"
-          value={month}
-          onChange={(event) => {
-            if (event.target.value) setMonth(event.target.value);
-          }}
+    <div className="space-y-4">
+      <Card className="space-y-5 p-4 md:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Resultado do escritório</h2>
+            <p className="text-sm text-muted-foreground">
+              {basis === "cash"
+                ? "Regime de caixa: o que foi efetivamente recebido e pago."
+                : "Regime de competência: receitas e despesas pelo mês a que pertencem."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              className="w-auto"
+              type="month"
+              aria-label="Mês final do relatório"
+              value={month}
+              onChange={(event) => {
+                if (event.target.value) setMonth(event.target.value);
+              }}
+            />
+            <select
+              className={selectClass.replace("w-full", "w-auto")}
+              aria-label="Regime do relatório"
+              value={basis}
+              onChange={(event) => setBasis(event.target.value as "cash" | "competence")}
+            >
+              <option value="cash">Caixa</option>
+              <option value="competence">Competência</option>
+            </select>
+            <Button variant="outline" onClick={exportReport}>
+              Exportar CSV
+            </Button>
+          </div>
+        </div>
+        <KpiStrip
+          items={[
+            {
+              label: `Receitas · ${monthLabel(month)}`,
+              value: currency(current.income),
+              tone: "income",
+              hint: `${pct(incomeChange)} vs. mês anterior`,
+            },
+            {
+              label: `Despesas · ${monthLabel(month)}`,
+              value: currency(current.expense),
+              tone: "expense",
+              hint: `Mês anterior: ${currency(previous.expense)}`,
+            },
+            {
+              label: "Resultado do mês",
+              value: currency(current.balance),
+              tone: current.balance < 0 ? "expense" : "balance",
+              hint: margin === null ? "Sem receitas no mês" : `Margem de ${margin}%`,
+            },
+            {
+              label: "A receber em aberto",
+              value: currency(openReceivable),
+              tone: overdueReceivable ? "alert" : "neutral",
+              hint: `${currency(overdueReceivable)} vencido`,
+            },
+          ]}
         />
-        <select
-          className={selectClass + " w-auto"}
-          aria-label="Regime do relatório"
-          value={basis}
-          onChange={(event) => setBasis(event.target.value as "cash" | "competence")}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
+          <div className="min-w-0">
+            <h3 className="mb-3 text-sm font-medium">Receitas × despesas · 12 meses</h3>
+            <FinanceFlowChart
+              label="Receitas e despesas dos últimos 12 meses"
+              incomeLabel="Receitas"
+              expenseLabel="Despesas"
+              data={monthly.map((item) => ({
+                key: item.period,
+                label: monthLabel(item.period),
+                income: item.income,
+                expense: item.expense,
+              }))}
+            />
+          </div>
+          <dl className="grid content-start gap-3 rounded-lg border bg-muted/30 p-4 text-sm">
+            <div>
+              <dt className="text-muted-foreground">Receitas em 12 meses</dt>
+              <dd className="text-lg font-semibold tabular-nums">{currency(yearIncome)}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Despesas em 12 meses</dt>
+              <dd className="text-lg font-semibold tabular-nums">{currency(yearExpense)}</dd>
+            </div>
+            <div className="border-t pt-3">
+              <dt className="text-muted-foreground">Resultado acumulado</dt>
+              <dd
+                className={`text-lg font-semibold tabular-nums ${yearIncome - yearExpense < 0 ? "text-destructive" : ""}`}
+              >
+                {currency(yearIncome - yearExpense)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Média mensal de receitas</dt>
+              <dd className="font-semibold tabular-nums">
+                {currency(Math.round(yearIncome / 12))}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </Card>
+
+      <Card className="space-y-3 p-4 md:p-5">
+        <div>
+          <h3 className="font-semibold">DRE gerencial · 6 meses</h3>
+          <p className="text-sm text-muted-foreground">
+            Demonstrativo de resultado pelo plano de contas (
+            {basis === "cash" ? "caixa" : "competência"}). AV é a análise vertical: quanto cada
+            conta representa da receita total.
+          </p>
+        </div>
+        <Sheet
+          label="DRE gerencial"
+          maxHeight="max-h-[36rem]"
+          columns={[
+            { label: "Conta" },
+            ...dreMonths.map((period) => ({ label: monthLabel(period), align: "right" as const })),
+            { label: "Total", align: "right" },
+            { label: "AV", align: "right" },
+          ]}
         >
-          <option value="cash">Caixa</option>
-          <option value="competence">Competência</option>
-        </select>
-        <select
-          className={selectClass + " w-auto"}
-          aria-label="Agrupar relatório"
-          value={group}
-          onChange={(event) => setGroup(event.target.value as typeof group)}
-        >
-          <option value="category">Categoria</option>
-          <option value="cost_center">Centro de custo</option>
-          <option value="client_id">Cliente</option>
-        </select>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b">
-              {["Mês", "Receitas", "Despesas", "Resultado"].map((label) => (
-                <th scope="col" className="p-2" key={label}>
-                  {label}
-                </th>
+          {(
+            [
+              ["income", "(+) Receitas", dre.income],
+              ["expense", "(−) Despesas", dre.expense],
+            ] as const
+          ).flatMap(([kind, title, part]) => [
+            <tr key={kind} className="bg-muted/40 font-semibold">
+              <SheetGutter n="" />
+              <td>{title}</td>
+              {part.total.map((value, index) => (
+                <td key={index} className="whitespace-nowrap text-right">
+                  {currency(value)}
+                </td>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {monthly.map((item) => (
-              <tr key={item.period} className="border-b last:border-0">
-                <td className="p-2">{item.period.split("-").reverse().join("/")}</td>
-                <td className="p-2 whitespace-nowrap">{currency(item.income)}</td>
-                <td className="p-2 whitespace-nowrap">{currency(item.expense)}</td>
-                <td className="p-2 whitespace-nowrap">{currency(item.balance)}</td>
+              <td className="whitespace-nowrap text-right">{currency(sum(part.total))}</td>
+              <td className="whitespace-nowrap text-right text-muted-foreground">
+                {percentOf(sum(part.total))}
+              </td>
+            </tr>,
+            ...part.rows.map((row, index) => (
+              <tr key={kind + row.name} className={row.group ? "font-medium" : ""}>
+                <SheetGutter n={index + 1} />
+                <td
+                  className="min-w-48 whitespace-nowrap"
+                  style={{ paddingLeft: `${0.75 + row.depth * 1.1}rem` }}
+                >
+                  {row.code && (
+                    <span className="mr-1.5 text-xs tabular-nums text-muted-foreground">
+                      {row.code}
+                    </span>
+                  )}
+                  {row.name}
+                </td>
+                {row.values.map((value, i) => (
+                  <td key={i} className="whitespace-nowrap text-right">
+                    {value ? currency(value) : <span className="text-muted-foreground">–</span>}
+                  </td>
+                ))}
+                <td className="whitespace-nowrap text-right font-medium">
+                  {currency(sum(row.values))}
+                </td>
+                <td className="whitespace-nowrap text-right text-muted-foreground">
+                  {percentOf(sum(row.values))}
+                </td>
+              </tr>
+            )),
+          ])}
+          <tr className="font-semibold [&>td]:border-t-[3px] [&>td]:border-double">
+            <SheetGutter n="=" />
+            <td>Resultado</td>
+            {dre.result.map((value, index) => (
+              <td key={index} className="whitespace-nowrap text-right">
+                <Amount cents={value} />
+              </td>
+            ))}
+            <td className="whitespace-nowrap text-right">
+              <Amount cents={sum(dre.result)} />
+            </td>
+            <td className="whitespace-nowrap text-right text-muted-foreground">
+              {percentOf(sum(dre.result))}
+            </td>
+          </tr>
+          <tr className="text-muted-foreground">
+            <SheetGutter n="%" />
+            <td>Margem</td>
+            {dre.result.map((value, index) => (
+              <td key={index} className="whitespace-nowrap text-right">
+                {dre.income.total[index]
+                  ? `${Math.round((value / dre.income.total[index]) * 100)}%`
+                  : "–"}
+              </td>
+            ))}
+            <td className="whitespace-nowrap text-right">{percentOf(sum(dre.result))}</td>
+            <td />
+          </tr>
+        </Sheet>
+      </Card>
+
+      <Card className="space-y-4 p-4 md:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-semibold">Composição de {monthLabel(month)}</h3>
+          <select
+            className={selectClass.replace("w-full", "w-auto")}
+            aria-label="Agrupar relatório"
+            value={group}
+            onChange={(event) => setGroup(event.target.value as typeof group)}
+          >
+            <option value="category">Por conta do plano</option>
+            <option value="cost_center">Por centro de custo</option>
+            <option value="client_id">Por cliente</option>
+          </select>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <section>
+            <h4 className="mb-3 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+              De onde veio o dinheiro
+            </h4>
+            <FinanceShareBars
+              rows={share("income")}
+              tone="income"
+              empty="Nenhuma receita neste mês."
+            />
+          </section>
+          <section>
+            <h4 className="mb-3 text-sm font-medium text-destructive">Para onde foi o dinheiro</h4>
+            <FinanceShareBars
+              rows={share("expense")}
+              tone="expense"
+              empty="Nenhuma despesa neste mês."
+            />
+          </section>
+        </div>
+        {groupedRows.length > 0 && (
+          <Sheet
+            label={`Detalhamento por ${groupName}`}
+            maxHeight="max-h-96"
+            columns={[
+              { label: groupName.charAt(0).toUpperCase() + groupName.slice(1) },
+              { label: "Receitas", align: "right" },
+              { label: "Despesas", align: "right" },
+              { label: "Resultado", align: "right" },
+            ]}
+          >
+            {groupedRows.map(([name, totals], index) => (
+              <tr key={name}>
+                <SheetGutter n={index + 1} />
+                <td className="min-w-40">{name}</td>
+                <td className="whitespace-nowrap text-right">{currency(totals.income)}</td>
+                <td className="whitespace-nowrap text-right">{currency(totals.expense)}</td>
+                <td className="whitespace-nowrap text-right font-medium">
+                  <Amount cents={totals.income - totals.expense} />
+                </td>
               </tr>
             ))}
-          </tbody>
-        </table>
-      </div>
-      <h3 className="font-medium">Fluxo diário de caixa</h3>
-      <p className="text-sm text-muted-foreground">
-        O resultado previsto soma as baixas e o saldo ainda em aberto nos vencimentos deste mês.
-      </p>
-      {daily.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b">
-                {["Data", "Recebido", "Pago", "A receber", "A pagar", "Resultado previsto"].map(
-                  (label) => (
-                    <th scope="col" key={label} className="p-2">
-                      {label}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {daily.map((day) => (
-                <tr key={day.date} className="border-b last:border-0">
-                  <td className="p-2 whitespace-nowrap">{displayDate(day.date)}</td>
-                  {[
-                    day.income,
-                    day.expense,
-                    day.pendingIncome,
-                    day.pendingExpense,
-                    day.projected,
-                  ].map((amount, index) => (
-                    <td key={index} className="p-2 whitespace-nowrap">
-                      {currency(amount)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          </Sheet>
+        )}
+      </Card>
+
+      <Card className="space-y-3 p-4 md:p-5">
+        <div>
+          <h3 className="font-semibold">Fluxo diário de {monthLabel(month)}</h3>
+          <p className="text-sm text-muted-foreground">
+            O resultado previsto soma as baixas e o saldo ainda em aberto nos vencimentos deste mês.
+          </p>
         </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">Sem movimentos ou vencimentos neste mês.</p>
-      )}
-      <h3 className="font-medium">Detalhamento de {month.split("-").reverse().join("/")}</h3>
-      {groupedRows.length ? (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b">
-                {["Grupo", "Receitas", "Despesas", "Resultado"].map((label) => (
-                  <th scope="col" className="p-2" key={label}>
-                    {label}
-                  </th>
-                ))}
+        {daily.length > 0 ? (
+          <Sheet
+            label="Fluxo diário de caixa"
+            maxHeight="max-h-[28rem]"
+            columns={[
+              { label: "Data" },
+              { label: "Recebido", align: "right" },
+              { label: "Pago", align: "right" },
+              { label: "A receber", align: "right" },
+              { label: "A pagar", align: "right" },
+              { label: "Resultado previsto", align: "right" },
+            ]}
+          >
+            {daily.map((day, index) => (
+              <tr key={day.date}>
+                <SheetGutter n={index + 1} />
+                <td className="whitespace-nowrap">{displayDate(day.date)}</td>
+                <td className="whitespace-nowrap text-right">
+                  {day.income ? <Amount cents={day.income} abs /> : ""}
+                </td>
+                <td className="whitespace-nowrap text-right">
+                  {day.expense ? <Amount cents={-day.expense} abs /> : ""}
+                </td>
+                <td className="whitespace-nowrap text-right text-muted-foreground">
+                  {day.pendingIncome ? currency(day.pendingIncome) : ""}
+                </td>
+                <td className="whitespace-nowrap text-right text-muted-foreground">
+                  {day.pendingExpense ? currency(day.pendingExpense) : ""}
+                </td>
+                <td
+                  className={`whitespace-nowrap text-right font-medium ${day.projected < 0 ? "text-destructive" : ""}`}
+                >
+                  {currency(day.projected)}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {groupedRows.map(([name, totals]) => (
-                <tr key={name} className="border-b last:border-0">
-                  <td className="p-2">{name}</td>
-                  <td className="p-2 whitespace-nowrap">{currency(totals.income)}</td>
-                  <td className="p-2 whitespace-nowrap">{currency(totals.expense)}</td>
-                  <td className="p-2 whitespace-nowrap">
-                    {currency(totals.income - totals.expense)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">Nenhum movimento neste mês.</p>
-      )}
-    </Card>
+            ))}
+          </Sheet>
+        ) : (
+          <p className="text-sm text-muted-foreground">Sem movimentos ou vencimentos neste mês.</p>
+        )}
+      </Card>
+    </div>
   );
 }
 
-export function FinanceStatement({ ledger }: { ledger: OfficeFinanceData }) {
+export function FinanceStatement({
+  ledger,
+  accountId = "",
+  embedded = false,
+}: {
+  ledger: OfficeFinanceData;
+  /** Fixed account chosen in Contas e extratos; empty means every account. */
+  accountId?: string;
+  embedded?: boolean;
+}) {
   const [month, setMonth] = useState(isoToday().slice(0, 7));
-  const [accountId, setAccountId] = useState("");
   const entries = new Map(ledger.entries.map((entry) => [entry.id, entry]));
   const accounts = new Map(ledger.accounts.map((account) => [account.id, account.name]));
+  const account = ledger.accounts.find((item) => item.id === accountId);
   const movements = ledger.settlements
     .filter(
       (item) =>
@@ -238,6 +470,7 @@ export function FinanceStatement({ ledger }: { ledger: OfficeFinanceData }) {
         id: item.id,
         date: item.settled_on,
         description: entry?.description ?? "Lançamento",
+        category: entry?.category ?? "",
         account: accounts.get(item.account_id ?? "") ?? "Sem conta informada",
         amount: (entry?.kind === "income" ? 1 : -1) * item.amount_cents,
       };
@@ -248,6 +481,7 @@ export function FinanceStatement({ ledger }: { ledger: OfficeFinanceData }) {
         id: transfer.id + "-out",
         date: transfer.transferred_on,
         description: "Transferência · " + transfer.description,
+        category: "Transferência",
         account: accounts.get(transfer.from_account) ?? "",
         amount: -transfer.amount_cents,
       });
@@ -256,36 +490,38 @@ export function FinanceStatement({ ledger }: { ledger: OfficeFinanceData }) {
         id: transfer.id + "-in",
         date: transfer.transferred_on,
         description: "Transferência · " + transfer.description,
+        category: "Transferência",
         account: accounts.get(transfer.to_account) ?? "",
         amount: transfer.amount_cents,
       });
   }
-  movements.sort((a, b) => b.date.localeCompare(a.date));
-  return (
-    <Card className="space-y-4 p-4">
+  // Oldest first, like a ledger, so the running column reads top to bottom.
+  movements.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  const previousDay = format(addDays(parseISO(month + "-01"), -1), "yyyy-MM-dd");
+  const opening = account
+    ? financeAccountBalance(
+        account,
+        ledger.entries,
+        ledger.settlements,
+        ledger.transfers,
+        previousDay,
+      )
+    : 0;
+  const credits = movements.reduce((sum, item) => sum + Math.max(item.amount, 0), 0);
+  const debits = movements.reduce((sum, item) => sum + Math.min(item.amount, 0), 0);
+  let running = opening;
+  const columns = [
+    { label: "Data" },
+    { label: "Descrição" },
+    { label: "Categoria" },
+    ...(accountId ? [] : [{ label: "Conta" }]),
+    { label: "Entrada", align: "right" as const },
+    { label: "Saída", align: "right" as const },
+    { label: account ? "Saldo" : "Acumulado no mês", align: "right" as const },
+  ];
+  const content = (
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">Extrato de movimentações</h2>
-        <Button
-          variant="outline"
-          onClick={() =>
-            saveCsv(
-              financeCsv([
-                ["Data", "Descrição", "Conta", "Valor (R$)"],
-                ...movements.map((item) => [
-                  displayDate(item.date),
-                  item.description,
-                  item.account,
-                  (item.amount / 100).toFixed(2).replace(".", ","),
-                ]),
-              ]),
-              `extrato-${month}.csv`,
-            )
-          }
-        >
-          Exportar extrato CSV
-        </Button>
-      </div>
-      <div className="flex flex-wrap gap-2">
         <Input
           className="w-auto"
           type="month"
@@ -295,40 +531,94 @@ export function FinanceStatement({ ledger }: { ledger: OfficeFinanceData }) {
             if (event.target.value) setMonth(event.target.value);
           }}
         />
-        <select
-          className={selectClass + " sm:w-auto"}
-          aria-label="Conta do extrato"
-          value={accountId}
-          onChange={(event) => setAccountId(event.target.value)}
+        <Button
+          variant="outline"
+          onClick={() =>
+            saveCsv(
+              financeCsv([
+                ["Data", "Descrição", "Categoria", "Conta", "Valor (R$)"],
+                ...movements.map((item) => [
+                  displayDate(item.date),
+                  item.description,
+                  item.category,
+                  item.account,
+                  (item.amount / 100).toFixed(2).replace(".", ","),
+                ]),
+              ]),
+              `extrato-${month}.csv`,
+            )
+          }
         >
-          <option value="">Todas as contas</option>
-          {ledger.accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.name}
-            </option>
-          ))}
-        </select>
+          Exportar CSV
+        </Button>
       </div>
-      <p className="font-medium">
-        Movimento líquido no período ·{" "}
-        {currency(movements.reduce((sum, item) => sum + item.amount, 0))}
-      </p>
-      <ul className="divide-y">
-        {movements.map((item) => (
-          <li className="flex flex-wrap justify-between gap-3 py-3 text-sm" key={item.id}>
-            <div>
-              <p>{item.description}</p>
-              <p className="text-muted-foreground">
-                {displayDate(item.date)} · {item.account}
-              </p>
-            </div>
-            <strong className="tabular-nums">{currency(item.amount)}</strong>
-          </li>
-        ))}
-      </ul>
-      {!movements.length && (
-        <p className="text-sm text-muted-foreground">Nenhuma movimentação no período.</p>
+      <KpiStrip
+        items={[
+          ...(account
+            ? [{ label: "Saldo inicial", value: currency(opening), tone: "neutral" as const }]
+            : []),
+          { label: "Entradas", value: currency(credits), tone: "income" },
+          { label: "Saídas", value: currency(-debits), tone: "expense" },
+          account
+            ? { label: "Saldo final", value: currency(opening + credits + debits), tone: "balance" }
+            : { label: "Resultado do mês", value: currency(credits + debits), tone: "balance" },
+        ]}
+      />
+      {movements.length ? (
+        <Sheet
+          label="Extrato de movimentações"
+          columns={columns}
+          footer={
+            <tr>
+              <td className="fin-sheet-gutter">Σ</td>
+              <td colSpan={accountId ? 3 : 4}>Totais do mês</td>
+              <td className="text-right">
+                <Amount cents={credits} abs />
+              </td>
+              <td className="text-right">
+                <Amount cents={debits} abs />
+              </td>
+              <td className="text-right">{currency(opening + credits + debits)}</td>
+            </tr>
+          }
+        >
+          {movements.map((item, index) => {
+            running += item.amount;
+            return (
+              <tr key={item.id}>
+                <SheetGutter n={index + 1} />
+                <td className="whitespace-nowrap">{displayDate(item.date)}</td>
+                <td className="min-w-48 break-words">{item.description}</td>
+                <td className="whitespace-nowrap text-muted-foreground">{item.category}</td>
+                {!accountId && <td className="whitespace-nowrap">{item.account}</td>}
+                <td className="whitespace-nowrap text-right">
+                  {item.amount > 0 && <Amount cents={item.amount} abs />}
+                </td>
+                <td className="whitespace-nowrap text-right">
+                  {item.amount < 0 && <Amount cents={item.amount} abs />}
+                </td>
+                <td
+                  className={`whitespace-nowrap text-right font-medium ${running < 0 ? "text-destructive" : ""}`}
+                >
+                  {currency(running)}
+                </td>
+              </tr>
+            );
+          })}
+        </Sheet>
+      ) : (
+        <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+          Nenhuma baixa ou transferência neste mês. As movimentações aparecem aqui quando um
+          lançamento recebe baixa nesta conta.
+        </p>
       )}
+    </div>
+  );
+  if (embedded) return content;
+  return (
+    <Card className="space-y-4 p-4">
+      <h2 className="text-lg font-semibold">Extrato de movimentações</h2>
+      {content}
     </Card>
   );
 }

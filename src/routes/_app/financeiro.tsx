@@ -20,16 +20,65 @@ import {
   financeCents,
   financeInstallments,
   financeStatus,
-  financeTotals,
   type FinanceEntry,
   type FinanceKind,
   type FinanceSettlement,
   type FinanceAccount,
   type FinanceRegister,
   financeCsv,
+  financePlanDepth,
+  financePlanOptions,
 } from "@/lib/office-finance";
 
 export const Route = createFileRoute("/_app/financeiro")({ component: FinanceRoute });
+
+// Conta-a-receber/pagar summary tabs, in the order an office reviews them.
+type QuickFilter = "all" | "overdue" | "today" | "upcoming" | "settled";
+function quickBucket(entry: FinanceEntry, today: string): QuickFilter | "cancelled" {
+  if (entry.cancelled_at) return "cancelled";
+  if (entry.settled_cents >= entry.amount_cents) return "settled";
+  if (entry.due_date < today) return "overdue";
+  if (entry.due_date === today) return "today";
+  return "upcoming";
+}
+const quickFilters = (kind: FinanceKind) =>
+  [
+    {
+      value: "overdue",
+      label: "Vencidos",
+      dot: "bg-destructive",
+      bar: "after:bg-destructive",
+      text: "text-destructive",
+    },
+    {
+      value: "today",
+      label: "Vencem hoje",
+      dot: "bg-amber-500",
+      bar: "after:bg-amber-500",
+      text: "text-amber-700 dark:text-amber-300",
+    },
+    { value: "upcoming", label: "A vencer", dot: "bg-sky-500", bar: "after:bg-sky-500", text: "" },
+    {
+      value: "settled",
+      label: kind === "income" ? "Recebidos" : "Pagos",
+      dot: "bg-emerald-600 dark:bg-emerald-400",
+      bar: "after:bg-emerald-600 dark:after:bg-emerald-400",
+      text: "text-emerald-700 dark:text-emerald-400",
+    },
+    {
+      value: "all",
+      label: "Total do período",
+      dot: "bg-primary",
+      bar: "after:bg-primary",
+      text: "",
+    },
+  ] as const satisfies readonly {
+    value: QuickFilter;
+    label: string;
+    dot: string;
+    bar: string;
+    text: string;
+  }[];
 
 import {
   currency,
@@ -43,18 +92,17 @@ import {
   saveCsv,
   type FinanceTable,
   type DocumentInfo,
+  type OfficeFinanceData,
 } from "@/lib/office-finance-data";
 import { FinanceAgreements } from "@/components/finance/FinanceAgreements";
 import { FinanceOrders } from "@/components/finance/FinanceOrders";
 import { FinanceRegisters } from "@/components/finance/FinanceRegisters";
 import { FinanceAccounts } from "@/components/finance/FinanceAccounts";
 import { FinanceBoletos } from "@/components/finance/FinanceBoletos";
-import { FinanceBank } from "@/components/finance/FinanceBank";
-import {
-  FinanceReports,
-  FinanceStatement,
-  FinanceHistoryPanel,
-} from "@/components/finance/FinanceReports";
+import { FinanceDashboard } from "@/components/finance/FinanceDashboard";
+import { FinanceBankReports } from "@/components/finance/FinanceBankReports";
+import { FinanceReports, FinanceHistoryPanel } from "@/components/finance/FinanceReports";
+import { Sheet, SheetGutter, StatusChip } from "@/components/finance/FinanceSheet";
 import { FinanceActionDialog, type FinanceAction } from "@/components/finance/FinanceActionDialog";
 import { FinanceEntryEditor } from "@/components/finance/FinanceEntryEditor";
 
@@ -67,30 +115,22 @@ async function insertFinance(name: FinanceTable, values: object | object[]) {
 }
 
 // Grouped by what the office is doing: day-to-day money, sales and long-lived setup.
+// Contratos, Serviços, Ordens de serviço and Compras are hidden from the menu at the
+// office's request; their components and data are kept untouched.
 const financeSections: { label: string; items: [string, string][] }[] = [
   {
     label: "Movimento",
     items: [
+      ["dashboard", "Painel"],
       ["entries", "Lançamentos"],
-      ["statement", "Extrato"],
-      ["bank", "Sicoob"],
+      ["accounts", "Contas e extratos"],
       ["boletos", "Boletos"],
-      ["accounts", "Contas"],
-    ],
-  },
-  {
-    label: "Comercial",
-    items: [
-      ["recurring", "Contratos"],
-      ["services", "Serviços"],
-      ["service", "Ordens de serviço"],
-      ["purchase", "Compras"],
     ],
   },
   {
     label: "Gestão",
     items: [
-      ["registers", "Cadastros"],
+      ["registers", "Plano de contas"],
       ["reports", "Relatórios"],
       ["history", "Histórico"],
     ],
@@ -112,14 +152,13 @@ function FinancePage({ userId }: { userId: string }) {
     queryKey,
     queryFn: loadOfficeFinance,
   });
-  const [section, setSection] = useState("entries");
+  const [section, setSection] = useState("dashboard");
   const [clientFilter, setClientFilter] = useState("");
   const [dueFrom, setDueFrom] = useState("");
   const [dueTo, setDueTo] = useState("");
   const [kind, setKind] = useState<FinanceKind>("income");
-  const [month, setMonth] = useState(isoToday().slice(0, 7));
-  const [basis, setBasis] = useState<"cash" | "competence">("cash");
-  const [status, setStatus] = useState("all");
+  const [quick, setQuick] = useState<QuickFilter>("all");
+  const [openBank, setOpenBank] = useState(false);
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState<{ id: string; kind: FinanceKind } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -129,34 +168,42 @@ function FinancePage({ userId }: { userId: string }) {
   const documents = ledger.data?.documents ?? [];
   const selected = entries.find((entry) => entry.id === selectedId);
   const today = isoToday();
-  const totals = financeTotals(entries, settlements, month, basis);
-  const nextWeek = new Date(`${today}T12:00:00Z`);
-  nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
-  const upcomingLimit = nextWeek.toISOString().slice(0, 10);
   const kindEntries = entries.filter((entry) => entry.kind === kind);
-  const pendingTotals = kindEntries.reduce(
-    (summary, entry) => {
-      if (entry.cancelled_at) return summary;
+  const bucketTotals = kindEntries.reduce(
+    (acc, entry) => {
+      const bucket = quickBucket(entry, today);
       const remaining = entry.amount_cents - entry.settled_cents;
-      summary.open += remaining;
-      if (entry.due_date < today) summary.overdue += remaining;
-      else if (entry.due_date <= upcomingLimit) summary.upcoming += remaining;
-      return summary;
+      if (bucket !== "cancelled") acc.all.cents += entry.amount_cents;
+      acc.all.count++;
+      acc[bucket].cents +=
+        bucket === "settled" || bucket === "cancelled" ? entry.amount_cents : remaining;
+      acc[bucket].count++;
+      return acc;
     },
-    { open: 0, overdue: 0, upcoming: 0 },
+    Object.fromEntries(
+      (["all", "overdue", "today", "upcoming", "settled", "cancelled"] as const).map((key) => [
+        key,
+        { cents: 0, count: 0 },
+      ]),
+    ) as Record<QuickFilter | "cancelled", { cents: number; count: number }>,
   );
   const clientNames = new Map(clients.map((client) => [client.id, client.name]));
+  const planCodes = new Map(
+    (ledger.data?.registers ?? [])
+      .filter((item) => item.kind === "category" && item.code)
+      .map((item) => [item.name, item.code ?? ""]),
+  );
   const processNames = new Map(tasks.map((task) => [task.id, task.title]));
   const rows = kindEntries
     .filter((entry) => {
       if (clientFilter && entry.client_id !== clientFilter) return false;
       if ((dueFrom && entry.due_date < dueFrom) || (dueTo && entry.due_date > dueTo)) return false;
-      const currentStatus = financeStatus(entry, today);
-      if (status !== "all" && currentStatus !== status) return false;
+      if (quick !== "all" && quickBucket(entry, today) !== quick) return false;
       return [
         entry.description,
         entry.category,
         entry.supplier,
+        entry.cost_center,
         clientNames.get(entry.client_id ?? ""),
         processNames.get(entry.process_id ?? ""),
       ].some((value) =>
@@ -171,44 +218,49 @@ function FinancePage({ userId }: { userId: string }) {
     <section className="mx-auto w-full min-w-0 max-w-7xl space-y-5 p-4 md:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary">
-            Magalhães Advocacia
-          </p>
-          <h1 className="text-2xl font-semibold">Financeiro</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
           <p className="text-sm text-muted-foreground">
-            Honorários, despesas e movimentações do escritório.
+            Receitas, despesas, contas bancárias e relatórios do escritório.
           </p>
         </div>
-        {section === "entries" && (
+        <div className="flex flex-wrap gap-2">
           <Button
-            onClick={() => setDraft({ id: crypto.randomUUID(), kind })}
+            variant="outline"
+            onClick={() => setDraft({ id: crypto.randomUUID(), kind: "expense" })}
             disabled={!ledger.data}
           >
-            <Plus /> {kind === "income" ? "Novo honorário" : "Nova despesa"}
+            <Plus /> Nova despesa
           </Button>
-        )}
+          <Button
+            onClick={() => setDraft({ id: crypto.randomUUID(), kind: "income" })}
+            disabled={!ledger.data}
+          >
+            <Plus /> Nova receita
+          </Button>
+        </div>
       </header>
       <nav
-        className="-mx-4 overflow-x-auto border-b px-4 [scrollbar-width:none] md:-mx-6 md:px-6 [&::-webkit-scrollbar]:hidden"
+        className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden"
         aria-label="Seções do financeiro"
       >
-        <div className="flex w-max items-end gap-5">
-          {financeSections.map((group) => (
+        <div className="flex w-max items-center gap-1 rounded-xl border bg-muted/40 p-1">
+          {financeSections.map((group, groupIndex) => (
             <div
               key={group.label}
               role="group"
               aria-label={group.label}
-              className="flex items-end gap-1 border-l pl-4 first:border-l-0 first:pl-0"
+              className="flex items-center gap-1"
             >
+              {groupIndex > 0 && <span aria-hidden className="mx-1 h-5 w-px bg-border" />}
               {group.items.map(([value, label]) => (
                 <button
                   type="button"
                   key={value}
                   aria-current={section === value ? "page" : undefined}
                   onClick={() => setSection(value)}
-                  className={`relative whitespace-nowrap rounded-t-md px-2.5 pb-3 pt-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     section === value
-                      ? "font-semibold text-primary after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary"
+                      ? "bg-card font-semibold text-foreground shadow-sm ring-1 ring-border"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -230,75 +282,37 @@ function FinancePage({ userId }: { userId: string }) {
       )}
       {ledger.data && section === "entries" && (
         <>
-          <Card className="space-y-3 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-semibold">Resumo mensal</h2>
-              <div className="flex flex-wrap gap-2">
-                <Input
-                  className="w-auto"
-                  aria-label="Mês do resumo"
-                  type="month"
-                  value={month}
-                  onChange={(event) => {
-                    if (event.target.value) setMonth(event.target.value);
-                  }}
-                />
-                <select
-                  className={selectClass + " w-auto"}
-                  aria-label="Regime do resumo"
-                  value={basis}
-                  onChange={(event) =>
-                    setBasis(event.target.value === "cash" ? "cash" : "competence")
-                  }
-                >
-                  <option value="cash">Caixa</option>
-                  <option value="competence">Competência</option>
-                </select>
-              </div>
-            </div>
-            <dl className="grid grid-cols-2 gap-3 md:grid-cols-3">
-              {[
-                [basis === "cash" ? "Recebido" : "Receitas", totals.income],
-                [basis === "cash" ? "Pago" : "Despesas", totals.expense],
-                ["Resultado do mês", totals.balance],
-              ].map(([label, amount]) => (
-                <div className="rounded-lg bg-muted/50 p-3" key={label}>
-                  <dt className="text-sm text-muted-foreground">{label}</dt>
-                  <dd className="font-semibold tabular-nums">{currency(Number(amount))}</dd>
-                </div>
-              ))}
-            </dl>
-          </Card>
           <Card className="space-y-4 p-4">
-            <div className="flex flex-wrap gap-2" aria-label="Tipo de lançamento">
-              <Button
-                variant={kind === "income" ? "default" : "outline"}
-                aria-pressed={kind === "income"}
-                onClick={() => setKind("income")}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div
+                className="flex rounded-lg border bg-muted/40 p-1"
+                role="group"
+                aria-label="Tipo de lançamento"
               >
-                Contas a receber
-              </Button>
-              <Button
-                variant={kind === "expense" ? "default" : "outline"}
-                aria-pressed={kind === "expense"}
-                onClick={() => setKind("expense")}
-              >
-                Contas a pagar
-              </Button>
-            </div>
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {[
-                ["Total em aberto", pendingTotals.open],
-                ["Saldo vencido", pendingTotals.overdue],
-                ["Vence em até 7 dias", pendingTotals.upcoming],
-              ].map(([label, amount]) => (
-                <div className="rounded-lg bg-muted/50 p-3" key={label}>
-                  <dt className="text-sm text-muted-foreground">{label}</dt>
-                  <dd className="font-semibold tabular-nums">{currency(Number(amount))}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ["income", "Contas a receber"],
+                    ["expense", "Contas a pagar"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={kind === value}
+                    onClick={() => {
+                      setKind(value);
+                      setQuick("all");
+                    }}
+                    className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      kind === value
+                        ? "bg-card font-semibold shadow-sm ring-1 ring-border"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <Input
                 className="sm:max-w-xs"
                 placeholder="Buscar lançamento, cliente ou processo"
@@ -306,24 +320,42 @@ function FinancePage({ userId }: { userId: string }) {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
-              <select
-                className={selectClass + " sm:w-auto"}
-                aria-label="Filtrar por situação"
-                value={status}
-                onChange={(event) => setStatus(event.target.value)}
-              >
-                <option value="all">Todas as situações</option>
-                {[
-                  "Em aberto",
-                  "Vencido",
-                  "Parcial",
-                  "Parcial em atraso",
-                  "Quitado",
-                  "Cancelado",
-                ].map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
+            </div>
+            <div
+              className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-3 lg:grid-cols-5"
+              role="group"
+              aria-label="Filtrar por situação"
+            >
+              {quickFilters(kind).map((filter) => {
+                const item = bucketTotals[filter.value];
+                const activeTab = quick === filter.value;
+                return (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    aria-pressed={activeTab}
+                    onClick={() => setQuick(filter.value)}
+                    className={`relative min-w-0 px-4 py-3 text-left transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] ${
+                      activeTab
+                        ? `bg-card ${filter.bar}`
+                        : "bg-card/70 after:bg-transparent hover:bg-card"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                      <span aria-hidden className={`h-2 w-2 rounded-full ${filter.dot}`} />
+                      {filter.label}
+                    </span>
+                    <span
+                      className={`mt-1.5 block text-xl font-semibold leading-none tracking-tight tabular-nums ${item.cents ? filter.text : ""}`}
+                    >
+                      {currency(item.cents)}
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {item.count} {item.count === 1 ? "lançamento" : "lançamentos"}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
               <label className={fieldClass}>
@@ -394,61 +426,111 @@ function FinancePage({ userId }: { userId: string }) {
               Exportar lista CSV
             </Button>
             {rows.length ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b text-muted-foreground">
-                      {["Lançamento", "Vencimento", "Valor", "Em aberto", "Situação", "Ações"].map(
-                        (label) => (
-                          <th scope="col" key={label} className="p-2 font-medium">
-                            {label}
-                          </th>
+              <Sheet
+                label={kind === "income" ? "Contas a receber" : "Contas a pagar"}
+                columns={[
+                  { label: "Vencimento" },
+                  { label: "Lançamento" },
+                  { label: "Conta do plano" },
+                  { label: "Centro de custo" },
+                  { label: "Valor", align: "right" },
+                  { label: "Em aberto", align: "right" },
+                  { label: "Situação" },
+                  { label: "" },
+                ]}
+                footer={
+                  <tr>
+                    <td className="fin-sheet-gutter">Σ</td>
+                    <td colSpan={4}>
+                      {rows.length} {rows.length === 1 ? "lançamento" : "lançamentos"}
+                    </td>
+                    <td className="whitespace-nowrap text-right">
+                      {currency(
+                        rows.reduce((sum, e) => sum + (e.cancelled_at ? 0 : e.amount_cents), 0),
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap text-right">
+                      {currency(
+                        rows.reduce(
+                          (sum, e) => sum + (e.cancelled_at ? 0 : e.amount_cents - e.settled_cents),
+                          0,
                         ),
                       )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((entry) => (
-                      <tr key={entry.id} className="border-b last:border-0">
-                        <td className="min-w-48 p-2">
-                          <p className="font-medium">
-                            {entry.description}
-                            {entry.installment_count > 1 &&
-                              ` · ${entry.installment}/${entry.installment_count}`}
-                          </p>
-                          <p className="text-muted-foreground">
-                            {[
-                              entry.category,
-                              entry.supplier,
-                              clientNames.get(entry.client_id ?? ""),
-                              processNames.get(entry.process_id ?? ""),
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
-                        </td>
-                        <td className="whitespace-nowrap p-2">{displayDate(entry.due_date)}</td>
-                        <td className="whitespace-nowrap p-2">{currency(entry.amount_cents)}</td>
-                        <td className="whitespace-nowrap p-2">
-                          {currency(
-                            entry.cancelled_at ? 0 : entry.amount_cents - entry.settled_cents,
+                    </td>
+                    <td colSpan={2} />
+                  </tr>
+                }
+              >
+                {rows.map((entry, index) => {
+                  const situation = financeStatus(entry, today);
+                  return (
+                    <tr
+                      key={entry.id}
+                      onClick={() => setSelectedId(entry.id)}
+                      className={`cursor-pointer ${situation === "Cancelado" ? "text-muted-foreground" : ""}`}
+                    >
+                      <SheetGutter n={index + 1} />
+                      <td
+                        className={`whitespace-nowrap ${situation === "Vencido" || situation === "Parcial em atraso" ? "font-medium text-destructive" : ""}`}
+                      >
+                        {displayDate(entry.due_date)}
+                      </td>
+                      <td className="min-w-52">
+                        <p className="font-medium">
+                          {entry.description}
+                          {entry.installment_count > 1 && (
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">
+                              {entry.installment}/{entry.installment_count}
+                            </span>
                           )}
-                        </td>
-                        <td className="p-2">{financeStatus(entry, today)}</td>
-                        <td className="p-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSelectedId(entry.id)}
-                          >
-                            Detalhes
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {[
+                            entry.supplier,
+                            clientNames.get(entry.client_id ?? ""),
+                            processNames.get(entry.process_id ?? ""),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") ||
+                            (entry.kind === "income" ? "Receita avulsa" : "Sem fornecedor")}
+                        </p>
+                      </td>
+                      <td className="whitespace-nowrap">
+                        {planCodes.get(entry.category) && (
+                          <span className="mr-1.5 text-xs tabular-nums text-muted-foreground">
+                            {planCodes.get(entry.category)}
+                          </span>
+                        )}
+                        {entry.category}
+                      </td>
+                      <td className="whitespace-nowrap text-muted-foreground">
+                        {entry.cost_center || "—"}
+                      </td>
+                      <td className="whitespace-nowrap text-right">
+                        {currency(entry.amount_cents)}
+                      </td>
+                      <td className="whitespace-nowrap text-right font-medium">
+                        {currency(
+                          entry.cancelled_at ? 0 : entry.amount_cents - entry.settled_cents,
+                        )}
+                      </td>
+                      <td>
+                        <StatusChip status={situation} />
+                      </td>
+                      <td>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setSelectedId(entry.id)}
+                        >
+                          Detalhes
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </Sheet>
             ) : (
               <p className="py-6 text-center text-sm text-muted-foreground">
                 Nenhum lançamento encontrado.
@@ -457,11 +539,35 @@ function FinancePage({ userId }: { userId: string }) {
           </Card>
         </>
       )}
+      {ledger.data && section === "dashboard" && (
+        <FinanceDashboard
+          ledger={ledger.data}
+          userId={userId}
+          navigate={(target, options = {}) => {
+            if (options.kind) setKind(options.kind);
+            if (options.quick) setQuick(options.quick);
+            if (target === "entries") {
+              setSearch(options.search ?? "");
+              setClientFilter("");
+              setDueFrom("");
+              setDueTo("");
+            }
+            if (options.entryId) setSelectedId(options.entryId);
+            setOpenBank(!!options.bank);
+            setSection(target);
+          }}
+        />
+      )}
       {ledger.data && section === "recurring" && (
         <FinanceAgreements agreements={ledger.data.agreements} kind="recurring" refresh={refresh} />
       )}
       {ledger.data && section === "accounts" && (
-        <FinanceAccounts ledger={ledger.data} refresh={refresh} />
+        <FinanceAccounts
+          ledger={ledger.data}
+          userId={userId}
+          refresh={refresh}
+          openBank={openBank}
+        />
       )}
       {ledger.data &&
         (section === "services" || section === "service" || section === "purchase") && (
@@ -476,9 +582,9 @@ function FinancePage({ userId }: { userId: string }) {
       {ledger.data && section === "registers" && (
         <FinanceRegisters registers={ledger.data.registers} refresh={refresh} />
       )}
-      {ledger.data && section === "reports" && <FinanceReports ledger={ledger.data} />}
-      {ledger.data && section === "statement" && <FinanceStatement ledger={ledger.data} />}
-      {section === "bank" && <FinanceBank userId={userId} />}
+      {ledger.data && section === "reports" && (
+        <ReportsSection userId={userId} ledger={ledger.data} />
+      )}
       {section === "boletos" && (
         <FinanceBoletos
           userId={userId}
@@ -535,12 +641,17 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
   const [clientId, setClientId] = useState("");
   const [processId, setProcessId] = useState("");
   const income = draft.kind === "income";
+  const plan = financePlanOptions(registers, draft.kind);
+  const centers = registers
+    .filter((item) => item.kind === "cost_center" && item.active)
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   const save = useMutation({
     mutationFn: async (form: FormData) => {
       const value = (field: string) => String(form.get(field) ?? "").trim();
       const description = value("description");
       const category = value("category");
-      if (!description || !category) throw new Error("Informe a descrição e a categoria.");
+      if (!description || !category)
+        throw new Error("Informe a descrição e a conta do plano de contas.");
       const installments = financeInstallments(
         financeCents(value("amount")),
         Number(value("count")),
@@ -553,8 +664,8 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
         description,
         category,
         cost_center: value("cost_center") || null,
-        client_id: clientId || null,
-        process_id: processId || null,
+        client_id: income ? clientId || null : null,
+        process_id: income ? processId || null : null,
         supplier: income ? null : value("supplier") || null,
         notes: value("notes") || null,
         competence_date: value("competence"),
@@ -582,9 +693,11 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
     >
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{income ? "Novo honorário" : "Nova despesa"}</DialogTitle>
+          <DialogTitle>{income ? "Nova receita" : "Nova despesa"}</DialogTitle>
           <DialogDescription>
-            O valor total será distribuído entre as parcelas mensais.
+            {income
+              ? "Honorário de cliente ou receita avulsa (rendimento, reembolso, venda). O cliente é opcional."
+              : "O valor total será distribuído entre as parcelas mensais."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -600,14 +713,32 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className={fieldClass}>
-              Categoria
-              <Input
-                name="category"
-                list="finance-categories"
-                required
-                maxLength={100}
-                defaultValue={income ? "Honorários" : ""}
-              />
+              Conta do plano
+              {plan.length ? (
+                <select
+                  name="category"
+                  required
+                  className={selectClass}
+                  defaultValue={plan.find((item) => income && /honor/i.test(item.name))?.name ?? ""}
+                >
+                  <option value="">Selecione</option>
+                  {plan.map((item) => (
+                    <option key={item.id} value={item.name}>
+                      {"\u00a0\u00a0".repeat(financePlanDepth(item.code))}
+                      {item.code ? `${item.code} ` : ""}
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <Input
+                  name="category"
+                  list="finance-categories"
+                  required
+                  maxLength={100}
+                  defaultValue={income ? "Honorários" : ""}
+                />
+              )}
             </label>
             {!income && (
               <label className={fieldClass}>
@@ -615,43 +746,46 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
                 <Input name="supplier" list="finance-suppliers" maxLength={160} />
               </label>
             )}
-            <label className={fieldClass}>
-              Cliente
-              <select
-                className={selectClass}
-                required={income}
-                value={clientId}
-                onChange={(event) => {
-                  setClientId(event.target.value);
-                  setProcessId("");
-                }}
-              >
-                <option value="">{income ? "Selecione um cliente" : "Sem cliente"}</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={fieldClass}>
-              Processo
-              <select
-                className={selectClass}
-                disabled={!clientId}
-                value={processId}
-                onChange={(event) => setProcessId(event.target.value)}
-              >
-                <option value="">Sem processo vinculado</option>
-                {tasks
-                  .filter((task) => task.client_id === clientId)
-                  .map((task) => (
-                    <option key={task.id} value={task.id}>
-                      {task.title}
-                    </option>
-                  ))}
-              </select>
-            </label>
+            {income && (
+              <>
+                <label className={fieldClass}>
+                  Cliente
+                  <select
+                    className={selectClass}
+                    value={clientId}
+                    onChange={(event) => {
+                      setClientId(event.target.value);
+                      setProcessId("");
+                    }}
+                  >
+                    <option value="">Sem cliente (receita avulsa)</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={fieldClass}>
+                  Processo
+                  <select
+                    className={selectClass}
+                    disabled={!clientId}
+                    value={processId}
+                    onChange={(event) => setProcessId(event.target.value)}
+                  >
+                    <option value="">Sem processo vinculado</option>
+                    {tasks
+                      .filter((task) => task.client_id === clientId)
+                      .map((task) => (
+                        <option key={task.id} value={task.id}>
+                          {task.title}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </>
+            )}
             <label className={fieldClass}>
               Valor total em R$
               <Input name="amount" required inputMode="decimal" placeholder="0,00" />
@@ -671,7 +805,18 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
           </div>
           <label className={fieldClass}>
             Centro de custo
-            <Input name="cost_center" maxLength={160} list="finance-centers" />
+            {centers.length ? (
+              <select name="cost_center" className={selectClass} defaultValue="">
+                <option value="">Sem centro de custo</option>
+                {centers.map((item) => (
+                  <option key={item.id} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Input name="cost_center" maxLength={160} list="finance-centers" />
+            )}
           </label>
           <datalist id="finance-categories">
             {registers
@@ -1003,5 +1148,44 @@ function EntryDetails({
         </section>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ReportsSection({ userId, ledger }: { userId: string; ledger: OfficeFinanceData }) {
+  const [view, setView] = useState<"office" | "bank">("bank");
+  return (
+    <div className="space-y-4">
+      <div
+        className="flex w-max rounded-md border p-0.5"
+        role="group"
+        aria-label="Tipo de relatório"
+      >
+        {(
+          [
+            ["bank", "Banco Sicoob"],
+            ["office", "Resultado do escritório"],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={view === value}
+            onClick={() => setView(value)}
+            className={`rounded px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              view === value
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === "office" ? (
+        <FinanceReports ledger={ledger} />
+      ) : (
+        <FinanceBankReports userId={userId} ledger={ledger} />
+      )}
+    </div>
   );
 }

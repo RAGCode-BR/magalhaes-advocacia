@@ -1650,6 +1650,50 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-finance-dashboard": () => (
+    <div
+      role="img"
+      aria-label="Prévia ilustrativa do painel financeiro com indicadores, gráfico e plano de contas"
+      data-finance-dashboard-preview
+      className="space-y-2 rounded-xl border bg-card p-3 text-[10px] text-card-foreground"
+    >
+      <div className="flex items-end justify-between gap-2">
+        <div>
+          <p className="text-muted-foreground">Saldo consolidado</p>
+          <p className="text-base font-semibold tabular-nums">R$ 25.400,00</p>
+        </div>
+        <span className="rounded bg-[#003641] px-1.5 py-0.5 font-semibold text-white">Sicoob · 92% conciliado</span>
+      </div>
+      <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border bg-border">
+        {[
+          ["bg-emerald-600", "Recebido", "R$ 9.000"],
+          ["bg-destructive", "Pago", "R$ 3.100"],
+          ["bg-amber-500", "Vencidos", "R$ 800"],
+        ].map(([dot, label, value]) => (
+          <div key={label} className="bg-card p-1.5">
+            <p className="flex items-center gap-1 text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${dot}`} />{label}</p>
+            <p className="font-semibold tabular-nums">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="flex h-12 items-end gap-2 rounded-lg border px-2 pb-1 pt-2">
+        {[45, 60, 52, 70, 64, 88].map((height, index) => (
+          <div key={index} className="flex flex-1 items-end justify-center gap-px">
+            <span className="w-1.5 rounded-t bg-emerald-600" style={{ height: `${height}%` }} />
+            <span className="w-1.5 rounded-t bg-destructive" style={{ height: `${height / 2.4}%` }} />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-lg border">
+        {[["1.1", "Honorários", "R$ 8.000"], ["2.2.01", "Aluguel e condomínio", "R$ 2.000"], ["2.6.01", "Tarifas bancárias", "R$ 40"]].map(([code, name, value]) => (
+          <p key={code} className="flex justify-between gap-2 border-b px-2 py-1 last:border-0">
+            <span><span className="text-muted-foreground">{code}</span> {name}</span>
+            <span className="tabular-nums">{value}</span>
+          </p>
+        ))}
+      </div>
+    </div>
+  ),
   "magalhaes-sicoob-boletos": () => (
     <div
       role="img"

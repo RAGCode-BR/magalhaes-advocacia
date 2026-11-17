@@ -97,7 +97,39 @@ export type FinanceRegister = {
   contact: string | null;
   notes: string | null;
   active: boolean;
+  /** Chart-of-accounts code such as "1.1.02" (categories only). */
+  code?: string | null;
+  /** Receita or despesa (categories only); empty means both. */
+  nature?: FinanceKind | null;
 };
+
+/** Sorts plan items by numeric code ("1.2" before "1.10"); uncoded items last. */
+export function financePlanSort(a: FinanceRegister, b: FinanceRegister) {
+  if (a.code && b.code) {
+    const x = a.code.split(".").map(Number);
+    const y = b.code.split(".").map(Number);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+      if (x[i] === undefined) return -1;
+      if (y[i] === undefined) return 1;
+      if (x[i] !== y[i]) return x[i] - y[i];
+    }
+    return 0;
+  }
+  if (a.code) return -1;
+  if (b.code) return 1;
+  return a.name.localeCompare(b.name, "pt-BR");
+}
+
+export const financePlanDepth = (code?: string | null) => (code ? code.split(".").length - 1 : 0);
+
+/** Plan items usable for an entry of this kind, in plan order. */
+export function financePlanOptions(registers: FinanceRegister[], kind: FinanceKind) {
+  return registers
+    .filter(
+      (item) => item.kind === "category" && item.active && (!item.nature || item.nature === kind),
+    )
+    .sort(financePlanSort);
+}
 export type FinanceAgreement = {
   id: string;
   kind: "quote" | "recurring";
@@ -278,4 +310,152 @@ export function financeDailyFlow(
       actual: amounts.income - amounts.expense,
       projected: amounts.income - amounts.expense + amounts.pendingIncome - amounts.pendingExpense,
     }));
+}
+
+// Suggested chart of accounts for a law office. Existing items with the same name are
+// kept (same id) and only receive the code and nature.
+export const SUGGESTED_PLAN: { code: string; name: string; nature: FinanceKind }[] = [
+  { code: "1", name: "Receitas", nature: "income" },
+  { code: "1.1", name: "Honorários", nature: "income" },
+  { code: "1.2", name: "Honorários de êxito", nature: "income" },
+  { code: "1.3", name: "Honorários de sucumbência", nature: "income" },
+  { code: "1.4", name: "Assessoria mensal", nature: "income" },
+  { code: "1.5", name: "Reembolso de despesas de clientes", nature: "income" },
+  { code: "1.6", name: "Rendimentos financeiros", nature: "income" },
+  { code: "1.9", name: "Outras receitas", nature: "income" },
+  { code: "2", name: "Despesas", nature: "expense" },
+  { code: "2.1", name: "Pessoal", nature: "expense" },
+  { code: "2.1.01", name: "Salários e encargos", nature: "expense" },
+  { code: "2.1.02", name: "Pró-labore", nature: "expense" },
+  { code: "2.1.03", name: "Estagiários", nature: "expense" },
+  { code: "2.2", name: "Ocupação", nature: "expense" },
+  { code: "2.2.01", name: "Aluguel e condomínio", nature: "expense" },
+  { code: "2.2.02", name: "Energia, água e internet", nature: "expense" },
+  { code: "2.3", name: "Administrativas", nature: "expense" },
+  { code: "2.3.01", name: "Material de escritório", nature: "expense" },
+  { code: "2.3.02", name: "Softwares e sistemas", nature: "expense" },
+  { code: "2.3.03", name: "Contabilidade", nature: "expense" },
+  { code: "2.4", name: "Custas e despesas processuais", nature: "expense" },
+  { code: "2.4.01", name: "Custas judiciais", nature: "expense" },
+  { code: "2.4.02", name: "Diligências e deslocamentos", nature: "expense" },
+  { code: "2.5", name: "Tributos e anuidades", nature: "expense" },
+  { code: "2.5.01", name: "Impostos sobre faturamento", nature: "expense" },
+  { code: "2.5.02", name: "Anuidade OAB", nature: "expense" },
+  { code: "2.6", name: "Despesas bancárias", nature: "expense" },
+  { code: "2.6.01", name: "Tarifas bancárias", nature: "expense" },
+  { code: "2.6.02", name: "Juros e IOF", nature: "expense" },
+  { code: "2.7", name: "Marketing", nature: "expense" },
+  { code: "2.9", name: "Outras despesas", nature: "expense" },
+];
+
+/** Daily consolidated balance of active accounts for the last `days` days. */
+export function financeBalanceSeries(
+  accounts: FinanceAccount[],
+  entries: FinanceEntry[],
+  settlements: FinanceSettlement[],
+  transfers: FinanceTransfer[],
+  today: string,
+  days = 90,
+) {
+  const active = accounts.filter((account) => account.active);
+  return Array.from({ length: days }, (_, index) => {
+    const day = new Date(`${today}T12:00:00Z`);
+    day.setUTCDate(day.getUTCDate() - (days - 1 - index));
+    const date = day.toISOString().slice(0, 10);
+    return {
+      date,
+      cents: active.reduce(
+        (sum, account) =>
+          sum + financeAccountBalance(account, entries, settlements, transfers, date),
+        0,
+      ),
+    };
+  });
+}
+
+export type FinanceDreRow = {
+  name: string;
+  code: string | null;
+  depth: number;
+  group: boolean;
+  values: number[];
+};
+
+/**
+ * Management income statement (DRE gerencial): one row per chart-of-accounts item
+ * per month. Group accounts add up their sub-accounts; root groups are omitted
+ * because the Receitas/Despesas totals already show them. Categories outside the
+ * plan are listed after it.
+ */
+export function financeDre(
+  entries: FinanceEntry[],
+  settlements: FinanceSettlement[],
+  registers: FinanceRegister[],
+  months: string[],
+  basis: "cash" | "competence",
+) {
+  const amounts: Record<FinanceKind, Map<string, number[]>> = {
+    income: new Map(),
+    expense: new Map(),
+  };
+  const add = (entry: FinanceEntry, date: string, cents: number) => {
+    const index = months.indexOf(date.slice(0, 7));
+    if (index < 0) return;
+    const map = amounts[entry.kind];
+    const row = map.get(entry.category) ?? months.map(() => 0);
+    row[index] += cents;
+    map.set(entry.category, row);
+  };
+  if (basis === "competence") {
+    for (const entry of entries)
+      if (!entry.cancelled_at) add(entry, entry.competence_date, entry.amount_cents);
+  } else {
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    for (const settlement of settlements) {
+      const entry = byId.get(settlement.entry_id);
+      if (entry && !settlement.reversed_at)
+        add(entry, settlement.settled_on, settlement.amount_cents);
+    }
+  }
+  const build = (kind: FinanceKind) => {
+    const map = amounts[kind];
+    const plan = registers
+      .filter(
+        (item) => item.kind === "category" && item.code && (!item.nature || item.nature === kind),
+      )
+      .sort(financePlanSort);
+    const codes = plan.map((item) => item.code ?? "");
+    const rows: FinanceDreRow[] = [];
+    const used = new Set<string>();
+    for (const item of plan) {
+      const code = item.code ?? "";
+      const group = codes.some((other) => other.startsWith(code + "."));
+      const depth = financePlanDepth(code);
+      if (group && depth === 0) continue;
+      const members = plan.filter(
+        (other) => other.code === code || (other.code ?? "").startsWith(code + "."),
+      );
+      const values = months.map((_, index) =>
+        members.reduce((sum, member) => sum + (map.get(member.name)?.[index] ?? 0), 0),
+      );
+      used.add(item.name);
+      if (values.some(Boolean))
+        rows.push({ name: item.name, code, depth: Math.max(0, depth - 1), group, values });
+    }
+    for (const [name, values] of [...map.entries()].sort((a, b) =>
+      a[0].localeCompare(b[0], "pt-BR"),
+    ))
+      if (!used.has(name)) rows.push({ name, code: null, depth: 0, group: false, values });
+    const total = months.map((_, index) =>
+      [...map.values()].reduce((sum, values) => sum + values[index], 0),
+    );
+    return { rows, total };
+  };
+  const income = build("income");
+  const expense = build("expense");
+  return {
+    income,
+    expense,
+    result: months.map((_, index) => income.total[index] - expense.total[index]),
+  };
 }

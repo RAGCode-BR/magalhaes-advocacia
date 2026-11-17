@@ -64,3 +64,20 @@ export async function synchronizeBank(
   if (!response.ok) throw new Error(result.error || "Não foi possível atualizar o Sicoob.");
   return result;
 }
+
+export function isSicoobAccount(name: string | null | undefined) {
+  return /sicoob|sicob/i.test(name ?? "");
+}
+
+// Groups bank descriptions such as "PIX RECEBIDO 12/11 FULANO" into "Pix recebido".
+export function bankHistoryGroup(description: string) {
+  const words = description
+    .replace(/[0-9./:-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(" ")
+    .toLocaleLowerCase("pt-BR");
+  return words ? words[0].toLocaleUpperCase("pt-BR") + words.slice(1) : "Sem histórico";
+}

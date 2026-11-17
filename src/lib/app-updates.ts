@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-finance-dashboard"
   | "magalhaes-sicoob-boletos"
   | "magalhaes-sicoob"
   | "magalhaes-proposal-retainer"
@@ -84,6 +85,23 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-financeiro-painel-plano-de-contas-2026-11-17",
+    title: "Financeiro com painel, plano de contas e relatórios do Sicoob",
+    date: "2026-11-17",
+    preview: "magalhaes-finance-dashboard",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "O Financeiro abre no novo Painel: saldo consolidado com a evolução de 90 dias, recebido, pago, resultado e inadimplência do mês, gráfico de 6 meses, situação do Sicoob e o que vence nos próximos 7 dias. Clique em qualquer indicador para ver os lançamentos por trás dele.",
+      "Receitas não precisam mais de cliente: registre rendimentos, reembolsos e outras entradas como receita avulsa. Despesas não têm campo de cliente. Os botões Nova receita e Nova despesa ficam sempre no topo.",
+      "Plano de contas com códigos (como 2.3.01), natureza de receita ou despesa e um plano sugerido para escritório de advocacia. Os centros de custo são escolhidos em lista. Os lançamentos já cadastrados continuam iguais.",
+      "Lançamentos ganharam abas-resumo clicáveis (Vencidos, Vencem hoje, A vencer, Recebidos ou Pagos e Total) e tabela em formato de planilha, com conta do plano, centro de custo e totais.",
+      "Extrato, Sicoob e Contas viraram uma única aba, Contas e extratos: escolha a conta para ver o extrato com saldo acumulado. Na conta Sicoob, alterne entre o extrato do banco e as baixas no sistema.",
+      "Relatórios abrem no Banco Sicoob, com gráfico de entradas e saídas, ticket médio, comparação banco × sistema e pendências de conciliação. O Resultado do escritório traz a DRE gerencial pelo plano de contas, com análise vertical.",
+      "Contratos, Serviços, Ordens de serviço e Compras saíram do menu do Financeiro. Os registros existentes foram preservados.",
+    ],
+  },
   {
     id: "magalhaes-sicoob-boletos-2026-11-17",
     title: "Boletos Sicoob e histórico do extrato",

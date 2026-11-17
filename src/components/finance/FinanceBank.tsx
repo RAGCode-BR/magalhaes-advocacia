@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Landmark, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -12,13 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  currency,
-  displayDate,
-  financeRpc,
-  isoToday,
-  selectClass,
-} from "@/lib/office-finance-data";
+import { currency, displayDate, financeRpc, isoToday } from "@/lib/office-finance-data";
 import {
   loadBankOverview,
   synchronizeBank,
@@ -27,6 +20,7 @@ import {
   type BankTransaction,
 } from "@/lib/office-bank";
 import { FinanceActionDialog, type FinanceAction } from "./FinanceActionDialog";
+import { Amount, KpiStrip, Sheet, SheetGutter, SicoobLogo, StatusChip } from "./FinanceSheet";
 
 const timestamp = (value: string) =>
   new Intl.DateTimeFormat("pt-BR", {
@@ -86,75 +80,248 @@ export function FinanceBank({ userId }: { userId: string }) {
   const rows = data?.rows.slice(0, 50) ?? [];
   const hasNext = (data?.rows.length ?? 0) > 50;
   const balance = data?.balances?.ledger;
+  const total = data?.totals?.count ?? 0;
+  const pending = data?.totals?.pending ?? 0;
+  const reconciledShare = total ? Math.round(((total - pending) / total) * 100) : 0;
   return (
     <div className="space-y-4">
-      <Card className="space-y-4 p-4 md:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-lg font-semibold">
-              <Landmark className="h-5 w-5 text-primary" />
-              Sicoob
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Saldo, extrato e conciliação da conta do escritório.
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <SicoobLogo className="h-5" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{connection?.name ?? "Conta Sicoob"}</p>
+            <p className="text-xs text-muted-foreground">
+              {connection?.last_success_at
+                ? `Atualizado em ${timestamp(connection.last_success_at)}`
+                : "Aguardando a primeira atualização"}
             </p>
           </div>
-          <Button onClick={() => sync.mutate()} disabled={sync.isPending || !connection?.enabled}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${sync.isPending ? "animate-spin" : ""}`} />
-            {sync.isPending ? "Atualizando…" : "Atualizar extrato"}
+        </div>
+        <Button onClick={() => sync.mutate()} disabled={sync.isPending || !connection?.enabled}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${sync.isPending ? "animate-spin" : ""}`} />
+          {sync.isPending ? "Atualizando…" : "Atualizar extrato"}
+        </Button>
+      </div>
+      {bank.isPending && (
+        <p role="status" className="text-sm">
+          Carregando os dados bancários…
+        </p>
+      )}
+      {bank.isError && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 text-sm">
+          <p>Não foi possível carregar o Sicoob.</p>
+          <Button variant="outline" onClick={() => void bank.refetch()}>
+            Tentar novamente
           </Button>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="grid gap-1.5 text-sm font-medium">
-            Mês do extrato
-            <Input
-              type="month"
-              max={isoToday().slice(0, 7)}
-              value={month}
-              className="w-auto"
-              onChange={(e) => {
-                if (e.target.value) {
-                  setMonth(e.target.value);
-                  setPages([]);
-                }
-              }}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            Conciliação
-            <select
-              className={selectClass + " w-auto"}
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value);
+      )}
+      {data && !connection && (
+        <p className="text-sm text-muted-foreground">A conta Sicoob ainda não está configurada.</p>
+      )}
+      {connection?.last_error && (
+        <p
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+        >
+          {connection.last_error}
+        </p>
+      )}
+      {connection && (
+        <KpiStrip
+          items={[
+            {
+              label: "Saldo no banco",
+              value: balance ? currency(balance.amount_cents) : "Aguardando consulta",
+              tone: "balance",
+              hint: balance
+                ? `Consultado em ${timestamp(balance.observed_at)} · sem limite de crédito`
+                : undefined,
+            },
+            {
+              label: "Entradas no mês",
+              value: currency(data.totals?.credits ?? 0),
+              tone: "income",
+            },
+            { label: "Saídas no mês", value: currency(data.totals?.debits ?? 0), tone: "expense" },
+            {
+              label: "Conciliação do mês",
+              value: total ? `${reconciledShare}%` : "—",
+              tone: pending ? "alert" : "income",
+              hint: (
+                <span className="block">
+                  <span
+                    className="mt-1 block h-1.5 overflow-hidden rounded-full bg-muted"
+                    role="progressbar"
+                    aria-label="Movimentações conciliadas"
+                    aria-valuenow={reconciledShare}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <span
+                      className="block h-full rounded-full bg-emerald-600 dark:bg-emerald-400"
+                      style={{ width: `${reconciledShare}%` }}
+                    />
+                  </span>
+                  <span className="mt-1 block">
+                    {pending} de {total} não conciliadas
+                  </span>
+                </span>
+              ),
+            },
+          ]}
+        />
+      )}
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="grid gap-1.5 text-sm font-medium">
+          Mês do extrato
+          <Input
+            type="month"
+            max={isoToday().slice(0, 7)}
+            value={month}
+            className="w-auto"
+            onChange={(e) => {
+              if (e.target.value) {
+                setMonth(e.target.value);
                 setPages([]);
+              }
+            }}
+          />
+        </label>
+        <div className="grid gap-1.5 text-sm font-medium">
+          Conciliação
+          <div className="flex rounded-md border p-0.5" role="group" aria-label="Conciliação">
+            {[
+              ["all", "Todas"],
+              ["pending", "Não conciliadas"],
+              ["reconciled", "Conciliadas"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={status === value}
+                onClick={() => {
+                  setStatus(value);
+                  setPages([]);
+                }}
+                className={`rounded px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  status === value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="pb-2 text-xs text-muted-foreground">
+          {selectedPeriod
+            ? selectedPeriod.row_count
+              ? `${selectedPeriod.row_count} movimentações retornadas pelo Sicoob · consulta em ${timestamp(selectedPeriod.synced_at)}`
+              : `O Sicoob respondeu sem movimentações · consulta em ${timestamp(selectedPeriod.synced_at)}`
+            : connection
+              ? "Este mês ainda não foi consultado. Use Atualizar extrato."
+              : null}
+        </p>
+      </div>
+      {connection && (
+        <>
+          {rows.length ? (
+            <Sheet
+              label="Movimentações bancárias Sicoob"
+              columns={[
+                { label: "Data" },
+                { label: "Histórico" },
+                { label: "Entrada", align: "right" },
+                { label: "Saída", align: "right" },
+                { label: "Conciliação" },
+              ]}
+            >
+              {rows.map((row, index) => (
+                <tr key={row.id}>
+                  <SheetGutter n={pages.length * 50 + index + 1} />
+                  <td className="whitespace-nowrap">{displayDate(row.booked_on)}</td>
+                  <td className="min-w-48 max-w-md break-words">{row.description}</td>
+                  <td className="whitespace-nowrap text-right font-medium">
+                    {row.amount_cents > 0 && <Amount cents={row.amount_cents} abs />}
+                  </td>
+                  <td className="whitespace-nowrap text-right font-medium">
+                    {row.amount_cents < 0 && <Amount cents={row.amount_cents} abs />}
+                  </td>
+                  <td className="whitespace-nowrap">
+                    {row.settlement_id ? (
+                      <div className="flex items-center gap-1">
+                        <StatusChip status="Conciliada" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() =>
+                            setAction({
+                              title: "Desfazer conciliação",
+                              explanation:
+                                "A movimentação voltará para Não conciliadas. A baixa registrada no financeiro será mantida.",
+                              needsReason: true,
+                              run: (reason) =>
+                                financeRpc("office_bank_unreconcile", {
+                                  p_transaction: row.id,
+                                  p_reason: reason,
+                                }),
+                            })
+                          }
+                        >
+                          Desfazer
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <StatusChip status="Pendente" />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setSelected(row)}
+                        >
+                          Conciliar
+                        </Button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </Sheet>
+          ) : (
+            <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Nenhuma movimentação neste filtro. Para buscar um mês ainda não importado, clique em
+              Atualizar extrato.
+            </p>
+          )}
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!pages.length || bank.isFetching}
+              onClick={() => setPages((p) => p.slice(0, -1))}
+            >
+              Anterior
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Página {pages.length + 1} · a importação não altera as baixas do financeiro
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!hasNext || bank.isFetching}
+              onClick={() => {
+                const last = rows.at(-1);
+                if (last) setPages((p) => [...p, { date: last.booked_on, id: last.id }]);
               }}
             >
-              <option value="all">Todas</option>
-              <option value="pending">Não conciliadas</option>
-              <option value="reconciled">Conciliadas</option>
-            </select>
-          </label>
-        </div>
-        <div className="space-y-2 text-sm">
-          {selectedPeriod ? (
-            <p>
-              {selectedPeriod.row_count
-                ? `${selectedPeriod.row_count} movimentações retornadas pelo Sicoob neste mês.`
-                : "Mês consultado: o Sicoob respondeu sem movimentações."}{" "}
-              <span className="text-muted-foreground">
-                Consulta em {timestamp(selectedPeriod.synced_at)}.
-              </span>
-            </p>
-          ) : (
-            connection && (
-              <p className="text-muted-foreground">
-                Este mês ainda não tem uma consulta registrada. Use Atualizar extrato.
-              </p>
-            )
-          )}
+              Próxima
+            </Button>
+          </div>
           {!!periods.data?.length && (
-            <details className="rounded-lg border p-3">
+            <details className="rounded-md border p-3 text-sm">
               <summary className="cursor-pointer font-medium">
                 Meses consultados ({periods.data.length})
               </summary>
@@ -178,176 +345,13 @@ export function FinanceBank({ userId }: { userId: string }) {
                 ))}
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Estes são os dados retornados pela API do Sicoob. Se houver movimentações no extrato
-                do banco que não aparecem aqui, solicite a liberação do histórico à cooperativa.
+                O mês atual é atualizado automaticamente a cada 30 minutos. Estes são os dados
+                retornados pela API do Sicoob. Se houver movimentações no extrato do banco que não
+                aparecem aqui, solicite a liberação do histórico à cooperativa.
               </p>
             </details>
           )}
-        </div>
-        {bank.isPending && (
-          <p role="status" className="text-sm">
-            Carregando os dados bancários…
-          </p>
-        )}
-        {bank.isError && (
-          <div role="alert" className="flex flex-wrap items-center gap-3 text-sm">
-            <p>Não foi possível carregar o Sicoob.</p>
-            <Button variant="outline" onClick={() => void bank.refetch()}>
-              Tentar novamente
-            </Button>
-          </div>
-        )}
-        {data && !connection && (
-          <p className="text-sm text-muted-foreground">
-            A conta Sicoob ainda não está configurada.
-          </p>
-        )}
-        {connection && (
-          <>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                [
-                  "Saldo atual do banco",
-                  balance ? currency(balance.amount_cents) : "Aguardando consulta",
-                ],
-                ["Entradas no mês", currency(data.totals?.credits ?? 0)],
-                ["Saídas no mês", currency(data.totals?.debits ?? 0)],
-              ].map(([label, value]) => (
-                <div key={label} className="min-w-0 rounded-lg bg-muted/40 p-3">
-                  <p className="text-sm text-muted-foreground">{label}</p>
-                  <p className="mt-1 break-words text-xl font-semibold tabular-nums">{value}</p>
-                </div>
-              ))}
-            </div>
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <p>
-                {connection.name} ·{" "}
-                {connection.last_success_at
-                  ? `Última atualização: ${timestamp(connection.last_success_at)}`
-                  : "Aguardando a primeira atualização"}
-              </p>
-              <p>
-                O mês atual é atualizado automaticamente a cada 30 minutos. Para outros meses,
-                selecione o período e clique em Atualizar extrato.
-              </p>
-              {balance && (
-                <p>
-                  Saldo consultado em {timestamp(balance.observed_at)}. O limite de crédito não é
-                  somado ao saldo.
-                </p>
-              )}
-            </div>
-            {connection.last_error && (
-              <p
-                role="alert"
-                className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-              >
-                {connection.last_error}
-              </p>
-            )}
-          </>
-        )}
-      </Card>
-      {connection && (
-        <Card className="overflow-hidden">
-          <div className="space-y-1 border-b p-4">
-            <h3 className="font-semibold">Movimentações bancárias</h3>
-            <p className="text-sm text-muted-foreground">
-              {data.totals?.count ?? 0} movimentações · {data.totals?.pending ?? 0} não conciliadas.
-              A importação não altera as baixas do financeiro.
-            </p>
-          </div>
-          {rows.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-muted/25">
-                  <tr>
-                    {["Data", "Descrição", "Valor", "Conciliação"].map((label) => (
-                      <th scope="col" key={label} className="p-3 font-medium">
-                        {label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id} className="border-t">
-                      <td className="whitespace-nowrap p-3 align-top">
-                        {displayDate(row.booked_on)}
-                      </td>
-                      <td className="min-w-48 max-w-md break-words p-3 align-top">
-                        {row.description}
-                      </td>
-                      <td
-                        className={`whitespace-nowrap p-3 align-top font-medium tabular-nums ${row.amount_cents < 0 ? "text-destructive" : "text-emerald-700"}`}
-                      >
-                        {currency(row.amount_cents)}
-                      </td>
-                      <td className="p-3 align-top">
-                        {row.settlement_id ? (
-                          <div className="grid gap-1">
-                            <span className="flex items-center gap-1 whitespace-nowrap text-xs text-emerald-700">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Conciliada
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setAction({
-                                  title: "Desfazer conciliação",
-                                  explanation:
-                                    "A movimentação voltará para Não conciliadas. A baixa registrada no financeiro será mantida.",
-                                  needsReason: true,
-                                  run: (reason) =>
-                                    financeRpc("office_bank_unreconcile", {
-                                      p_transaction: row.id,
-                                      p_reason: reason,
-                                    }),
-                                })
-                              }
-                            >
-                              Desfazer
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => setSelected(row)}>
-                            Conciliar
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="p-6 text-sm text-muted-foreground">
-              Nenhuma movimentação neste filtro. Para buscar um mês ainda não importado, clique em
-              Atualizar extrato.
-            </p>
-          )}
-          <div className="flex items-center justify-between gap-2 border-t p-3">
-            <Button
-              variant="outline"
-              disabled={!pages.length || bank.isFetching}
-              onClick={() => setPages((p) => p.slice(0, -1))}
-            >
-              Anterior
-            </Button>
-            <span className="text-xs text-muted-foreground">Página {pages.length + 1}</span>
-            <Button
-              variant="outline"
-              disabled={!hasNext || bank.isFetching}
-              onClick={() => {
-                const last = rows.at(-1);
-                if (last) setPages((p) => [...p, { date: last.booked_on, id: last.id }]);
-              }}
-            >
-              Próxima
-            </Button>
-          </div>
-        </Card>
+        </>
       )}
       {selected && (
         <ReconcileDialog
