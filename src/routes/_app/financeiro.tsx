@@ -48,6 +48,7 @@ import { FinanceAgreements } from "@/components/finance/FinanceAgreements";
 import { FinanceOrders } from "@/components/finance/FinanceOrders";
 import { FinanceRegisters } from "@/components/finance/FinanceRegisters";
 import { FinanceAccounts } from "@/components/finance/FinanceAccounts";
+import { FinanceBank } from "@/components/finance/FinanceBank";
 import {
   FinanceReports,
   FinanceStatement,
@@ -71,6 +72,7 @@ const financeSections: { label: string; items: [string, string][] }[] = [
     items: [
       ["entries", "Lançamentos"],
       ["statement", "Extrato"],
+      ["bank", "Sicoob"],
       ["accounts", "Contas"],
     ],
   },
@@ -467,6 +469,7 @@ function FinancePage({ userId }: { userId: string }) {
       )}
       {ledger.data && section === "reports" && <FinanceReports ledger={ledger.data} />}
       {ledger.data && section === "statement" && <FinanceStatement ledger={ledger.data} />}
+      {section === "bank" && <FinanceBank userId={userId} />}
       {ledger.data && section === "history" && (
         <FinanceHistoryPanel userId={userId} ledger={ledger.data} />
       )}

@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-sicoob"
   | "magalhaes-proposal-retainer"
   | "crm-column-order"
   | "magalhaes-quote-proposal-crm"
@@ -82,6 +83,20 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-sicoob-2026-11-17",
+    title: "Sicoob no financeiro: saldo, extrato e conciliação",
+    date: "2026-11-17",
+    preview: "magalhaes-sicoob",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "A nova aba Sicoob no Financeiro mostra o saldo informado pelo banco, entradas, saídas e movimentações por mês, com acesso restrito aos administradores.",
+      "O mês atual é atualizado automaticamente a cada 30 minutos. Para consultar outro mês, selecione o período e use Atualizar extrato. Repetir a importação preserva os mesmos registros.",
+      "Concilie uma movimentação com uma baixa existente da mesma conta, valor e tipo. O sistema registra quem confirmou o vínculo e permite desfazê-lo com motivo, preservando a baixa e o histórico.",
+      "A importação não cria baixas automaticamente. Esta entrega consulta a conta corrente; investimentos RDC e emissão de boletos não fazem parte desta atualização.",
+    ],
+  },
   {
     id: "magalhaes-proposta-mensalidade-2026-11-16",
     title: "Orçamentos agora são Propostas, com assessoria mensal",

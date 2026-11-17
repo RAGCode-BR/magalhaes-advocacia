@@ -49,3 +49,8 @@ supabase/.temp/
 supabase/.branches/
 
 *.local.mjs
+
+# Banking credentials and private certificate containers
+*.pfx
+*.p12
+*.key

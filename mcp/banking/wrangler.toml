@@ -1,0 +1,23 @@
+name = "magalhaes-sicoob"
+main = "worker.ts"
+account_id = "5a499ca4bed22bd256b911e7b18c95c7"
+compatibility_date = "2026-11-17"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+APP_ORIGIN = "https://ragcode-br.github.io"
+NEON_DATA_URL = "https://ep-weathered-hat-b4vy9dtp.apirest.c-6.us-east-2.aws.neon.tech/magalhaes/rest/v1"
+BANK_CONNECTION_ID = "11a420b0-0469-4895-b16d-68dbdb5a83e4"
+
+[[mtls_certificates]]
+binding = "SICOOB_CERT"
+certificate_id = "e4451152-c7ce-4b8a-9fef-8d3ab27ae7ef"
+
+[triggers]
+crons = ["*/30 * * * *"]
+
+[observability]
+enabled = true
+
+# Server-only secrets, configured with Wrangler, never VITE_ variables:
+# SICOOB_CLIENT_ID, SICOOB_ACCOUNT, BANK_DATABASE_URL

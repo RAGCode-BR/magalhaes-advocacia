@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { testBankStatement } from "./test-bank-statement-db.mjs";
+import { testBankConnector } from "./test-bank-connector-db.mjs";
 
 // This harness never reads application credentials or connects to a remote database.
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -143,6 +144,7 @@ try {
     "20261107150000_office_finance_orders.sql",
     "20261110120000_finance_quote_proposal_crm.sql",
     "20261116120000_bank_statement_foundation.sql",
+    "20261117120000_sicoob_connector.sql",
   ]) {
     await owner.query(await readFile(join(root, "supabase/migrations", filename), "utf8"));
   }
@@ -150,6 +152,7 @@ try {
   const other = await connection();
   const outsider = await connection(outsiderId);
   await testBankStatement({ owner, admin, outsider });
+  await testBankConnector({ owner, admin, other, outsider, connection, clientId });
 
   // Non-admins cannot read any finance table, mutate through RPCs or write history.
   for (const table of [

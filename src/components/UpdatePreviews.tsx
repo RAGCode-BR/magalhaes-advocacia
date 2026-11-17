@@ -1650,6 +1650,14 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-sicoob": () => (
+    <div role="img" aria-label="Prévia ilustrativa do saldo, extrato e conciliação Sicoob" className="space-y-3 rounded-xl border bg-card p-4 text-xs text-card-foreground">
+      <div className="flex items-center justify-between gap-2"><strong>Financeiro · Sicoob</strong><RefreshCw className="h-4 w-4 text-primary" /></div>
+      <div className="grid grid-cols-2 gap-2"><div className="rounded-lg bg-muted p-2"><p>Saldo do banco</p><strong>R$ 1.200,00</strong></div><div className="rounded-lg bg-muted p-2"><p>Novembro · Exemplo</p><span>1 não conciliada</span></div></div>
+      <div className="flex items-center justify-between gap-2 border-t pt-2"><span>Recebimento de honorários</span><span className="rounded border px-2 py-1 text-primary">Conciliar</span></div>
+      <div className="flex items-center justify-between gap-2"><span>Despesa do escritório</span><span className="flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3 w-3" />Conciliada</span></div>
+    </div>
+  ),
   "magalhaes-proposal-retainer": MagalhaesProposalRetainerPreview,
   "crm-column-order": CrmColumnOrderPreview,
   "magalhaes-quote-proposal-crm": MagalhaesQuoteProposalCrmPreview,
