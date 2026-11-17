@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { testBankStatement } from "./test-bank-statement-db.mjs";
+import { testBoletos } from "./test-boletos-db.mjs";
 import { testBankConnector } from "./test-bank-connector-db.mjs";
 
 // This harness never reads application credentials or connects to a remote database.
@@ -145,6 +146,7 @@ try {
     "20261110120000_finance_quote_proposal_crm.sql",
     "20261116120000_bank_statement_foundation.sql",
     "20261117120000_sicoob_connector.sql",
+    "20261117160000_sicoob_history_boletos.sql",
   ]) {
     await owner.query(await readFile(join(root, "supabase/migrations", filename), "utf8"));
   }
@@ -153,6 +155,8 @@ try {
   const outsider = await connection(outsiderId);
   await testBankStatement({ owner, admin, outsider });
   await testBankConnector({ owner, admin, other, outsider, connection, clientId });
+
+  await testBoletos({ owner, admin, other, outsider, connection, clientId });
 
   // Non-admins cannot read any finance table, mutate through RPCs or write history.
   for (const table of [
@@ -388,7 +392,9 @@ try {
     ]),
     /já tem um cliente/,
   );
-  await admin.query("SELECT public.office_finance_agreement_action($1,'generate')", [prospectQuote]);
+  await admin.query("SELECT public.office_finance_agreement_action($1,'generate')", [
+    prospectQuote,
+  ]);
   assert.equal(
     (
       await admin.query(

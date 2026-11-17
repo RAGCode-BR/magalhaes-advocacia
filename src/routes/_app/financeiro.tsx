@@ -48,6 +48,7 @@ import { FinanceAgreements } from "@/components/finance/FinanceAgreements";
 import { FinanceOrders } from "@/components/finance/FinanceOrders";
 import { FinanceRegisters } from "@/components/finance/FinanceRegisters";
 import { FinanceAccounts } from "@/components/finance/FinanceAccounts";
+import { FinanceBoletos } from "@/components/finance/FinanceBoletos";
 import { FinanceBank } from "@/components/finance/FinanceBank";
 import {
   FinanceReports,
@@ -73,6 +74,7 @@ const financeSections: { label: string; items: [string, string][] }[] = [
       ["entries", "Lançamentos"],
       ["statement", "Extrato"],
       ["bank", "Sicoob"],
+      ["boletos", "Boletos"],
       ["accounts", "Contas"],
     ],
   },
@@ -461,15 +463,33 @@ function FinancePage({ userId }: { userId: string }) {
       {ledger.data && section === "accounts" && (
         <FinanceAccounts ledger={ledger.data} refresh={refresh} />
       )}
-      {ledger.data && (section === "services" || section === "service" || section === "purchase") && (
-        <FinanceOrders key={section} userId={userId} section={section} registers={ledger.data.registers} refresh={refresh} />
-      )}
+      {ledger.data &&
+        (section === "services" || section === "service" || section === "purchase") && (
+          <FinanceOrders
+            key={section}
+            userId={userId}
+            section={section}
+            registers={ledger.data.registers}
+            refresh={refresh}
+          />
+        )}
       {ledger.data && section === "registers" && (
         <FinanceRegisters registers={ledger.data.registers} refresh={refresh} />
       )}
       {ledger.data && section === "reports" && <FinanceReports ledger={ledger.data} />}
       {ledger.data && section === "statement" && <FinanceStatement ledger={ledger.data} />}
       {section === "bank" && <FinanceBank userId={userId} />}
+      {section === "boletos" && (
+        <FinanceBoletos
+          userId={userId}
+          entries={entries}
+          clients={clients}
+          onNewEntry={() => {
+            setSection("entries");
+            setDraft({ id: crypto.randomUUID(), kind: "income" });
+          }}
+        />
+      )}
       {ledger.data && section === "history" && (
         <FinanceHistoryPanel userId={userId} ledger={ledger.data} />
       )}

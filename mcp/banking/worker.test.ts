@@ -23,6 +23,15 @@ describe("bank endpoint access", () => {
         )
       ).status,
     ).toBe(403);
+    for (const action of ["issue", "query", "pdf"])
+      expect(
+        (
+          await worker.fetch(
+            new Request(`https://bank.test/boletos/${action}`, { method: "POST" }),
+            env,
+          )
+        ).status,
+      ).toBe(401);
     expect(fetch).not.toHaveBeenCalled();
   });
   it("requires the authenticated admin RPC, not a decoded JWT claim", async () => {
@@ -41,6 +50,21 @@ describe("bank endpoint access", () => {
       "https://data.example.test/rest/v1/rpc/office_bank_sync_authorize",
     );
     expect(fetch.mock.calls[0][1].redirect).toBe("manual");
+  });
+  it("distinguishes authorization service outages from permission denial", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 503 })));
+    expect(
+      (
+        await worker.fetch(
+          new Request("https://bank.test/boletos/issue", {
+            method: "POST",
+            headers: { Authorization: "Bearer token" },
+            body: "{}",
+          }),
+          env,
+        )
+      ).status,
+    ).toBe(502);
   });
   it("rejects invalid periods before accessing the banking credentials", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(true)));

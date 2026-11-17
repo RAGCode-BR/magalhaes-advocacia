@@ -1,6 +1,6 @@
 # Integração Sicoob — Magalhães Advocacia
 
-Implementação em 17/11/2026. Escopo: saldo, extrato da conta corrente e conciliação com baixas já registradas no financeiro.
+Implementação em 17/11/2026. Escopo: saldo, extrato retroativo da conta corrente, conciliação com baixas e emissão de boletos de honorários.
 
 ## Componentes
 
@@ -9,7 +9,7 @@ Implementação em 17/11/2026. Escopo: saldo, extrato da conta corrente e concil
 | GitHub Pages | Interface em `Financeiro → Sicoob`, publicada pelo workflow `pages.yml` a partir de `main` |
 | Neon | PostgreSQL, Neon Auth, Data API e RLS do projeto exclusivo `magalhaes-advocacia` |
 | Cloudflare | Worker exclusivo `magalhaes-sicoob`, independente do conector `taskflow-mcp` |
-| Sicoob | API Conta Corrente v4; OAuth client credentials e certificado mTLS |
+| Sicoob | APIs Conta Corrente v4 e Cobrança Bancária v3; OAuth client credentials e certificado mTLS |
 
 Site: <https://ragcode-br.github.io/magalhaes-advocacia/financeiro>.
 Serviço: <https://magalhaes-sicoob.ragcodebr.workers.dev>.
@@ -25,7 +25,7 @@ flowchart LR
 
 ## Funcionamento entregue
 
-- A conta corrente autorizada pelo banco é vinculada à conta financeira **Sicoob · Conta corrente**. A abertura em 01/11/2026 foi calculada pelo saldo atual confirmado menos a soma dos 13 movimentos de novembro, antes de existirem baixas na conta, com registro em histórico. O campo `saldoAnterior` da API retornou o mesmo valor para consultas de períodos diferentes e não foi usado como abertura do mês. Isso não cria baixas de honorários ou despesas.
+- A conta corrente autorizada pelo banco é vinculada à conta financeira **Sicoob · Conta corrente**. A abertura em 01/01/2026 foi recalculada pelo saldo atual confirmado menos a soma dos 39 movimentos retornados entre janeiro e novembro, antes de existirem baixas na conta, com registro em histórico. O campo `saldoAnterior` da API retornou o mesmo valor para consultas de períodos diferentes e não foi usado como abertura do mês. Isso não cria baixas de honorários ou despesas.
 - O Worker consulta o mês corrente a cada 30 minutos, pelo calendário de São Paulo. O botão **Atualizar extrato** consulta o mês escolhido. Meses anteriores dependem da disponibilidade do histórico na API do banco.
 - A API utilizada retorna o mês em uma resposta, com `transactionId` estável. O importador rejeita resposta incompleta, identificadores repetidos, valores ou datas inválidos; não inventa identificadores por data/valor. Valores iguais de pagamentos distintos continuam sendo movimentos distintos.
 - Cada importação usa uma transação SQL e uma trava temporária por conexão. Repetir a consulta atualiza somente movimentos alterados; não duplica lançamentos. Falhas preservam os dados anteriores e aparecem na tela junto à última atualização concluída.
@@ -33,7 +33,11 @@ flowchart LR
 - A lista consulta até 51 registros para apresentar páginas de 50, usando data/identificador como cursor. Totais mensais são calculados no servidor. Abrir a tela não dispara consultas no Sicoob por usuário.
 - A conciliação é confirmada pelo administrador: uma movimentação é vinculada a uma baixa existente, da mesma conta, mesmo valor e direção. As sugestões são ordenadas pela proximidade da data. O vínculo não altera valor nem data da baixa.
 - Desfazer uma conciliação exige motivo e mantém a baixa financeira. O histórico guarda a operação. Uma baixa conciliada não pode ser estornada sem desfazer o vínculo. Alteração posterior de valor/data pelo banco também exige revisão antes de sincronizar.
-- Não foram habilitados pagamentos, transferências bancárias ou emissão de boletos. A permissão solicitada ao Sicoob é somente `cco_consulta openid`.
+- Histórico consultado de janeiro a novembro de 2026: janeiro–agosto retornaram zero registros; setembro 9; outubro 17; novembro 13. Isso descreve o retorno da API, não comprova inexistência de movimentos no internet banking. `office_bank_periods` registra inclusive consultas vazias.
+- Boletos: `Financeiro → Boletos`, com honorário e cliente já cadastrados, saldo em aberto e vencimento hoje ou futuro. Dados do pagador validados, confirmação explícita, consulta da situação, linha digitável e PDF sob demanda. O banco emite e o escritório distribui. Sem juros, multa, desconto, protesto, negativação ou distribuição automática. Escopos `boletos_inclusao boletos_consulta openid`, comprovados por OAuth em produção. A consulta de boletos por pagador retornou HTTP 204.
+- Cada honorário tem uma intenção durável única. A trava é gravada antes do POST ao Sicoob. Timeout, 5xx ou confirmação perdida bloqueiam reemissão; o administrador pode informar o nosso número e recuperar a cobrança após conferência de referência, valor, beneficiário e CPF/CNPJ. Recusas explícitas permitem revisão. Não se repete automaticamente o POST.
+- PDF não é armazenado em coluna do Neon nem publicado no Pages: é obtido pelo Worker autenticado e baixado sob demanda. Consultar ou emitir não cria recebimento contábil.
+- Não foram habilitados pagamentos ou transferências bancárias. A primeira emissão real depende da confirmação de um honorário pelo usuário; nenhum boleto real de teste foi criado.
 
 ### Limites desta etapa
 
@@ -44,8 +48,8 @@ RDC ainda depende de uma API ou arquivo com posição e movimentos do investimen
 ## Segurança e operação
 
 - Certificado e chave privada ficam no binding mTLS do Cloudflare. A implantação usa o certificado final normalizado em PEM, sem metadados do PFX, e a chave RSA correspondente. O primeiro pacote com a cadeia completa retornou HTTP 500 vazio; a configuração normalizada foi validada com consultas reais pelo Worker. O certificado apresentado vence em **17/09/2027**; renovar no banco e substituir o binding antes desse prazo.
-- `SICOOB_CLIENT_ID`, `SICOOB_ACCOUNT` e `BANK_DATABASE_URL` são segredos do Worker. A cópia de configuração local está em `.banking.local/secrets.json`, ignorada pelo Git e com permissões privadas. Nenhuma dessas credenciais é variável `VITE_`.
-- A identidade PostgreSQL `magalhaes_sicoob` não tem permissões de tabela, administração ou identidade de usuário. Pode somente chamar as funções de aquisição/conclusão da sincronização. O importador não usa a credencial proprietária do banco.
+- `SICOOB_CLIENT_ID`, `SICOOB_ACCOUNT`, `SICOOB_BENEFICIARY` e `BANK_DATABASE_URL` são segredos do Worker. A cópia de configuração local está em `.banking.local/secrets.json`, ignorada pelo Git e com permissões privadas. Nenhuma dessas credenciais é variável `VITE_`.
+- A identidade PostgreSQL `magalhaes_sicoob` não tem permissões de tabela, administração ou identidade de usuário. Pode somente chamar as funções de aquisição/conclusão da sincronização e de leitura/transição das intenções de boleto. O importador não usa a credencial proprietária do banco.
 - A interface e as funções de conciliação exigem administrador no servidor. A atualização manual valida o JWT pelo Neon Data API antes de acessar o Sicoob. CORS permite a origem do Pages; CORS sozinho não é usado como autenticação.
 - Tokens bancários duram poucos minutos e são mantidos apenas em memória. Requisições têm timeout e não seguem redirecionamentos. Há pausa de 600 ms entre saldo e extrato para respeitar o limite de duas requisições por segundo da documentação.
 - O cron não depende do computador do escritório ligado. O horário fixo é `*/30 * * * *`. A consulta manual tem intervalo mínimo de 30 segundos por conexão e trava expira em dois minutos em caso de interrupção.
@@ -53,7 +57,8 @@ RDC ainda depende de uma API ou arquivo com posição e movimentos do investimen
 
 ### Publicação e manutenção
 
-1. As migrações `20261116120000_bank_statement_foundation.sql` e `20261117120000_sicoob_connector.sql` devem existir no banco. Foram aplicadas ao Neon da Magalhães nesta implantação.
+1. As migrações `20261116120000_bank_statement_foundation.sql`, `20261117120000_sicoob_connector.sql` e `20261117160000_sicoob_history_boletos.sql` devem existir no banco. Foram aplicadas ao Neon da Magalhães nesta implantação.
+   Após mudanças SQL, executar `npx neonctl me` e `node scripts/refresh-neon-data-api.mjs`. O PATCH vazio na API oficial do Neon recarrega o cache sem alterar permissões. Apenas `NOTIFY pgrst` não foi suficiente nesta instalação; houve respostas intermitentes PGRST202 até o refresh pela API de controle.
 2. O código do serviço fica em `mcp/banking`. Publicar a partir de `mcp` com `./node_modules/.bin/wrangler deploy --config banking/wrangler.toml`. Os segredos existentes são preservados. Para uma instalação nova, provisionar a identidade limitada, conexão e segredos antes de habilitar o cron.
 3. O frontend segue o workflow normal do repositório: testes, `npm run build:pages`, push autorizado para `main`, verificação do workflow e do endereço público.
 4. Não copiar os arquivos privados, PFX, PEM ou chave privada para o GitHub Pages. O certificado mTLS é configurado por ID no Wrangler; sua chave não é parte do bundle.
@@ -89,3 +94,10 @@ O fluxo de anexos atual continua no PostgreSQL e pode consumir muito mais transf
 - [Cloudflare — agendamentos](https://developers.cloudflare.com/workers/configuration/cron-triggers/)
 - [Cloudflare — limites](https://developers.cloudflare.com/workers/platform/limits/)
 - [Neon — acompanhamento de consumo](https://neon.com/docs/introduction/monitor-usage)
+
+### Validação da ampliação de 17/11/2026
+
+- PostgreSQL descartável: restrições de administrador/importador, emissão concorrente única, recuperação por referência e nenhuma baixa automática.
+- Adaptador de cobrança: CPF/CNPJ, payload v3, documentos, respostas divergentes, PDF e falhas ambíguas. Não houve POST de cobrança real durante os testes.
+- Prévia visual do componente e da miniatura em larguras de 1000 e 390 pixels; ações de rede bloqueadas na prévia.
+- [Documentação oficial Cobrança Bancária v3](https://developers.sicoob.com.br/portal/documentacao?slugItem=apis&slugSubItem=cobranca-bancaria-v3).

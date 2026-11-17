@@ -20,4 +20,4 @@ crons = ["*/30 * * * *"]
 enabled = true
 
 # Server-only secrets, configured with Wrangler, never VITE_ variables:
-# SICOOB_CLIENT_ID, SICOOB_ACCOUNT, BANK_DATABASE_URL
+# SICOOB_CLIENT_ID, SICOOB_ACCOUNT, SICOOB_BENEFICIARY, BANK_DATABASE_URL

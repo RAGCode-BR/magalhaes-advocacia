@@ -52,7 +52,18 @@ export function FinanceBank({ userId }: { userId: string }) {
       return since && Date.now() - new Date(since).getTime() < 120000 ? 5000 : false;
     },
   });
+  const periods = useQuery({
+    queryKey: ["office-bank-periods", userId],
+    queryFn: async () =>
+      (await financeRpc("office_bank_periods_list", {})) as unknown as {
+        month: string;
+        row_count: number;
+        synced_at: string;
+      }[],
+  });
+  const selectedPeriod = periods.data?.find((p) => p.month.slice(0, 7) === month);
   const refresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["office-bank-periods", userId] });
     await queryClient.invalidateQueries({ queryKey: ["office-bank", userId] });
   };
   const sync = useMutation({
@@ -124,6 +135,54 @@ export function FinanceBank({ userId }: { userId: string }) {
               <option value="reconciled">Conciliadas</option>
             </select>
           </label>
+        </div>
+        <div className="space-y-2 text-sm">
+          {selectedPeriod ? (
+            <p>
+              {selectedPeriod.row_count
+                ? `${selectedPeriod.row_count} movimentações retornadas pelo Sicoob neste mês.`
+                : "Mês consultado: o Sicoob respondeu sem movimentações."}{" "}
+              <span className="text-muted-foreground">
+                Consulta em {timestamp(selectedPeriod.synced_at)}.
+              </span>
+            </p>
+          ) : (
+            connection && (
+              <p className="text-muted-foreground">
+                Este mês ainda não tem uma consulta registrada. Use Atualizar extrato.
+              </p>
+            )
+          )}
+          {!!periods.data?.length && (
+            <details className="rounded-lg border p-3">
+              <summary className="cursor-pointer font-medium">
+                Meses consultados ({periods.data.length})
+              </summary>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {periods.data.map((p) => (
+                  <button
+                    key={p.month}
+                    onClick={() => {
+                      setMonth(p.month.slice(0, 7));
+                      setPages([]);
+                    }}
+                    className="rounded border p-2 text-left hover:bg-muted"
+                  >
+                    <span>
+                      {p.month.slice(5, 7)}/{p.month.slice(0, 4)}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {p.row_count} movimentações
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Estes são os dados retornados pela API do Sicoob. Se houver movimentações no extrato
+                do banco que não aparecem aqui, solicite a liberação do histórico à cooperativa.
+              </p>
+            </details>
+          )}
         </div>
         {bank.isPending && (
           <p role="status" className="text-sm">

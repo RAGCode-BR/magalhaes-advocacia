@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-sicoob-boletos"
   | "magalhaes-sicoob"
   | "magalhaes-proposal-retainer"
   | "crm-column-order"
@@ -83,6 +84,20 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-sicoob-boletos-2026-11-17",
+    title: "Boletos Sicoob e histórico do extrato",
+    date: "2026-11-17",
+    preview: "magalhaes-sicoob-boletos",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "A aba Boletos no Financeiro permite registrar a cobrança de um honorário em aberto com cliente, dados do pagador e vencimento hoje ou futuro. A emissão exige confirmação do administrador.",
+      "Consulte a situação no Sicoob, copie a linha digitável e baixe o PDF. O sistema não envia a cobrança ao cliente nem marca o honorário como recebido automaticamente.",
+      "Uma solicitação por honorário evita duplicações. Se a confirmação do banco falhar, a nova emissão fica bloqueada e é possível localizar a cobrança pelo nosso número, conferindo referência, valor e pagador.",
+      "O extrato agora mostra os meses consultados, a data da consulta e os meses em que o banco respondeu sem movimentações. Selecione um mês para consultar os registros retornados pelo Sicoob.",
+    ],
+  },
   {
     id: "magalhaes-sicoob-2026-11-17",
     title: "Sicoob no financeiro: saldo, extrato e conciliação",

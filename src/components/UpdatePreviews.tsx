@@ -1650,6 +1650,29 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-sicoob-boletos": () => (
+    <div
+      role="img"
+      aria-label="Prévia ilustrativa de boletos e meses consultados no Sicoob"
+      className="space-y-3 rounded-xl border bg-card p-4 text-xs text-card-foreground"
+    >
+      <strong>Financeiro · Boletos Sicoob</strong>
+      <div className="rounded-lg border p-3">
+        <p>Cliente Exemplo · Honorários</p>
+        <p className="mt-1 font-semibold">R$ 150,00 · Vencimento 30/11</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-800">Registrado</span>
+          <span className="rounded border px-2 py-1">Consultar situação</span>
+          <span className="rounded border px-2 py-1">Baixar PDF</span>
+        </div>
+      </div>
+      <div className="rounded-lg bg-muted p-3">
+        <strong>Extrato · Meses consultados</strong>
+        <p className="mt-2">Janeiro · Sem movimentos retornados</p>
+        <p>Fevereiro · 3 movimentações</p>
+      </div>
+    </div>
+  ),
   "magalhaes-sicoob": () => (
     <div role="img" aria-label="Prévia ilustrativa do saldo, extrato e conciliação Sicoob" className="space-y-3 rounded-xl border bg-card p-4 text-xs text-card-foreground">
       <div className="flex items-center justify-between gap-2"><strong>Financeiro · Sicoob</strong><RefreshCw className="h-4 w-4 text-primary" /></div>

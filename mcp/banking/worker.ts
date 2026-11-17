@@ -1,4 +1,5 @@
 import pg from "pg";
+import { handleBoleto } from "./boletos.ts";
 import {
   API_URL,
   TOKEN_URL,
@@ -14,6 +15,7 @@ interface Env {
   SICOOB_CERT: MtlsFetcher;
   SICOOB_CLIENT_ID: string;
   SICOOB_ACCOUNT: string;
+  SICOOB_BENEFICIARY: string;
   BANK_DATABASE_URL: string;
   BANK_CONNECTION_ID: string;
   NEON_DATA_URL: string;
@@ -46,8 +48,13 @@ function safeError(error: unknown) {
   // Only these fixed database validation messages may reach a browser or logs.
   if (
     error instanceof Error &&
-    error.message ===
-      "O banco alterou uma movimentação conciliada. Revise a conciliação antes de atualizar."
+    [
+      "O banco alterou uma movimentação conciliada. Revise a conciliação antes de atualizar.",
+      "O honorário mudou. Revise o boleto antes de emitir.",
+      "Aguarde a emissão antes de consultar.",
+      "Boleto do banco não corresponde ao lançamento.",
+      "Conta desativada.",
+    ].includes(error.message)
   )
     return error.message;
   return "Não foi possível atualizar o Sicoob. Os dados anteriores foram preservados. Tente novamente.";
@@ -148,7 +155,8 @@ export default {
       return json({ ok: true, service: "magalhaes-sicoob" });
     const origin = request.headers.get("Origin");
     if (origin && origin !== env.APP_ORIGIN) return json({ error: "Origem não autorizada." }, 403);
-    if (request.method === "OPTIONS" && path === "/sync")
+    const boletoAction = /^\/boletos\/(issue|query|pdf)$/.exec(path)?.[1];
+    if (request.method === "OPTIONS" && (path === "/sync" || boletoAction))
       return new Response(null, {
         status: 204,
         headers: {
@@ -159,7 +167,7 @@ export default {
           Vary: "Origin",
         },
       });
-    if (path !== "/sync" || request.method !== "POST")
+    if ((path !== "/sync" && !boletoAction) || request.method !== "POST")
       return json({ error: "Não encontrado." }, 404, origin || undefined);
     const authorization = request.headers.get("Authorization") || "";
     if (!/^Bearer [^\s]+$/.test(authorization) || authorization.length > 20000)
@@ -176,15 +184,57 @@ export default {
         redirect: "manual",
         signal: AbortSignal.timeout(10000),
       });
-      if (!auth.ok || (await auth.json()) !== true)
+      if (!auth.ok && auth.status !== 401 && auth.status !== 403 && auth.status !== 400)
+        throw new BankError(
+          "Não foi possível validar sua sessão agora. Tente novamente.",
+          "auth_unavailable",
+        );
+      const authResult = await auth.json().catch(() => null);
+      if (!auth.ok || authResult !== true) {
+        console.warn(
+          "bank_authorization_denied",
+          auth.status,
+          typeof authResult?.code === "string" && /^[A-Z0-9_]{1,20}$/.test(authResult.code)
+            ? authResult.code
+            : "denied",
+        );
         return json(
           { error: "Acesso restrito a administradores. Entre novamente se a sessão expirou." },
           403,
           origin || undefined,
         );
+      }
       const body = await request.text();
-      if (body.length > 256)
+      if (body.length > 512)
         return json({ error: "Solicitação inválida." }, 400, origin || undefined);
+      if (boletoAction) {
+        let input: { id?: string; nossoNumero?: string };
+        try {
+          input = JSON.parse(body);
+        } catch {
+          return json({ error: "Solicitação inválida." }, 400, origin || undefined);
+        }
+        if (
+          !input ||
+          typeof input.id !== "string" ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.id) ||
+          (input.nossoNumero !== undefined && !/^\d{1,20}$/.test(input.nossoNumero))
+        )
+          return json({ error: "Boleto inválido." }, 400, origin || undefined);
+        const result = await handleBoleto(env, boletoAction, input.id, input.nossoNumero);
+        if ("pdf" in result)
+          return new Response(result.pdf as BodyInit, {
+            headers: {
+              "Content-Type": "application/pdf",
+              "Content-Disposition": `attachment; filename="boleto-${input.id}.pdf"`,
+              "Cache-Control": "no-store",
+              "X-Content-Type-Options": "nosniff",
+              "Access-Control-Allow-Origin": env.APP_ORIGIN,
+              Vary: "Origin",
+            },
+          });
+        return json(result, 200, origin || undefined);
+      }
       let month: string;
       try {
         month = JSON.parse(body).month;
