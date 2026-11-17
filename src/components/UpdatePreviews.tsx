@@ -1650,6 +1650,21 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-bank-reconciliation": () => (
+    <PreviewGrid label="Prévia ilustrativa da conciliação bancária lado a lado">
+      <div className="space-y-2 rounded-xl border bg-card p-3 text-[10px]">
+        <p className="font-semibold">Extrato do banco · Novembro</p>
+        <p className="rounded-lg border border-primary bg-primary/5 p-2">Recebimento de exemplo<br/>17/11 · + R$ 500,00</p>
+        <p className="text-muted-foreground">1 movimentação pendente</p>
+      </div>
+      <div className="space-y-2 rounded-xl border bg-card p-3 text-[10px]">
+        <p className="font-semibold">Lançamentos do sistema</p>
+        <p>Honorário de exemplo<br/>Em aberto: R$ 500,00</p>
+        <p className="rounded-lg bg-primary/10 p-2">Mesmo valor · conferir correspondência</p>
+        <p className="font-semibold text-primary">Vincular lançamento</p>
+      </div>
+    </PreviewGrid>
+  ),
   "magalhaes-finance-recurrence": () => (
     <PreviewGrid label="Prévia ilustrativa de receitas e despesas recorrentes">
       <div className="space-y-2 rounded-xl border bg-card p-3 text-[10px]">

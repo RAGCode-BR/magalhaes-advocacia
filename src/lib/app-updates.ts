@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-bank-reconciliation"
   | "magalhaes-finance-recurrence"
   | "magalhaes-contaazul-history"
   | "crm-commercial-report"
@@ -88,6 +89,20 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-bank-reconciliation-2026-11-17",
+    title: "Conciliação bancária e financeiro mais amplo",
+    date: "2026-11-17",
+    preview: "magalhaes-bank-reconciliation",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "A nova aba Conciliação bancária compara o extrato Sicoob com os lançamentos em aberto. Filtre por mês ou dia e veja pendentes ou conciliadas.",
+      "Confira as sugestões por valor e vencimento, confirme a baixa total ou parcial de um lançamento existente, vincule uma baixa já registrada ou cadastre o lançamento que falta. Nenhum pagamento é executado no banco.",
+      "O financeiro usa a largura disponível. A lista de lançamentos ajusta textos e colunas sem rolagem horizontal e se reorganiza em blocos em telas menores.",
+      "Nova receita e Nova despesa oferecem Avulso, Parcelado e Recorrente separadamente. Parcelado divide o total; Recorrente repete o valor por ocorrência.",
+    ],
+  },
   {
     id: "magalhaes-finance-recurrence-2026-11-17",
     title: "Receitas e despesas recorrentes",

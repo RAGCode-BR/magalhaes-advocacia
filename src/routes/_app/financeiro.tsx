@@ -5,6 +5,7 @@ import { Plus, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useClients, useTasks } from "@/hooks/use-data";
+import { FinanceReconciliation } from "@/components/finance/FinanceReconciliation";
 import { FinanceAttachments } from "@/components/finance/FinanceAttachments";
 import { ClientPicker } from "@/components/ClientPicker";
 import { Button } from "@/components/ui/button";
@@ -132,6 +133,7 @@ const financeSections: { label: string; items: [string, string][] }[] = [
       ["dashboard", "Painel"],
       ["entries", "Lançamentos"],
       ["accounts", "Contas e extratos"],
+      ["reconciliation", "Conciliação bancária"],
       ["boletos", "Boletos"],
     ],
   },
@@ -219,7 +221,7 @@ function FinancePage({ userId }: { userId: string }) {
   const refresh = () => queryClient.invalidateQueries({ queryKey });
 
   return (
-    <section className="mx-auto w-full min-w-0 max-w-7xl space-y-5 p-4 md:p-6">
+    <section className="mx-auto w-full min-w-0 max-w-none space-y-5 p-3 md:p-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
@@ -426,7 +428,7 @@ function FinancePage({ userId }: { userId: string }) {
               Exportar lista CSV
             </Button>
             {rows.length ? (
-              <Sheet
+              <Sheet fit
                 label={kind === "income" ? "Contas a receber" : "Contas a pagar"}
                 columns={[
                   { label: "Vencimento" },
@@ -573,6 +575,7 @@ function FinancePage({ userId }: { userId: string }) {
       {ledger.data && section === "recurring" && (
         <FinanceAgreements agreements={ledger.data.agreements} kind="recurring" refresh={refresh} />
       )}
+      {ledger.data && section === "reconciliation" && <FinanceReconciliation userId={userId} ledger={ledger.data} refreshLedger={refresh} />}
       {ledger.data && section === "accounts" && (
         <FinanceAccounts
           ledger={ledger.data}
@@ -668,7 +671,8 @@ type EditorProps = {
 function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }: EditorProps) {
   const [clientId, setClientId] = useState("");
   const [processId, setProcessId] = useState("");
-  const [recurring, setRecurring] = useState(false);
+  const [launchMode, setLaunchMode] = useState("single");
+  const recurring = launchMode === "recurring";
   const [ending, setEnding] = useState("count");
   const [frequency, setFrequency] = useState<FinanceFrequency>("monthly");
   const [count, setCount] = useState("12");
@@ -699,7 +703,7 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
         ? financeRecurrences({ cents: financeCents(value("amount")), frequency,
             dueDate: value("due"), competenceDate: value("competence"),
             ...(ending === "count" ? { count: Number(count) } : { until: until || "invalid" }) })
-        : financeInstallments(financeCents(value("amount")), Number(value("count")), value("due"))
+        : financeInstallments(financeCents(value("amount")), launchMode === "installments" ? Number(value("count")) : 1, value("due"))
             .map((item) => ({ ...item, competence_date: value("competence"), recurrence_frequency: null }));
       const rows = installments.map((installment) => ({
         ...installment,
@@ -752,9 +756,10 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
         >
           <label className={fieldClass}>
             Tipo de lançamento
-            <select className={selectClass} value={recurring ? "recurring" : "single"}
-              disabled={save.isPending} onChange={(event) => setRecurring(event.target.value === "recurring")}>
-              <option value="single">Avulso ou parcelado</option>
+            <select className={selectClass} value={launchMode}
+              disabled={save.isPending} onChange={(event) => setLaunchMode(event.target.value)}>
+              <option value="single">Avulso</option>
+              <option value="installments">Parcelado</option>
               <option value="recurring">Recorrente</option>
             </select>
           </label>
@@ -836,7 +841,7 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
               {recurring ? "Valor de cada ocorrência em R$" : "Valor total em R$"}
               <Input name="amount" required inputMode="decimal" placeholder="0,00" value={amount} onChange={(event) => setAmount(event.target.value)} />
             </label>
-            {!recurring && <label className={fieldClass}>
+            {launchMode === "installments" && <label className={fieldClass}>
               Parcelas
               <Input name="count" type="number" required min={1} max={120} defaultValue={1} />
             </label>}

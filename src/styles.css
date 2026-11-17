@@ -820,3 +820,29 @@
     transition: none;
   }
 }
+
+/* Fit the entry ledger to its container; compact screens use labelled rows. */
+.fin-sheet-fit { overflow-y: auto; overflow-x: clip; container-type: inline-size; }
+.fin-sheet-fit table { table-layout: fixed; width: 100%; }
+.fin-sheet-fit th, .fin-sheet-fit td { min-width: 0; max-width: none; white-space: normal; overflow-wrap: anywhere; padding: .6rem .5rem; }
+.fin-sheet-fit th:nth-child(2) { width: 8%; }
+.fin-sheet-fit th:nth-child(3) { width: 23%; }
+.fin-sheet-fit th:nth-child(4) { width: 14%; }
+.fin-sheet-fit th:nth-child(5) { width: 13%; }
+.fin-sheet-fit th:nth-child(6), .fin-sheet-fit th:nth-child(7) { width: 10%; }
+.fin-sheet-fit th:nth-child(8) { width: 8%; }
+.fin-sheet-fit th:nth-child(9) { width: 11%; }
+.fin-sheet-fit td button, .fin-sheet-fit td span { max-width: 100%; white-space: normal; }
+.fin-sheet-fit td button { height: auto; min-height: 1.75rem; }
+@container (max-width: 1050px) {
+  .fin-sheet-fit table, .fin-sheet-fit tbody, .fin-sheet-fit tfoot { display: block; }
+  .fin-sheet-fit thead { display: none; }
+  .fin-sheet-fit tbody tr { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); padding: .6rem; border-bottom: 1px solid var(--border); }
+  .fin-sheet-fit tbody td { display: block; width: auto; text-align: left; border: 0; }
+  .fin-sheet-fit tbody td::before { content: attr(data-label); display: block; font-size: 11px; color: var(--muted-foreground); margin-bottom: .25rem; }
+  .fin-sheet-fit tbody td:nth-child(3) { grid-column: 1/-1; grid-row: 1; }
+  .fin-sheet-fit tbody .fin-sheet-gutter { display: none; }
+  .fin-sheet-fit tfoot tr { display: flex; flex-wrap: wrap; }
+  .fin-sheet-fit tfoot td { flex: 1 1 130px; text-align: left; }
+  .fin-sheet-fit tfoot td:empty { display: none; }
+}

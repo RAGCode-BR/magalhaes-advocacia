@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Children, cloneElement, isValidElement, useState, type ReactNode, type ReactElement } from "react";
 import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -280,15 +280,17 @@ export function Sheet({
   footer,
   label,
   maxHeight = "max-h-[65vh]",
+  fit = false,
 }: {
   columns: { label: string; align?: "right" | "center"; className?: string }[];
   children: ReactNode;
   footer?: ReactNode;
   label: string;
   maxHeight?: string;
+  fit?: boolean;
 }) {
   return (
-    <div className={`fin-sheet overflow-auto rounded-xl border ${maxHeight}`}>
+    <div className={`fin-sheet ${fit ? "fin-sheet-fit" : "overflow-auto"} rounded-xl border ${maxHeight}`}>
       <table className="w-full border-collapse text-left text-[13px]" aria-label={label}>
         <thead>
           <tr>
@@ -306,7 +308,11 @@ export function Sheet({
             ))}
           </tr>
         </thead>
-        <tbody>{children}</tbody>
+        <tbody>{fit ? Children.map(children, row => {
+          if (!isValidElement<{ children: ReactNode }>(row)) return row;
+          return cloneElement(row, {}, Children.map(row.props.children, (cell, index) =>
+            isValidElement(cell) ? cloneElement(cell as ReactElement<Record<string, unknown>>, { "data-label": index ? columns[index - 1]?.label : "Linha" }) : cell));
+        }) : children}</tbody>
         {footer && <tfoot>{footer}</tfoot>}
       </table>
     </div>

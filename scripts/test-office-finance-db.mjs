@@ -1,3 +1,4 @@
+import { testBankSettleExisting } from "./test-bank-settle-existing-db.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -154,6 +155,7 @@ try {
     "20261117210000_bank_create_entry_reconcile.sql",
     "20261117220000_contaazul_finance_import.sql",
     "20261117230000_finance_entry_recurrence.sql",
+    "20261117233000_bank_settle_existing.sql",
   ]) {
     await owner.query(await readFile(join(root, "supabase/migrations", filename), "utf8"));
   }
@@ -789,6 +791,7 @@ try {
       )
     ).rows[0].n >= 4,
   );
+  await testBankSettleExisting({owner,admin,other,outsider});
   console.log(
     "Finance SQL passed: migrations, RLS, retries, overpayment, concurrent operations, quote conversion, recurrence, transfers, services, orders, purchases and history.",
   );
