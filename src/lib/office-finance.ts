@@ -20,6 +20,10 @@ export type FinanceEntry = {
   cost_center?: string | null;
   cancelled_at?: string | null;
   cancellation_reason?: string | null;
+  import_batch_id?: string | null;
+  source_status?: string | null;
+  counterparty_name?: string | null;
+  counterparty_document?: string | null;
 };
 
 export type FinanceSettlement = {
@@ -31,6 +35,12 @@ export type FinanceSettlement = {
   payment_method?: string;
   reversed_at?: string | null;
   reversal_reason?: string | null;
+  principal_cents?: number;
+  interest_cents?: number;
+  fine_cents?: number;
+  discount_cents?: number;
+  source_reconciled?: boolean;
+  import_batch_id?: string | null;
 };
 
 export function financeCents(value: string) {
@@ -54,10 +64,75 @@ export function financeInstallments(cents: number, count: number, dueDate: strin
 }
 
 export function financeStatus(entry: FinanceEntry, today: string) {
+  if (entry.cancelled_at && entry.source_status === "Perdido/Desconsiderado")
+    return "Desconsiderado";
   if (entry.cancelled_at) return "Cancelado";
   if (entry.settled_cents === entry.amount_cents) return "Quitado";
   if (entry.due_date < today) return entry.settled_cents ? "Parcial em atraso" : "Vencido";
   return entry.settled_cents ? "Parcial" : "Em aberto";
+}
+
+export function financeSettlementAmounts(
+  principal: number,
+  interest: number,
+  fine: number,
+  discount: number,
+  remaining: number,
+) {
+  if (
+    ![principal, interest, fine, discount].every(
+      (n) => Number.isSafeInteger(n) && n >= 0 && n <= 2147483647,
+    ) ||
+    principal <= 0 ||
+    principal > remaining
+  )
+    throw new Error("Confira o principal e os ajustes da baixa.");
+  const net = principal + interest + fine - discount;
+  if (net <= 0 || net > 2147483647)
+    throw new Error("O valor pago precisa ser positivo. Confira o desconto.");
+  return {
+    amount_cents: net,
+    principal_cents: principal,
+    interest_cents: interest,
+    fine_cents: fine,
+    discount_cents: discount,
+  };
+}
+
+/** Cash received includes partial payments and adjustments. Outstanding values
+ * consume principal only; a discounted invoice can be fully settled. */
+export function financeLedgerBuckets(
+  entries: FinanceEntry[],
+  settlements: FinanceSettlement[],
+  today: string,
+) {
+  const cash = new Map<string, number>();
+  for (const s of settlements)
+    if (!s.reversed_at) cash.set(s.entry_id, (cash.get(s.entry_id) ?? 0) + s.amount_cents);
+  const buckets = {
+    all: { cents: 0, count: 0 },
+    overdue: { cents: 0, count: 0 },
+    today: { cents: 0, count: 0 },
+    upcoming: { cents: 0, count: 0 },
+    settled: { cents: 0, count: 0 },
+  };
+  for (const e of entries) {
+    buckets.all.count++;
+    if (e.cancelled_at) continue;
+    const paid = cash.get(e.id) ?? 0,
+      remaining = e.amount_cents - e.settled_cents;
+    buckets.all.cents += paid + remaining;
+    if (paid > 0) {
+      buckets.settled.cents += paid;
+      buckets.settled.count++;
+    }
+    if (remaining > 0) {
+      const bucket = e.due_date < today ? "overdue" : e.due_date === today ? "today" : "upcoming";
+      buckets[bucket].cents += remaining;
+      buckets[bucket].count++;
+    }
+  }
+  return { buckets, cash };
 }
 
 export function financeTotals(

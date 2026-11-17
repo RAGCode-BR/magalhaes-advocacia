@@ -46,7 +46,7 @@ export function FinanceReports({ ledger }: { ledger: OfficeFinanceData }) {
   function accumulate(entry: FinanceEntry, amount: number) {
     const name =
       group === "client_id"
-        ? (clientNames.get(entry.client_id ?? "") ?? "Sem cliente")
+        ? (clientNames.get(entry.client_id ?? "") ?? entry.counterparty_name ?? "Sem cliente")
         : entry[group] || "Sem centro de custo";
     const totals = grouped.get(name) ?? { income: 0, expense: 0 };
     totals[entry.kind] += amount;
@@ -140,7 +140,10 @@ export function FinanceReports({ ledger }: { ledger: OfficeFinanceData }) {
                     key: item.id,
                     date: item.settled_on,
                     title: entry.description,
-                    subtitle: [clientNames.get(entry.client_id ?? ""), entry.category]
+                    subtitle: [
+                      clientNames.get(entry.client_id ?? "") ?? entry.counterparty_name,
+                      entry.category,
+                    ]
                       .filter(Boolean)
                       .join(" · "),
                     value: currency(item.amount_cents),
@@ -159,7 +162,10 @@ export function FinanceReports({ ledger }: { ledger: OfficeFinanceData }) {
             key: entry.id,
             date: entry.competence_date,
             title: entry.description,
-            subtitle: [clientNames.get(entry.client_id ?? ""), entry.category]
+            subtitle: [
+              clientNames.get(entry.client_id ?? "") ?? entry.counterparty_name,
+              entry.category,
+            ]
               .filter(Boolean)
               .join(" · "),
             value: currency(entry.amount_cents),
@@ -174,7 +180,7 @@ export function FinanceReports({ ledger }: { ledger: OfficeFinanceData }) {
       key: entry.id,
       date: entry.due_date,
       title: entry.description,
-      subtitle: `${clientNames.get(entry.client_id ?? "") ?? "Sem cliente"}${entry.due_date < isoToday() ? " · vencido" : ""}`,
+      subtitle: `${clientNames.get(entry.client_id ?? "") ?? entry.counterparty_name ?? "Sem cliente"}${entry.due_date < isoToday() ? " · vencido" : ""}`,
       value: currency(entry.amount_cents - entry.settled_cents),
     }));
   const basisNote =

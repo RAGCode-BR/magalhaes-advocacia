@@ -139,7 +139,10 @@ export function FinanceDashboard({
             key: item.id,
             date: item.settled_on,
             title: entry.description,
-            subtitle: [clientNames.get(entry.client_id ?? "") ?? entry.supplier, entry.category]
+            subtitle: [
+              clientNames.get(entry.client_id ?? "") ?? entry.counterparty_name ?? entry.supplier,
+              entry.category,
+            ]
               .filter(Boolean)
               .join(" · "),
             value: currency(item.amount_cents),
@@ -164,7 +167,7 @@ export function FinanceDashboard({
       key: entry.id,
       date: entry.due_date,
       title: entry.description,
-      subtitle: `${clientNames.get(entry.client_id ?? "") ?? "Sem cliente"} · vencido há ${Math.round(
+      subtitle: `${clientNames.get(entry.client_id ?? "") ?? entry.counterparty_name ?? "Sem cliente"} · vencido há ${Math.round(
         (Date.parse(today) - Date.parse(entry.due_date)) / 86400000,
       )} dias`,
       value: currency(entry.amount_cents - entry.settled_cents),
@@ -494,7 +497,10 @@ export function FinanceDashboard({
                     </button>
                     <p className="text-xs text-muted-foreground">
                       {entry.kind === "income" ? "Receber" : "Pagar"} ·{" "}
-                      {clientNames.get(entry.client_id ?? "") ?? entry.supplier ?? entry.category}
+                      {clientNames.get(entry.client_id ?? "") ??
+                        entry.counterparty_name ??
+                        entry.supplier ??
+                        entry.category}
                     </p>
                   </td>
                   <td

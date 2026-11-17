@@ -1,10 +1,11 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useClients, useTasks } from "@/hooks/use-data";
+import { FinanceAttachments } from "@/components/finance/FinanceAttachments";
 import { ClientPicker } from "@/components/ClientPicker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,6 +22,8 @@ import {
   financeCents,
   financeInstallments,
   financeStatus,
+  financeLedgerBuckets,
+  financeSettlementAmounts,
   type FinanceEntry,
   type FinanceKind,
   type FinanceSettlement,
@@ -105,6 +108,7 @@ import { FinanceBankReports } from "@/components/finance/FinanceBankReports";
 import { FinanceReports, FinanceHistoryPanel } from "@/components/finance/FinanceReports";
 import { Sheet, SheetGutter, StatusChip } from "@/components/finance/FinanceSheet";
 import { FinanceActionDialog, type FinanceAction } from "@/components/finance/FinanceActionDialog";
+import { FinanceImportStatus } from "@/components/finance/FinanceImportStatus";
 import { FinanceEntryEditor } from "@/components/finance/FinanceEntryEditor";
 
 async function insertFinance(name: FinanceTable, values: object | object[]) {
@@ -163,31 +167,15 @@ function FinancePage({ userId }: { userId: string }) {
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState<{ id: string; kind: FinanceKind } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [attachmentId, setAttachmentId] = useState<string | null>(null);
 
   const entries = ledger.data?.entries ?? [];
   const settlements = ledger.data?.settlements ?? [];
   const documents = ledger.data?.documents ?? [];
   const selected = entries.find((entry) => entry.id === selectedId);
+  const attachmentEntry = entries.find((entry) => entry.id === attachmentId);
   const today = isoToday();
   const kindEntries = entries.filter((entry) => entry.kind === kind);
-  const bucketTotals = kindEntries.reduce(
-    (acc, entry) => {
-      const bucket = quickBucket(entry, today);
-      const remaining = entry.amount_cents - entry.settled_cents;
-      if (bucket !== "cancelled") acc.all.cents += entry.amount_cents;
-      acc.all.count++;
-      acc[bucket].cents +=
-        bucket === "settled" || bucket === "cancelled" ? entry.amount_cents : remaining;
-      acc[bucket].count++;
-      return acc;
-    },
-    Object.fromEntries(
-      (["all", "overdue", "today", "upcoming", "settled", "cancelled"] as const).map((key) => [
-        key,
-        { cents: 0, count: 0 },
-      ]),
-    ) as Record<QuickFilter | "cancelled", { cents: number; count: number }>,
-  );
   const clientNames = new Map(clients.map((client) => [client.id, client.name]));
   const planCodes = new Map(
     (ledger.data?.registers ?? [])
@@ -195,23 +183,35 @@ function FinancePage({ userId }: { userId: string }) {
       .map((item) => [item.name, item.code ?? ""]),
   );
   const processNames = new Map(tasks.map((task) => [task.id, task.title]));
-  const rows = kindEntries
+  const filteredEntries = kindEntries
     .filter((entry) => {
       if (clientFilter && entry.client_id !== clientFilter) return false;
       if ((dueFrom && entry.due_date < dueFrom) || (dueTo && entry.due_date > dueTo)) return false;
-      if (quick !== "all" && quickBucket(entry, today) !== quick) return false;
       return [
         entry.description,
         entry.category,
         entry.supplier,
         entry.cost_center,
-        clientNames.get(entry.client_id ?? ""),
+        clientNames.get(entry.client_id ?? "") ?? entry.counterparty_name,
         processNames.get(entry.process_id ?? ""),
       ].some((value) =>
         value?.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR")),
       );
     })
     .sort((a, b) => a.due_date.localeCompare(b.due_date));
+
+  const { buckets: bucketTotals, cash: cashByEntry } = financeLedgerBuckets(
+    filteredEntries,
+    settlements,
+    today,
+  );
+  const rows = filteredEntries.filter(
+    (entry) =>
+      quick === "all" ||
+      (quick === "settled"
+        ? (cashByEntry.get(entry.id) ?? 0) > 0
+        : quickBucket(entry, today) === quick),
+  );
 
   const refresh = () => queryClient.invalidateQueries({ queryKey });
 
@@ -272,6 +272,7 @@ function FinancePage({ userId }: { userId: string }) {
           ))}
         </div>
       </nav>
+      {ledger.data && <FinanceImportStatus userId={userId} ledger={ledger.data} />}
       {ledger.isPending && <p role="status">Carregando o financeiro…</p>}
       {ledger.isError && (
         <Card className="flex flex-wrap items-center gap-3 p-4" role="alert">
@@ -404,7 +405,7 @@ function FinancePage({ userId }: { userId: string }) {
                     ],
                     ...rows.map((entry) => [
                       entry.description,
-                      clientNames.get(entry.client_id ?? ""),
+                      clientNames.get(entry.client_id ?? "") ?? entry.counterparty_name,
                       entry.category,
                       entry.cost_center,
                       displayDate(entry.due_date),
@@ -483,7 +484,7 @@ function FinancePage({ userId }: { userId: string }) {
                         <p className="text-xs text-muted-foreground">
                           {[
                             entry.supplier,
-                            clientNames.get(entry.client_id ?? ""),
+                            clientNames.get(entry.client_id ?? "") ?? entry.counterparty_name,
                             processNames.get(entry.process_id ?? ""),
                           ]
                             .filter(Boolean)
@@ -521,6 +522,18 @@ function FinancePage({ userId }: { userId: string }) {
                           onClick={() => setSelectedId(entry.id)}
                         >
                           Detalhes
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setAttachmentId(entry.id);
+                          }}
+                        >
+                          <Paperclip className="mr-1 h-3 w-3" />
+                          Anexos ({documents.filter((doc) => doc.entry_id === entry.id).length})
                         </Button>
                       </td>
                     </tr>
@@ -610,6 +623,15 @@ function FinancePage({ userId }: { userId: string }) {
           registers={ledger.data?.registers ?? []}
           today={today}
           close={() => setDraft(null)}
+          refresh={refresh}
+        />
+      )}
+      {attachmentEntry && (
+        <FinanceAttachments
+          key={attachmentEntry.id}
+          entry={attachmentEntry}
+          documents={documents.filter((doc) => doc.entry_id === attachmentEntry.id)}
+          close={() => setAttachmentId(null)}
           refresh={refresh}
         />
       )}
@@ -855,35 +877,6 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
   );
 }
 
-const documentLimit = 2 * 1024 * 1024;
-
-async function readDocument(file: File) {
-  if (file.size === 0 || file.size > documentLimit)
-    throw new Error("Escolha um arquivo de até 2 MB.");
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
-    reader.onload = () => resolve(String(reader.result).split(",")[1]);
-    reader.readAsDataURL(file);
-  });
-}
-
-async function downloadDocument(documentInfo: DocumentInfo) {
-  const { data, error } = await table("office_finance_documents")
-    .select("content_base64")
-    .eq("id", documentInfo.id)
-    .single();
-  if (error) throw error;
-  const { content_base64 } = data as unknown as { content_base64: string };
-  const bytes = Uint8Array.from(atob(content_base64), (character) => character.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = documentInfo.filename;
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 function EntryDetails({
   entry,
   documents,
@@ -906,9 +899,8 @@ function EntryDetails({
   const [editing, setEditing] = useState(false);
   const [action, setAction] = useState<FinanceAction | null>(null);
   const [settlementId, setSettlementId] = useState(() => crypto.randomUUID());
-  const [documentId, setDocumentId] = useState(() => crypto.randomUUID());
-  const [file, setFile] = useState<File | null>(null);
-  const remaining = entry.amount_cents - entry.settled_cents;
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const remaining = entry.cancelled_at ? 0 : entry.amount_cents - entry.settled_cents;
 
   const settle = useMutation({
     mutationFn: async (form: FormData) => {
@@ -918,7 +910,13 @@ function EntryDetails({
       await insertFinance("office_finance_settlements", {
         id: settlementId,
         entry_id: entry.id,
-        amount_cents: amount,
+        ...financeSettlementAmounts(
+          amount,
+          financeCents(String(form.get("interest") || "0")),
+          financeCents(String(form.get("fine") || "0")),
+          financeCents(String(form.get("discount") || "0")),
+          remaining,
+        ),
         settled_on: form.get("date"),
         account_id: form.get("account") || null,
         payment_method: form.get("method"),
@@ -931,32 +929,20 @@ function EntryDetails({
     },
     onError: (error: Error) => toast.error(error.message || "Não foi possível registrar a baixa."),
   });
-  const upload = useMutation({
-    mutationFn: async (selectedFile: File) => {
-      const content = await readDocument(selectedFile);
-      await insertFinance("office_finance_documents", {
-        id: documentId,
-        entry_id: entry.id,
-        filename: selectedFile.name.slice(0, 255),
-        content_base64: content,
-      });
-    },
-    onSuccess: async () => {
-      setDocumentId(crypto.randomUUID());
-      setFile(null);
-      await refresh();
-      toast.success("Arquivo anexado.");
-    },
-    onError: (error: Error) => toast.error(error.message || "Não foi possível anexar o arquivo."),
-  });
-  const download = useMutation({
-    mutationFn: downloadDocument,
-    onError: () => toast.error("Não foi possível baixar o arquivo."),
-  });
   function submitSettlement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!settle.isPending) settle.mutate(new FormData(event.currentTarget));
   }
+
+  if (attachmentsOpen)
+    return (
+      <FinanceAttachments
+        entry={entry}
+        documents={documents}
+        close={() => setAttachmentsOpen(false)}
+        refresh={refresh}
+      />
+    );
 
   if (editing)
     return (
@@ -974,7 +960,7 @@ function EntryDetails({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !settle.isPending && !upload.isPending) close();
+        if (!open && !settle.isPending) close();
       }}
     >
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
@@ -988,19 +974,29 @@ function EntryDetails({
         <p className="text-sm">
           Valor {currency(entry.amount_cents)} · Em aberto {currency(remaining)}
         </p>
+        {entry.import_batch_id && (
+          <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+            <p className="font-medium">Importado do Conta Azul</p>
+            {entry.counterparty_name && <p>{entry.counterparty_name}</p>}
+            {entry.counterparty_document && (
+              <p className="text-xs">CPF/CNPJ: {entry.counterparty_document}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Situação na origem: {entry.source_status}. Consulte os arquivos em Anexos. A coleta de
+              comprovantes da origem está restrita a novembro de 2026.
+            </p>
+          </div>
+        )}
+        {entry.kind === "income" && <FinanceClientLink entry={entry} refresh={refresh} />}
         {entry.notes && <p className="whitespace-pre-wrap text-sm">{entry.notes}</p>}
         {!entry.cancelled_at && (
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              disabled={settle.isPending || upload.isPending}
-              onClick={() => setEditing(true)}
-            >
+            <Button variant="outline" disabled={settle.isPending} onClick={() => setEditing(true)}>
               Editar lançamento
             </Button>
             <Button
               variant="outline"
-              disabled={settle.isPending || upload.isPending || entry.settled_cents > 0}
+              disabled={settle.isPending || entry.settled_cents > 0}
               onClick={() =>
                 setAction({
                   title: "Cancelar lançamento",
@@ -1017,7 +1013,9 @@ function EntryDetails({
           </div>
         )}
         {entry.cancelled_at && (
-          <p className="text-sm text-destructive">Cancelado · {entry.cancellation_reason}</p>
+          <p className="text-sm text-destructive">
+            {financeStatus(entry, today)} · {entry.cancellation_reason}
+          </p>
         )}
         {remaining > 0 && !entry.cancelled_at && (
           <form
@@ -1028,7 +1026,7 @@ function EntryDetails({
             <h3 className="font-medium">Registrar baixa manual</h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className={fieldClass}>
-                Valor em R$
+                Principal da parcela em R$
                 <Input
                   name="amount"
                   required
@@ -1041,6 +1039,27 @@ function EntryDetails({
                 <Input name="date" type="date" required max={today} defaultValue={today} />
               </label>
             </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                ["interest", "Juros"],
+                ["fine", "Multa"],
+                ["discount", "Desconto"],
+              ].map(([name, label]) => (
+                <label key={name} className={fieldClass}>
+                  {label} (R$)
+                  <Input
+                    name={name}
+                    inputMode="decimal"
+                    defaultValue="0,00"
+                    pattern="[0-9]+([.,][0-9]{1,2})?"
+                  />
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              O principal reduz o saldo da parcela. Juros e multa aumentam o valor pago; o desconto
+              reduz esse valor.
+            </p>
             <label className={fieldClass}>
               Conta de recebimento ou pagamento
               <select name="account" className={selectClass} defaultValue="">
@@ -1082,6 +1101,20 @@ function EntryDetails({
                     <span className="ml-2 text-muted-foreground">
                       {accounts.find((account) => account.id === item.account_id)?.name}
                     </span>
+                    {(!!item.interest_cents || !!item.fine_cents || !!item.discount_cents) && (
+                      <p className="text-xs text-muted-foreground">
+                        Principal {currency(item.principal_cents ?? item.amount_cents)} · Juros{" "}
+                        {currency(item.interest_cents ?? 0)} · Multa{" "}
+                        {currency(item.fine_cents ?? 0)} · Desconto{" "}
+                        {currency(item.discount_cents ?? 0)}
+                      </p>
+                    )}
+                    {item.source_reconciled && (
+                      <p className="text-xs text-muted-foreground">
+                        Conciliado no Conta Azul. O vínculo com o extrato atual é conferido na aba
+                        Sicoob.
+                      </p>
+                    )}
                     {item.reversed_at ? (
                       <p className="text-muted-foreground">Estornado · {item.reversal_reason}</p>
                     ) : (
@@ -1089,7 +1122,7 @@ function EntryDetails({
                         size="sm"
                         variant="outline"
                         className="ml-2"
-                        disabled={settle.isPending || upload.isPending}
+                        disabled={settle.isPending}
                         onClick={() =>
                           setAction({
                             title: "Estornar baixa",
@@ -1112,36 +1145,15 @@ function EntryDetails({
             </ul>
           </section>
         )}
-        <section className="space-y-2">
+        <section className="rounded-xl border p-4">
           <h3 className="font-medium">Comprovantes e documentos</h3>
-          {documents.map((doc) => (
-            <Button
-              className="h-auto max-w-full whitespace-normal break-all"
-              variant="outline"
-              key={doc.id}
-              disabled={download.isPending}
-              onClick={() => download.mutate(doc)}
-            >
-              {doc.filename}
-            </Button>
-          ))}
-          <label className={fieldClass}>
-            Adicionar arquivo de até 2 MB
-            <Input
-              key={documentId}
-              type="file"
-              disabled={upload.isPending}
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            />
-          </label>
-          <Button
-            variant="outline"
-            disabled={!file || upload.isPending}
-            onClick={() => {
-              if (file) upload.mutate(file);
-            }}
-          >
-            {upload.isPending ? "Anexando…" : "Anexar arquivo"}
+          <p className="mb-3 mt-1 text-sm text-muted-foreground">
+            {documents.length} arquivo(s) anexado(s). Arraste arquivos, visualize ou baixe os
+            comprovantes.
+          </p>
+          <Button variant="outline" onClick={() => setAttachmentsOpen(true)}>
+            <Paperclip className="mr-2 h-4 w-4" />
+            Abrir anexos
           </Button>
         </section>
       </DialogContent>
@@ -1192,6 +1204,52 @@ function ReportsSection({
       ) : (
         <FinanceBankReports userId={userId} ledger={ledger} openStatement={openStatement} />
       )}
+    </div>
+  );
+}
+
+function FinanceClientLink({
+  entry,
+  refresh,
+}: {
+  entry: FinanceEntry;
+  refresh: () => Promise<unknown>;
+}) {
+  const { data: clients = [] } = useClients();
+  const [id, setId] = useState(entry.client_id ?? "");
+  const save = useMutation({
+    mutationFn: () =>
+      financeRpc("office_finance_link_client", { target: entry.id, client: id || null }),
+    onSuccess: async () => {
+      await refresh();
+      toast.success("Cliente vinculado ao lançamento.");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <label className={fieldClass}>
+        Cliente do cadastro
+        <ClientPicker
+          clients={clients}
+          value={id}
+          onChange={setId}
+          emptyLabel="Sem vínculo com cadastro"
+        />
+      </label>
+      {entry.import_batch_id && !entry.client_id && (
+        <p className="text-xs text-muted-foreground">
+          Confira o cliente antes de vincular. O nome e documento da origem foram preservados.
+        </p>
+      )}
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={save.isPending || id === (entry.client_id ?? "")}
+        onClick={() => save.mutate()}
+      >
+        Salvar vínculo
+      </Button>
     </div>
   );
 }

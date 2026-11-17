@@ -204,7 +204,7 @@ export function FinanceBank({ userId }: { userId: string }) {
               detail: () => (
                 <DetailRows
                   rows={rows
-                    .filter((row) => !row.settlement_id)
+                    .filter((row) => !(row.settlement_id || row.transfer_id))
                     .map((row) => ({
                       key: row.id,
                       date: row.booked_on,
@@ -309,9 +309,11 @@ export function FinanceBank({ userId }: { userId: string }) {
               {rows.map((row, index) => (
                 <tr
                   key={row.id}
-                  onClick={row.settlement_id ? undefined : () => setSelected(row)}
-                  className={row.settlement_id ? "" : "cursor-pointer"}
-                  title={row.settlement_id ? undefined : "Clique para conciliar"}
+                  onClick={
+                    row.settlement_id || row.transfer_id ? undefined : () => setSelected(row)
+                  }
+                  className={row.settlement_id || row.transfer_id ? "" : "cursor-pointer"}
+                  title={row.settlement_id || row.transfer_id ? undefined : "Clique para conciliar"}
                 >
                   <SheetGutter n={pages.length * 50 + index + 1} />
                   <td className="whitespace-nowrap">{displayDate(row.booked_on)}</td>
@@ -330,7 +332,7 @@ export function FinanceBank({ userId }: { userId: string }) {
                     {row.amount_cents < 0 && <Amount cents={row.amount_cents} abs />}
                   </td>
                   <td className="whitespace-nowrap">
-                    {row.settlement_id ? (
+                    {row.settlement_id || row.transfer_id ? (
                       <div className="flex items-center gap-1">
                         <StatusChip status="Conciliada" />
                         <Button
@@ -504,11 +506,19 @@ export function ReconcileDialog({
     toast.success(message);
   };
   const link = useMutation({
-    mutationFn: () =>
-      financeRpc("office_bank_reconcile", {
-        p_transaction: transaction.id,
-        p_settlement: settlement,
-      }),
+    mutationFn: () => {
+      const candidate = candidates.data?.find((c) => c.id === settlement);
+      if (!candidate) throw new Error("Escolha o lançamento correspondente.");
+      return candidate.target_type === "transfer"
+        ? financeRpc("office_bank_reconcile_transfer", {
+            p_transaction: transaction.id,
+            p_transfer: settlement,
+          })
+        : financeRpc("office_bank_reconcile", {
+            p_transaction: transaction.id,
+            p_settlement: settlement,
+          });
+    },
     onSuccess: () => done("Conciliação registrada."),
     onError: (error: Error) => toast.error(error.message || "Não foi possível conciliar."),
   });
@@ -544,7 +554,7 @@ export function ReconcileDialog({
         <DialogHeader>
           <DialogTitle>Conciliar movimentação</DialogTitle>
           <DialogDescription>
-            Vincule a uma baixa já registrada ou crie o lançamento agora a partir do banco.
+            Vincule a uma baixa ou transferência já registrada. Confira os dados antes de confirmar.
           </DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-3 rounded-xl border bg-muted/30 p-3">
@@ -569,7 +579,10 @@ export function ReconcileDialog({
         >
           {(
             [
-              ["link", `Baixa existente${candidates.data ? ` (${candidates.data.length})` : ""}`],
+              [
+                "link",
+                `Lançamento existente${candidates.data ? ` (${candidates.data.length})` : ""}`,
+              ],
               ["create", income ? "Criar receita" : "Criar despesa"],
             ] as const
           ).map(([value, label]) => (
@@ -597,13 +610,15 @@ export function ReconcileDialog({
             )}
             {candidates.data?.length === 0 && (
               <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                Nenhuma baixa com a mesma conta, valor e tipo. Use{" "}
+                Nenhuma baixa ou transferência com a mesma conta, valor e tipo. Use{" "}
                 {income ? "Criar receita" : "Criar despesa"} para lançar e conciliar de uma vez.
               </p>
             )}
             {!!candidates.data?.length && (
               <fieldset className="grid gap-2">
-                <legend className="mb-2 text-sm font-medium">Escolha a baixa correspondente</legend>
+                <legend className="mb-2 text-sm font-medium">
+                  Escolha a baixa ou transferência correspondente
+                </legend>
                 {candidates.data.map((candidate) => (
                   <label
                     key={candidate.id}
@@ -618,6 +633,16 @@ export function ReconcileDialog({
                     />
                     <span className="min-w-0 break-words">
                       <strong>{candidate.description}</strong>
+                      {candidate.target_type === "transfer" && (
+                        <span className="block text-xs font-medium text-primary">
+                          Transferência entre contas
+                        </span>
+                      )}
+                      {candidate.source_reconciled && (
+                        <span className="block text-xs text-muted-foreground">
+                          Marcado como conciliado no Conta Azul · conferir vínculo
+                        </span>
+                      )}
                       {candidate.client_name && (
                         <span className="block text-muted-foreground">{candidate.client_name}</span>
                       )}

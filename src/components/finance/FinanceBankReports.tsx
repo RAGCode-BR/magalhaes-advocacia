@@ -185,7 +185,7 @@ export function FinanceBankReports({
   const before = monthIndex > 0 ? flow[monthIndex - 1].credits : 0;
   const monthVariation = before ? Math.round(((monthCredits - before) / before) * 100) : null;
   const pending = monthRows
-    .filter((row) => !row.settlement_id)
+    .filter((row) => !(row.settlement_id || row.transfer_id))
     .sort((a, b) => a.booked_on.localeCompare(b.booked_on));
   const pendingTotal = pending.reduce((s, r) => s + Math.abs(r.amount_cents), 0);
   const largest = [...monthRows]
@@ -644,7 +644,9 @@ function TransactionList({
             <li key={row.id}>
               <button
                 type="button"
-                onClick={() => (row.settlement_id ? setSelected(row) : setReconciling(row))}
+                onClick={() =>
+                  row.settlement_id || row.transfer_id ? setSelected(row) : setReconciling(row)
+                }
                 className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 <span
@@ -667,7 +669,7 @@ function TransactionList({
                     {income ? "+" : "−"}
                     {currency(Math.abs(row.amount_cents))}
                   </span>
-                  {!row.settlement_id && (
+                  {!(row.settlement_id || row.transfer_id) && (
                     <span className="text-[11px] text-amber-700 dark:text-amber-300">
                       Para conciliar
                     </span>
@@ -712,7 +714,11 @@ function TransactionList({
               <dd>{selected.amount_cents > 0 ? "Entrada" : "Saída"}</dd>
               <dt className="text-muted-foreground">Conciliação</dt>
               <dd>
-                <StatusChip status={selected.settlement_id ? "Conciliada" : "Pendente"} />
+                <StatusChip
+                  status={
+                    selected.settlement_id || selected.transfer_id ? "Conciliada" : "Pendente"
+                  }
+                />
               </dd>
               <dt className="text-muted-foreground">Histórico do banco</dt>
               <dd className="break-words text-xs text-muted-foreground">{selected.description}</dd>

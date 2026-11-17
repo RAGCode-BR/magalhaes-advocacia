@@ -28,6 +28,7 @@ export type FinanceHistory = {
   created_by: string;
 };
 export type FinanceTable =
+  | "office_finance_import_batches"
   | "office_finance_entries"
   | "office_finance_settlements"
   | "office_finance_documents"

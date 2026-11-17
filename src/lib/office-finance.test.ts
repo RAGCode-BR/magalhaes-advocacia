@@ -9,6 +9,8 @@ import {
   financeStatus,
   financeTotals,
   financeOrderTotal,
+  financeSettlementAmounts,
+  financeLedgerBuckets,
   type FinanceEntry,
 } from "./office-finance";
 
@@ -30,6 +32,30 @@ const entry: FinanceEntry = {
 };
 
 describe("office finance", () => {
+  it("separates the principal consumed from cash with interest and discounts", () => {
+    expect(financeSettlementAmounts(6000, 100, 0, 500, 10000)).toEqual({
+      principal_cents: 6000, interest_cents: 100, fine_cents: 0,
+      discount_cents: 500, amount_cents: 5600,
+    });
+    expect(() => financeSettlementAmounts(6000, 0, 0, 0, 5000)).toThrow();
+    expect(() => financeSettlementAmounts(100, 0, 0, 101, 100)).toThrow();
+    expect(() => financeSettlementAmounts(100, -1, 0, 0, 100)).toThrow();
+  });
+  it("counts partial cash and outstanding principal, excluding reversals and disregarded titles", () => {
+    const partial = { ...entry, settled_cents: 6000 };
+    const full = { ...entry, id: "full", settled_cents: 10000 };
+    const lost = { ...entry, id: "lost", settled_cents: 0, cancelled_at: "2026-03-01", source_status: "Perdido/Desconsiderado" };
+    const payments = [
+      { id: "p", entry_id: partial.id, amount_cents: 5600, settled_on: "2026-03-01" },
+      { id: "f", entry_id: full.id, amount_cents: 10200, settled_on: "2026-03-01" },
+      { id: "r", entry_id: partial.id, amount_cents: 100, settled_on: "2026-03-01", reversed_at: "2026-03-01" },
+    ];
+    const { buckets } = financeLedgerBuckets([partial, full, lost], payments, "2026-03-01");
+    expect(buckets.all).toEqual({ cents: 19800, count: 3 });
+    expect(buckets.settled).toEqual({ cents: 15800, count: 2 });
+    expect(buckets.overdue).toEqual({ cents: 4000, count: 1 });
+    expect(financeStatus(lost, "2026-03-01")).toBe("Desconsiderado");
+  });
   it("calculates item totals in cents and rejects discounts or quantities that cannot be financed", () => {
     expect(
       financeOrderTotal(

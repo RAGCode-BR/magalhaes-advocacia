@@ -7,6 +7,7 @@ export type BankTransaction = {
   description: string;
   amount_cents: number;
   settlement_id: string | null;
+  transfer_id?: string | null;
   reconciled_at: string | null;
 };
 export type BankCursor = { date: string; id: string };
@@ -30,6 +31,8 @@ export type BankCandidate = {
   amount_cents: number;
   description: string;
   client_name: string | null;
+  target_type?: "settlement" | "transfer";
+  source_reconciled?: boolean;
 };
 
 export async function loadBankOverview(

@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-contaazul-history"
   | "crm-commercial-report"
   | "magalhaes-finance-dashboard"
   | "magalhaes-sicoob-boletos"
@@ -86,6 +87,20 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-contaazul-history-2026-11-17",
+    title: "Histórico financeiro do Conta Azul",
+    date: "2026-11-17",
+    preview: "magalhaes-contaazul-history",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "Lançamentos, parcelas, pagamentos e recebimentos do Conta Azul estão no Financeiro, com categorias, centros de custo e transferências entre contas.",
+      "As baixas preservam o principal, juros, multa e desconto. Os indicadores de recebidos e pagos incluem pagamentos parciais e mostram o dinheiro efetivamente movimentado.",
+      "Os detalhes mostram a origem e permitem vincular o cliente correto. As marcações de conciliação da origem foram preservadas; os vínculos com o extrato atual precisam ser conferidos e confirmados na aba Sicoob.",
+      "A conciliação aceita também transferências entre contas, incluindo aplicações e resgates. Na lista financeira, Anexos abre uma área para arrastar arquivos, revisar a seleção, anexar, visualizar PDFs e imagens e baixar documentos (até 2 MB por arquivo). A coleta da origem está limitada aos comprovantes de novembro.",
+    ],
+  },
   {
     id: "crm-relatorio-comercial-2026-11-17",
     title: "Relatório comercial no CRM",

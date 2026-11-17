@@ -1650,6 +1650,34 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-contaazul-history": () => (
+    <PreviewGrid label="Prévia ilustrativa do histórico financeiro importado">
+      <div className="space-y-2 rounded-xl border bg-card p-3 text-[10px]">
+        <p className="font-semibold">Financeiro · Histórico do Conta Azul</p>
+        <div className="rounded-lg border-2 border-dashed border-primary/40 p-3 text-center"><span aria-hidden="true">↓</span><p>Arraste arquivos aqui</p><p className="text-muted-foreground">Selecionar · Conferir · Anexar</p></div>
+        <div className="rounded-lg border p-2">
+          <p>Serviço de exemplo · Parcela 2/3</p>
+          <p className="mt-1 text-muted-foreground">Cliente Exemplo · Operacional</p>
+          <p className="mt-2 font-semibold">Original R$ 1.000,00 · Em aberto R$ 400,00</p>
+        </div>
+        <div className="rounded-lg border p-2">
+          <p className="font-medium">Pagamento parcial</p>
+          <p>Principal R$ 600,00 · Desconto R$ 20,00</p>
+          <p className="mt-1 text-primary">Recebido R$ 580,00</p>
+        </div>
+      </div>
+      <div className="space-y-2 rounded-xl border bg-card p-3 text-[10px]">
+        <p className="font-semibold">Conferir conciliação</p>
+        <p className="rounded-lg border p-2">Transferência entre contas · Aplicação</p>
+        <p className="text-muted-foreground">
+          Marcação da origem preservada. Confirme o vínculo com o extrato atual.
+        </p>
+        <div className="inline-flex rounded-md bg-primary px-3 py-1.5 text-primary-foreground">
+          Confirmar conciliação
+        </div>
+      </div>
+    </PreviewGrid>
+  ),
   "crm-commercial-report": () => (
     <div
       role="img"
