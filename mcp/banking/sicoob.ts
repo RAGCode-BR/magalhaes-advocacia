@@ -114,10 +114,12 @@ export async function bankJson(fetcher: MtlsFetcher, url: string, init: RequestI
     redirect: "manual",
     signal: AbortSignal.timeout(20000),
   });
-  if (!response.ok)
+  if (!response.ok) {
+    console.error("bank_upstream_error", new URL(url).pathname, response.status);
     throw new BankError(
       `O Sicoob recusou a consulta (HTTP ${response.status}). Tente novamente ou confira o acesso da conta.`,
       `http_${response.status}`,
     );
+  }
   return response.json();
 }

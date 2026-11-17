@@ -11,7 +11,7 @@ BANK_CONNECTION_ID = "11a420b0-0469-4895-b16d-68dbdb5a83e4"
 
 [[mtls_certificates]]
 binding = "SICOOB_CERT"
-certificate_id = "e4451152-c7ce-4b8a-9fef-8d3ab27ae7ef"
+certificate_id = "7fb360ff-51d5-4e78-9fb5-7de40a7c5596"
 
 [triggers]
 crons = ["*/30 * * * *"]

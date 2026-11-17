@@ -25,7 +25,7 @@ flowchart LR
 
 ## Funcionamento entregue
 
-- A conta corrente autorizada pelo banco é vinculada à conta financeira **Sicoob · Conta corrente**. O saldo inicial foi obtido de `saldoAnterior` do extrato de novembro, com data de abertura em 01/11/2026. Isso não cria baixas de honorários ou despesas.
+- A conta corrente autorizada pelo banco é vinculada à conta financeira **Sicoob · Conta corrente**. A abertura em 01/11/2026 foi calculada pelo saldo atual confirmado menos a soma dos 13 movimentos de novembro, antes de existirem baixas na conta, com registro em histórico. O campo `saldoAnterior` da API retornou o mesmo valor para consultas de períodos diferentes e não foi usado como abertura do mês. Isso não cria baixas de honorários ou despesas.
 - O Worker consulta o mês corrente a cada 30 minutos, pelo calendário de São Paulo. O botão **Atualizar extrato** consulta o mês escolhido. Meses anteriores dependem da disponibilidade do histórico na API do banco.
 - A API utilizada retorna o mês em uma resposta, com `transactionId` estável. O importador rejeita resposta incompleta, identificadores repetidos, valores ou datas inválidos; não inventa identificadores por data/valor. Valores iguais de pagamentos distintos continuam sendo movimentos distintos.
 - Cada importação usa uma transação SQL e uma trava temporária por conexão. Repetir a consulta atualiza somente movimentos alterados; não duplica lançamentos. Falhas preservam os dados anteriores e aparecem na tela junto à última atualização concluída.
@@ -43,7 +43,7 @@ RDC ainda depende de uma API ou arquivo com posição e movimentos do investimen
 
 ## Segurança e operação
 
-- Certificado e chave privada ficam no binding mTLS do Cloudflare. O certificado apresentado vence em **17/09/2027**; renovar no banco e substituir o binding antes desse prazo.
+- Certificado e chave privada ficam no binding mTLS do Cloudflare. A implantação usa o certificado final normalizado em PEM, sem metadados do PFX, e a chave RSA correspondente. O primeiro pacote com a cadeia completa retornou HTTP 500 vazio; a configuração normalizada foi validada com consultas reais pelo Worker. O certificado apresentado vence em **17/09/2027**; renovar no banco e substituir o binding antes desse prazo.
 - `SICOOB_CLIENT_ID`, `SICOOB_ACCOUNT` e `BANK_DATABASE_URL` são segredos do Worker. A cópia de configuração local está em `.banking.local/secrets.json`, ignorada pelo Git e com permissões privadas. Nenhuma dessas credenciais é variável `VITE_`.
 - A identidade PostgreSQL `magalhaes_sicoob` não tem permissões de tabela, administração ou identidade de usuário. Pode somente chamar as funções de aquisição/conclusão da sincronização. O importador não usa a credencial proprietária do banco.
 - A interface e as funções de conciliação exigem administrador no servidor. A atualização manual valida o JWT pelo Neon Data API antes de acessar o Sicoob. CORS permite a origem do Pages; CORS sozinho não é usado como autenticação.
@@ -75,7 +75,10 @@ O fluxo de anexos atual continua no PostgreSQL e pode consumir muito mais transf
 - Testes do adaptador: centavos exatos, datas, IDs bancários, respostas inválidas, separação entre saldo/limite e rejeição de redirecionamento.
 - PostgreSQL descartável: importação repetida, paginação, permissões, concorrência de conciliações, valores/tipos incompatíveis, desfazimento com motivo, preservação de dados em falha e bloqueio de alteração de baixa conciliada.
 - Compilação TypeScript do Worker. A checagem global do aplicativo ainda possui 23 diagnósticos preexistentes em outros módulos.
-- Autenticação real do certificado e consulta de saldo/extrato da conta autorizada: 13 movimentações em novembro até a primeira consulta, sem registrar baixas financeiras de teste em produção.
+- Produção: autenticação administrativa, consulta manual pelo Worker HTTP 200, saldo e 13 movimentações de novembro conferidos por identificador, data e valor. A repetição retornou `count: 13, changed: 0`; nenhuma duplicação.
+- O mesmo handler agendado foi executado pelo preview remoto do Cloudflare, com persistência e atualização da data de sucesso. O cron de produção está configurado para cada 30 minutos.
+- A tela publicada foi conferida na sessão administrativa do Chrome: saldo, entradas, saídas, 13 movimentos e diálogo de conciliação. Nenhuma baixa financeira de teste foi criada em produção.
+- GitHub Actions executou 424 testes e o build do Pages com sucesso. O Worker também bloqueou chamadas anônimas e tokens inválidos.
 
 ## Fontes técnicas
 

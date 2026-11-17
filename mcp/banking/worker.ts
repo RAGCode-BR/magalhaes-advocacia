@@ -24,7 +24,7 @@ async function token(env: Env) {
   if (cached?.client === env.SICOOB_CLIENT_ID && cached.until > Date.now()) return cached.token;
   const body = await bankJson(env.SICOOB_CERT, TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
     body: new URLSearchParams({
       grant_type: "client_credentials",
       client_id: env.SICOOB_CLIENT_ID,
