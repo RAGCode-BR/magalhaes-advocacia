@@ -54,7 +54,7 @@ export function ClientsNavGroup({
           to="/clients"
           search={{}}
           onClick={onNavigate}
-          title="Clientes · calendário geral"
+          title="Clientes · cadastros"
           aria-current={active ? "page" : undefined}
           className={TOP_NAV_ITEM_CLASS}
         >
@@ -79,7 +79,7 @@ export function ClientsNavGroup({
           >
             <DropdownMenuItem asChild>
               <Link to="/clients" search={{}} onClick={onNavigate}>
-                Todos os clientes no calendário
+                Todos os clientes
               </Link>
             </DropdownMenuItem>
             {activeClients.map((client) => (

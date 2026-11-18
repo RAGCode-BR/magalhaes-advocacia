@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ClientsIndexPage } from "./clients";
 import { ClientCalendarPage } from "@/components/ClientCalendarPage";
 
 export const Route = createFileRoute("/_app/clients/")({
@@ -12,5 +13,5 @@ export const Route = createFileRoute("/_app/clients/")({
 
 function Page() {
   const { client } = Route.useSearch();
-  return <ClientCalendarPage clientId={client} />;
+  return client ? <ClientCalendarPage clientId={client} /> : <ClientsIndexPage />;
 }

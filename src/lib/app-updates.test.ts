@@ -3,7 +3,7 @@ import { APP_UPDATES, formatAppUpdateDate, getVisibleAppUpdates } from "./app-up
 
 describe("application release catalogue", () => {
   it("requires a unique version, date, explanation and preview for every release", () => {
-    expect(APP_UPDATES).toHaveLength(48);
+    expect(APP_UPDATES).toHaveLength(49);
     expect(new Set(APP_UPDATES.map((update) => update.id)).size).toBe(APP_UPDATES.length);
     for (const update of APP_UPDATES) {
       expect(update.id.trim()).not.toBe("");
@@ -44,12 +44,12 @@ describe("application release catalogue", () => {
       expect(updates[0].preview).toBe("crm-commercial-report");
       expect(getVisibleAppUpdates(true, workspace)[0].id).toBe(
         workspace === "consultoria"
-          ? "magalhaes-reconciliation-guide-2026-11-18"
+          ? "magalhaes-client-directory-2026-11-18"
           : "crm-relatorio-comercial-2026-11-17",
       );
       expect(getVisibleAppUpdates(true, workspace).map((update) => update.id)).toContain(
         workspace === "consultoria"
-          ? "magalhaes-reconciliation-guide-2026-11-18"
+          ? "magalhaes-client-directory-2026-11-18"
           : "claude-conectar-e-ler-documentos-2026-10-28",
       );
       expect(updates.every((update) => update.audience === "all")).toBe(true);
