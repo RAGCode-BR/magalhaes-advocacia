@@ -35,7 +35,8 @@ export function FinanceImportStatus({
   return (
     <details className="rounded-xl border bg-card px-4 py-3 text-sm">
       <summary className="cursor-pointer font-medium">
-        Histórico do Conta Azul · {batch.summary.entries} lançamentos importados
+        Histórico importado do Conta Azul (sem sincronização automática) · {batch.summary.entries}{" "}
+        lançamentos importados
       </summary>
       <div className="mt-3 space-y-2 text-muted-foreground">
         <p>

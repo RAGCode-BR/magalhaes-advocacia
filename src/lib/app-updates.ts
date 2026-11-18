@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-finance-export"
   | "magalhaes-bank-reconciliation"
   | "magalhaes-finance-recurrence"
   | "magalhaes-contaazul-history"
@@ -89,6 +90,20 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-finance-export-2026-11-18",
+    title: "Filtros financeiros, Excel e PDF",
+    date: "2026-11-18",
+    preview: "magalhaes-finance-export",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "Busque lançamentos por texto, cliente, vencimento, categoria, centro de custo, situação e faixa de valor. Limpe todos os filtros com um clique.",
+      "Exporte tabelas e indicadores financeiros para Excel ou imprima e salve em PDF. As tabelas exportam os dados exibidos, respeitando filtros e página.",
+      "Em Contas e extratos, a exportação superior busca todas as páginas do mês no filtro selecionado e inclui o saldo atual com a data da consulta. O saldo atual é diferente do saldo de fechamento do mês.",
+      "O histórico do Conta Azul é uma importação de arquivos, sem sincronização automática. Atualizar extrato consulta o Sicoob diretamente.",
+    ],
+  },
   {
     id: "magalhaes-bank-reconciliation-2026-11-17",
     title: "Conciliação bancária e financeiro mais amplo",

@@ -170,6 +170,10 @@ function FinancePage({ userId }: { userId: string }) {
   const [quick, setQuick] = useState<QuickFilter>("all");
   const [openBank, setOpenBank] = useState(false);
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [centerFilter, setCenterFilter] = useState("");
+  const [minValue, setMinValue] = useState("");
+  const [maxValue, setMaxValue] = useState("");
   const [draft, setDraft] = useState<{ id: string; kind: FinanceKind } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [attachmentId, setAttachmentId] = useState<string | null>(null);
@@ -191,6 +195,10 @@ function FinancePage({ userId }: { userId: string }) {
   const filteredEntries = kindEntries
     .filter((entry) => {
       if (clientFilter && entry.client_id !== clientFilter) return false;
+      if (categoryFilter && entry.category !== categoryFilter) return false;
+      if (centerFilter && entry.cost_center !== centerFilter) return false;
+      if (minValue && entry.amount_cents < Number(minValue) * 100) return false;
+      if (maxValue && entry.amount_cents > Number(maxValue) * 100) return false;
       if ((dueFrom && entry.due_date < dueFrom) || (dueTo && entry.due_date > dueTo)) return false;
       return [
         entry.description,
@@ -393,6 +401,13 @@ function FinancePage({ userId }: { userId: string }) {
                 />
               </label>
             </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <label className={fieldClass}>Categoria<select className="h-10 rounded-md border bg-background px-3" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}><option value="">Todas as categorias</option>{[...new Set(kindEntries.map(e => e.category).filter(Boolean))].sort().map(value => <option key={value!} value={value!}>{value}</option>)}</select></label>
+              <label className={fieldClass}>Centro de custo<select className="h-10 rounded-md border bg-background px-3" value={centerFilter} onChange={e => setCenterFilter(e.target.value)}><option value="">Todos os centros</option>{[...new Set(kindEntries.map(e => e.cost_center).filter(Boolean))].sort().map(value => <option key={value!} value={value!}>{value}</option>)}</select></label>
+              <label className={fieldClass}>Valor mínimo (R$)<Input type="number" min="0" step="0.01" value={minValue} onChange={e => setMinValue(e.target.value)} /></label>
+              <label className={fieldClass}>Valor máximo (R$)<Input type="number" min={minValue || "0"} step="0.01" value={maxValue} onChange={e => setMaxValue(e.target.value)} /></label>
+            </div>
+            <div className="flex flex-wrap items-center gap-3"><span className="text-sm text-muted-foreground">{rows.length} lançamentos encontrados</span><Button variant="ghost" onClick={() => { setSearch(""); setClientFilter(""); setDueFrom(""); setDueTo(""); setCategoryFilter(""); setCenterFilter(""); setMinValue(""); setMaxValue(""); setQuick("all"); }}>Limpar filtros</Button></div>
             <Button
               variant="outline"
               onClick={() =>

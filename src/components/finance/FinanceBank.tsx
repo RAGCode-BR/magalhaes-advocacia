@@ -1,3 +1,4 @@
+import { FinanceExport } from "./FinanceExport";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
@@ -79,6 +80,8 @@ export function FinanceBank({ userId }: { userId: string }) {
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["office-bank-periods", userId] });
     await queryClient.invalidateQueries({ queryKey: ["office-bank", userId] });
+    await queryClient.invalidateQueries({ queryKey: ["office-bank-reconciliation", userId] });
+    await queryClient.invalidateQueries({ queryKey: ["office-bank-report-rows", userId] });
   };
   const sync = useMutation({
     mutationFn: () => synchronizeBank(month),
@@ -238,6 +241,43 @@ export function FinanceBank({ userId }: { userId: string }) {
               ),
             },
           ]}
+        />
+      )}
+      {connection && (
+        <FinanceExport
+          report={async () => {
+            const all: BankTransaction[] = [];
+            let next: BankCursor | undefined;
+            const seen = new Set<string>();
+            for (let page = 0; page < 200; page++) {
+              const overview = await loadBankOverview(month, status, next);
+              const chunk = overview.rows.slice(0, 50);
+              for (const row of chunk) {
+                if (seen.has(row.id))
+                  throw new Error(
+                    "O extrato mudou durante a exportação. Atualize e tente novamente.",
+                  );
+                seen.add(row.id);
+                all.push(row);
+              }
+              if (overview.rows.length <= 50)
+                return {
+                  title: `Extrato Sicoob · ${month}`,
+                  note: `Mês completo no filtro ${status}. Saldo bancário atual (não saldo final do mês): ${balance ? currency(balance.amount_cents) : "indisponível"}. Consultado: ${balance ? timestamp(balance.observed_at) : "sem consulta"}.`,
+                  columns: ["Data", "Histórico", "Entrada (R$)", "Saída (R$)", "Conciliação"],
+                  rows: all.map((row) => [
+                    row.booked_on.slice(0, 10).split("-").reverse().join("/"),
+                    row.description,
+                    Math.max(0, row.amount_cents) / 100,
+                    Math.max(0, -row.amount_cents) / 100,
+                    row.reconciled_at ? "Conciliada" : "Pendente",
+                  ]),
+                };
+              const last = chunk.at(-1)!;
+              next = { date: last.booked_on, id: last.id };
+            }
+            throw new Error("Extrato muito extenso. Exporte um período menor.");
+          }}
         />
       )}
       <div className="flex flex-wrap items-end gap-3">

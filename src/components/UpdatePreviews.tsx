@@ -1650,6 +1650,19 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-finance-export": () => (
+    <PreviewGrid label="Exportação financeira em Excel e PDF">
+      <div className="rounded-xl border bg-background p-4 text-xs">
+        <p className="font-semibold">Extrato · Conta de exemplo</p>
+        <p className="my-3">Saldo atual · R$ 1.500,00</p>
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded border p-2">Exportar Excel</span>
+          <span className="rounded border p-2">Imprimir / salvar PDF</span>
+        </div>
+        <p className="mt-3 text-muted-foreground">Período e data da consulta no relatório</p>
+      </div>
+    </PreviewGrid>
+  ),
   "magalhaes-bank-reconciliation": () => (
     <PreviewGrid label="Prévia ilustrativa da conciliação bancária lado a lado">
       <div className="space-y-2 rounded-xl border bg-card p-3 text-[10px]">

@@ -1,4 +1,12 @@
-import { Children, cloneElement, isValidElement, useState, type ReactNode, type ReactElement } from "react";
+import { FinanceExportRegion } from "./FinanceExport";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useState,
+  type ReactNode,
+  type ReactElement,
+} from "react";
 import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,52 +73,54 @@ export function KpiStrip({ items, className = "" }: { items: KpiItem[]; classNam
   const [open, setOpen] = useState<KpiItem | null>(null);
   return (
     <>
-      <dl
-        className={`grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border shadow-[0_1px_2px_rgb(0_0_0/0.04)] [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1 ${
-          items.length >= 4 ? "lg:grid-cols-4" : "sm:grid-cols-3"
-        } ${className}`}
-      >
-        {items.map((item) => {
-          const clickable = !!(item.detail || item.summary || item.onClick);
-          const activate = () => (item.detail || item.summary ? setOpen(item) : item.onClick?.());
-          return (
-            <div
-              key={item.label}
-              className={`relative min-w-0 bg-card px-4 py-4 md:px-5 ${clickable ? "transition-colors hover:bg-muted/40" : ""}`}
-            >
-              <dt className="flex items-center gap-2 text-[13px] text-muted-foreground">
-                <span
-                  aria-hidden
-                  className={`h-2 w-2 shrink-0 rounded-full ${toneDot[item.tone]}`}
-                />
-                {clickable ? (
-                  <button
-                    type="button"
-                    onClick={activate}
-                    aria-haspopup={item.detail || item.summary ? "dialog" : undefined}
-                    className="truncate text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
-                  >
-                    {item.label}
-                  </button>
-                ) : (
-                  <span className="truncate">{item.label}</span>
-                )}
-                {clickable && (
-                  <ChevronRight aria-hidden className="ml-auto h-3.5 w-3.5 shrink-0 opacity-50" />
-                )}
-              </dt>
-              <dd
-                className={`mt-2 break-words text-lg font-semibold leading-none tracking-tight tabular-nums sm:text-2xl ${toneText[item.tone]}`}
+      <FinanceExportRegion title="Saldos e indicadores financeiros">
+        <dl
+          className={`grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border shadow-[0_1px_2px_rgb(0_0_0/0.04)] [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1 ${
+            items.length >= 4 ? "lg:grid-cols-4" : "sm:grid-cols-3"
+          } ${className}`}
+        >
+          {items.map((item) => {
+            const clickable = !!(item.detail || item.summary || item.onClick);
+            const activate = () => (item.detail || item.summary ? setOpen(item) : item.onClick?.());
+            return (
+              <div
+                key={item.label}
+                className={`relative min-w-0 bg-card px-4 py-4 md:px-5 ${clickable ? "transition-colors hover:bg-muted/40" : ""}`}
               >
-                {item.value}
-              </dd>
-              {item.hint && (
-                <dd className="mt-2 text-xs leading-snug text-muted-foreground">{item.hint}</dd>
-              )}
-            </div>
-          );
-        })}
-      </dl>
+                <dt className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                  <span
+                    aria-hidden
+                    className={`h-2 w-2 shrink-0 rounded-full ${toneDot[item.tone]}`}
+                  />
+                  {clickable ? (
+                    <button
+                      type="button"
+                      onClick={activate}
+                      aria-haspopup={item.detail || item.summary ? "dialog" : undefined}
+                      className="truncate text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
+                    >
+                      {item.label}
+                    </button>
+                  ) : (
+                    <span className="truncate">{item.label}</span>
+                  )}
+                  {clickable && (
+                    <ChevronRight aria-hidden className="ml-auto h-3.5 w-3.5 shrink-0 opacity-50" />
+                  )}
+                </dt>
+                <dd
+                  className={`mt-2 break-words text-lg font-semibold leading-none tracking-tight tabular-nums sm:text-2xl ${toneText[item.tone]}`}
+                >
+                  {item.value}
+                </dd>
+                {item.hint && (
+                  <dd className="mt-2 text-xs leading-snug text-muted-foreground">{item.hint}</dd>
+                )}
+              </div>
+            );
+          })}
+        </dl>
+      </FinanceExportRegion>
       {open && (
         <Dialog open onOpenChange={(next) => !next && setOpen(null)}>
           <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
@@ -290,32 +300,49 @@ export function Sheet({
   fit?: boolean;
 }) {
   return (
-    <div className={`fin-sheet ${fit ? "fin-sheet-fit" : "overflow-auto"} rounded-xl border ${maxHeight}`}>
-      <table className="w-full border-collapse text-left text-[13px]" aria-label={label}>
-        <thead>
-          <tr>
-            <th scope="col" className="fin-sheet-gutter">
-              <span className="sr-only">Linha</span>
-            </th>
-            {columns.map((column) => (
-              <th
-                scope="col"
-                key={column.label}
-                className={`${column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : ""} ${column.className ?? ""}`}
-              >
-                {column.label}
+    <FinanceExportRegion title={label}>
+      <div
+        className={`fin-sheet ${fit ? "fin-sheet-fit" : "overflow-auto"} rounded-xl border ${maxHeight}`}
+      >
+        <table className="w-full border-collapse text-left text-[13px]" aria-label={label}>
+          <thead>
+            <tr>
+              <th scope="col" className="fin-sheet-gutter">
+                <span className="sr-only">Linha</span>
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{fit ? Children.map(children, row => {
-          if (!isValidElement<{ children: ReactNode }>(row)) return row;
-          return cloneElement(row, {}, Children.map(row.props.children, (cell, index) =>
-            isValidElement(cell) ? cloneElement(cell as ReactElement<Record<string, unknown>>, { "data-label": index ? columns[index - 1]?.label : "Linha" }) : cell));
-        }) : children}</tbody>
-        {footer && <tfoot>{footer}</tfoot>}
-      </table>
-    </div>
+              {columns.map((column) => (
+                <th
+                  scope="col"
+                  key={column.label}
+                  className={`${column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : ""} ${column.className ?? ""}`}
+                >
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {fit
+              ? Children.map(children, (row) => {
+                  if (!isValidElement<{ children: ReactNode }>(row)) return row;
+                  return cloneElement(
+                    row,
+                    {},
+                    Children.map(row.props.children, (cell, index) =>
+                      isValidElement(cell)
+                        ? cloneElement(cell as ReactElement<Record<string, unknown>>, {
+                            "data-label": index ? columns[index - 1]?.label : "Linha",
+                          })
+                        : cell,
+                    ),
+                  );
+                })
+              : children}
+          </tbody>
+          {footer && <tfoot>{footer}</tfoot>}
+        </table>
+      </div>
+    </FinanceExportRegion>
   );
 }
 
