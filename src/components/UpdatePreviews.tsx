@@ -1650,6 +1650,7 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-reconciliation-guide": () => (<PreviewGrid label="Conciliação em três passos"><div className="rounded-xl border bg-background p-4 text-xs"><p className="font-semibold">1. Movimento do banco</p><p className="my-2 rounded border p-2">Entrada de exemplo · R$ 500,00</p><p className="font-semibold">2. Está em aberto / Já foi baixado / Ainda não existe</p><p className="mt-3 rounded bg-primary/10 p-2">3. Confira os dois lados → Confirmar vínculo</p></div></PreviewGrid>),
   "magalhaes-finance-month": () => (<PreviewGrid label="Filtro financeiro por mês"><div className="rounded-xl border bg-background p-4 text-xs"><p className="font-semibold">Mês de vencimento</p><div className="my-3 rounded border p-2">Novembro de 2026 ▾</div><p>01/11/2026 → 30/11/2026</p><p className="mt-2 text-muted-foreground">Receitas e despesas do mês inteiro</p></div></PreviewGrid>),
   "magalhaes-finance-export": () => (
     <PreviewGrid label="Exportação financeira em Excel e PDF">

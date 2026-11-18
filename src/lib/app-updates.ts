@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-reconciliation-guide"
   | "magalhaes-finance-month"
   | "magalhaes-finance-export"
   | "magalhaes-bank-reconciliation"
@@ -91,6 +92,7 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {id: "magalhaes-reconciliation-guide-2026-11-18", title: "Conciliação em três passos", date: "2026-11-18", preview: "magalhaes-reconciliation-guide", audience: "admin", workspaces: ["consultoria"], details: ["Escolha uma movimentação no extrato e indique se o lançamento está em aberto, já foi recebido/pago ou ainda não existe.", "Para lançamentos em aberto, escolha o registro e confira o resumo com os dois lados e o saldo restante antes de confirmar. Pagamentos já registrados têm um caminho separado para evitar uma nova baixa."]},
   { id: "magalhaes-finance-month-2026-11-18", title: "Lançamentos por mês", date: "2026-11-18", preview: "magalhaes-finance-month", audience: "admin", workspaces: ["consultoria"], details: ["Selecione o mês e o ano no filtro Mês de vencimento para consultar receitas e despesas do mês inteiro. As datas inicial e final são preenchidas automaticamente e continuam disponíveis para períodos personalizados.", "Os totais, a lista e as exportações acompanham o período selecionado. Limpar filtros retorna à consulta de todo o período."] },
   {
     id: "magalhaes-finance-export-2026-11-18",

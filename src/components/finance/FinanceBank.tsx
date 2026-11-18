@@ -500,11 +500,13 @@ export function FinanceBank({ userId }: { userId: string }) {
  * (receita/despesa) from the movement itself, settled and reconciled in one step.
  */
 export function ReconcileDialog({
+  initialMode,
   transaction,
   userId,
   close,
   refresh,
 }: {
+  initialMode?: "link" | "create";
   transaction: BankTransaction;
   userId: string;
   close: () => void;
@@ -515,7 +517,7 @@ export function ReconcileDialog({
   const kind = income ? "income" : "expense";
   const parts = bankDescriptionParts(transaction.description);
   const [settlement, setSettlement] = useState("");
-  const [mode, setMode] = useState<"link" | "create" | null>(null);
+  const [mode, setMode] = useState<"link" | "create" | null>(initialMode ?? null);
   const [clientId, setClientId] = useState("");
   const [ids] = useState(() => ({ entry: crypto.randomUUID(), settlement: crypto.randomUUID() }));
   const { data: clients = [] } = useClients();
@@ -621,7 +623,7 @@ export function ReconcileDialog({
             [
               [
                 "link",
-                `Lançamento existente${candidates.data ? ` (${candidates.data.length})` : ""}`,
+                `Pagamento já registrado${candidates.data ? ` (${candidates.data.length})` : ""}`,
               ],
               ["create", income ? "Criar receita" : "Criar despesa"],
             ] as const
@@ -650,8 +652,7 @@ export function ReconcileDialog({
             )}
             {candidates.data?.length === 0 && (
               <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                Nenhuma baixa ou transferência com a mesma conta, valor e tipo. Use{" "}
-                {income ? "Criar receita" : "Criar despesa"} para lançar e conciliar de uma vez.
+                Nenhum pagamento já registrado com a mesma conta, valor e tipo foi encontrado. Se o lançamento ainda está em aberto, volte e escolha “Está em aberto”. Cadastre uma nova receita ou despesa somente se ela ainda não existe.
               </p>
             )}
             {!!candidates.data?.length && (
