@@ -1,3 +1,4 @@
+import { ClientFilesSheet } from "@/components/ClientFilesSheet";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { LayoutGroup } from "motion/react";
 import { SlidingThumb } from "@/components/SlidingThumb";
@@ -86,6 +87,7 @@ import { normalizeTasksWithOpenSubtasks } from "@/lib/task-utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function CalendarPage({ clientCalendar = false, clientId }: { clientCalendar?: boolean; clientId?: string } = {}) {
+  const [filesOpen, setFilesOpen] = useState(false);
   const calendarViewGroupId = useId();
   const teamVisibilityWorkspaceId = useTeamTaskVisibility();
   const { user, isCollaborator, isClient, activeWorkspace, workspaces } = useAuth();
@@ -500,6 +502,7 @@ export function CalendarPage({ clientCalendar = false, clientId }: { clientCalen
   return (
     <div className="space-y-3 px-3 py-3 sm:px-4">
       <header className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => setFilesOpen(true)}>Arquivos do cliente</Button>
         <div className="flex items-center gap-2">
           <div className="flex gap-1">
             <Button size="icon" variant="outline" className="h-8 w-8 rounded-full transition-transform active:scale-[0.94]" onClick={() => moveCursor(-1)} aria-label={calendarView === "week" ? "Semana anterior" : "Mês anterior"}>
@@ -817,6 +820,7 @@ export function CalendarPage({ clientCalendar = false, clientId }: { clientCalen
         onOpenChange={(nextOpen) => { if (!nextOpen && !completingTask.current) setCompletionTask(null); }}
         onConfirm={(date) => completionTask ? completeTask(completionTask, date) : undefined}
       />
+      <ClientFilesSheet open={filesOpen} onOpenChange={setFilesOpen} initialClientId={clientCalendar ? clientId : filters.client} />
       <TaskDialog open={open} onOpenChange={setOpen} task={edit} defaults={{ dueDate: newTaskDay, clientId: clientCalendar ? clientId : undefined }} />
     </div>
   );

@@ -81,8 +81,8 @@ export function ClientFilesManager({
   );
 
   useEffect(() => {
-    if (user?.id) setSelectedUploaderIds([user.id]);
-  }, [user?.id]);
+    if (user?.id) setSelectedUploaderIds(isAdmin ? [] : [user.id]);
+  }, [user?.id, isAdmin]);
 
   const load = async (uploaderIds: string[]) => {
     if (!user?.id) {
@@ -97,8 +97,7 @@ export function ClientFilesManager({
       .order("position", { ascending: true })
       .order("created_at", { ascending: false });
     if (isAdmin) {
-      if (!uploaderIds.length) return;
-      query = query.in("uploaded_by", uploaderIds);
+      if (uploaderIds.length) query = query.in("uploaded_by", uploaderIds);
     } else {
       query = query.eq("uploaded_by", user.id);
     }
@@ -114,13 +113,14 @@ export function ClientFilesManager({
   };
 
   useEffect(() => {
-    if (user?.id && (!isAdmin || selectedUploaderIds.length)) {
+    if (user?.id) {
       void load(selectedUploaderIds);
     }
   }, [clientId, isAdmin, selectedUploaderIds, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleUploader = (uploaderId: string) => {
     setSelectedUploaderIds((current) => {
+      if (!current.length) return filterableProfiles.length > 1 ? filterableProfiles.filter(profile => profile.id !== uploaderId).map(profile => profile.id) : current;
       if (!current.includes(uploaderId)) return [...current, uploaderId];
       if (current.length === 1) {
         toast.error("Selecione ao menos um usuário.");
@@ -336,7 +336,7 @@ export function ClientFilesManager({
                 className="w-[240px] justify-between font-normal"
               >
                 <span className="truncate text-left">
-                  {selectedProfiles.length === 0 && selectedUploaderIds.length === 1
+                  {selectedUploaderIds.length === 0 ? "Todos os remetentes" : selectedProfiles.length === 0 && selectedUploaderIds.length === 1
                     ? "Meu usuário"
                     : selectedProfiles.length === 1
                       ? selectedUploaderLabel
@@ -355,11 +355,10 @@ export function ClientFilesManager({
                     size="sm"
                     className="h-7 px-2 text-xs"
                     onClick={() =>
-                      setSelectedUploaderIds(filterableProfiles.map((profile) => profile.id))
+                      setSelectedUploaderIds([])
                     }
                     disabled={
-                      !filterableProfiles.length ||
-                      selectedUploaderIds.length === filterableProfiles.length
+                      selectedUploaderIds.length === 0
                     }
                   >
                     Todos
@@ -385,7 +384,7 @@ export function ClientFilesManager({
                     className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted"
                   >
                     <Checkbox
-                      checked={selectedUploaderIds.includes(profile.id)}
+                      checked={selectedUploaderIds.length === 0 || selectedUploaderIds.includes(profile.id)}
                       onCheckedChange={() => toggleUploader(profile.id)}
                     />
                     <span className="truncate">

@@ -1,3 +1,4 @@
+import { ClientFilesSheet } from "@/components/ClientFilesSheet";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
@@ -72,6 +73,8 @@ function ListPage() {
   const [open, setOpen] = useState(false);
   const { pins } = usePersonalTaskPins();
   const pinnedIds = useMemo(() => new Set(pins.filter(pin => pin.is_pinned).map(pin => pin.task_id)), [pins]);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
   const [completedOpen, setCompletedOpen] = useState(false);
   const [edit, setEdit] = useState<Task | null>(null);
   const [dueDateSortDirection, setDueDateSortDirection] = useState<"asc" | "desc">("asc");
@@ -277,9 +280,19 @@ function ListPage() {
     void completeTask(task.id, today);
   };
 
+  const changeInline = async (task: Task, patch: Partial<Task>) => {
+    if (!user || savingTaskId) return;
+    setSavingTaskId(task.id);
+    try {
+      const { queued } = await updateTaskWithOfflineSupport({ userId: user.id, task, patch, queryClient });
+      toast.success(queued ? "Alteração salva neste aparelho; será sincronizada ao reconectar." : "Tarefa atualizada.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível salvar."); }
+    finally { setSavingTaskId(null); }
+  };
   return (
     <div className="space-y-3 px-3 py-3 sm:px-4">
       <header className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => setFilesOpen(true)}>Arquivos do cliente</Button>
       <TaskFilters
         filters={filters}
         onChange={setFilters}
@@ -420,27 +433,24 @@ function ListPage() {
                       </div>
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
-                  <td className="border-r px-2 py-2">
-                    {displayStatus ? (
-                      <Badge variant="outline" className="max-w-full rounded-md align-middle font-medium" title={displayStatus.name} style={{ borderColor: displayStatus.color, color: displayStatus.color }}>
-                        <span className="min-w-0 truncate">{displayStatus.name}</span>
-                      </Badge>
-                    ) : <span className="text-muted-foreground">—</span>}
+                  <td className="border-r px-2 py-2" onClick={event => event.stopPropagation()}>
+                    <select aria-label={`Status de ${t.title}`} className="w-full min-w-0 rounded-md border bg-background px-2 py-1 text-xs" title={displayStatus?.name} style={{color:displayStatus?.color}} disabled={!!savingTaskId || !(isAdmin || t.created_by === user?.id || t.assignee_id === user?.id)} value={isCompleted ? "done" : t.column_id ?? ""} onChange={event => {
+                      if (event.target.value === "done") { startCompletion(t); return; }
+                      const column = columns.find(item => item.id === event.target.value);
+                      if (!column) return;
+                      const fallback = statuses.find(item => !item.is_completed);
+                      void changeInline(t, {column_id: column.id, ...(isCompleted ? {status:"todo", completed_at:null, status_id:fallback?.id ?? null} : {})});
+                    }}>
+                      <option value="" disabled>{displayStatus?.name ?? "Escolher status"}</option>
+                      {columns.map(column => <option key={column.id} value={column.id}>{column.name}</option>)}
+                      <option value="done">{completedStatus?.name ?? "Concluída"}</option>
+                    </select>
                   </td>
-                  <td className="border-r px-2 py-2">
-                    {t.priority ? (
-                      <Badge
-                        variant="outline"
-                        style={{
-                          borderColor: priorityColors[t.priority],
-                          color: priorityColors[t.priority],
-                        }}
-                      >
-                        {priorityLabels[t.priority]}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
+                  <td className="border-r px-2 py-2" onClick={event => event.stopPropagation()}>
+                    <select aria-label={`Prioridade de ${t.title}`} className="w-full min-w-0 rounded-md border bg-background px-2 py-1 text-xs" style={{color: t.priority ? priorityColors[t.priority] : undefined}} disabled={!!savingTaskId || !(isAdmin || t.created_by === user?.id || t.assignee_id === user?.id)} value={t.priority ?? ""} onChange={event => void changeInline(t, {priority: (event.target.value || null) as Task["priority"]})}>
+                      <option value="">Sem prioridade</option>
+                      {Object.entries(priorityLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
                   </td>
                   <td className={`border-r px-2 py-2 whitespace-nowrap ${dueTextClass}`}>
                     {t.due_date
@@ -529,6 +539,7 @@ function ListPage() {
           </tbody>
         </table>
       </div>
+      <ClientFilesSheet open={filesOpen} onOpenChange={setFilesOpen} initialClientId={filters.client} />
       <TaskDialog open={open} onOpenChange={setOpen} task={edit} />
       <CompletionDateDialog
         open={!!completionTaskTarget}

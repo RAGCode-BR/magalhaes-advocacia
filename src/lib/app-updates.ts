@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-task-list-actions"
   | "magalhaes-client-tabs"
   | "magalhaes-client-directory"
   | "magalhaes-reconciliation-guide"
@@ -94,6 +95,7 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {id: "magalhaes-task-list-actions-2026-11-18", title: "Status, prioridade e arquivos na lista", date: "2026-11-18", preview: "magalhaes-task-list-actions", audience: "admin", workspaces: ["consultoria"], details: ["Altere o status/coluna e a prioridade diretamente na lista de processos. A conclusão mantém a conferência de subtarefas e a data de conclusão.", "Arquivos do cliente fica no topo da lista e do calendário. Administradores, incluindo Ana, veem todos os remetentes por padrão e podem filtrar por usuário."]},
   {id: "magalhaes-client-tabs-2026-11-18", title: "Ficha de clientes simplificada", date: "2026-11-18", preview: "magalhaes-client-tabs", audience: "admin", workspaces: ["consultoria"], details: ["As seções Sistemas, Outras unidades e Departamentos foram retiradas da ficha de clientes da Magalhães. O atalho Sistemas e senhas também foi removido do painel do calendário."]},
   {id: "magalhaes-client-directory-2026-11-18", title: "Clientes abre os cadastros", date: "2026-11-18", preview: "magalhaes-client-directory", audience: "admin", workspaces: ["consultoria"], details: ["O menu Clientes agora abre diretamente a lista de cadastros, com busca, filtros e ações de gerenciamento."]},
   {id: "magalhaes-reconciliation-guide-2026-11-18", title: "Conciliação em três passos", date: "2026-11-18", preview: "magalhaes-reconciliation-guide", audience: "admin", workspaces: ["consultoria"], details: ["Escolha uma movimentação no extrato e indique se o lançamento está em aberto, já foi recebido/pago ou ainda não existe.", "Para lançamentos em aberto, escolha o registro e confira o resumo com os dois lados e o saldo restante antes de confirmar. Pagamentos já registrados têm um caminho separado para evitar uma nova baixa."]},
