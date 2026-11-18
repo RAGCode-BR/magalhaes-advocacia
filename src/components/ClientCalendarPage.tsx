@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { BookImage, Building2, Eye, EyeOff, KeyRound, Settings2 } from "lucide-react";
+import { BookImage, Building2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -11,34 +10,15 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useClients, type Client, type ClientSystemAccess } from "@/hooks/use-data";
+import { useClients, type Client } from "@/hooks/use-data";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
 import { LinkedText } from "@/components/LinkedText";
 import { ClientReferences } from "@/components/ClientReferences";
 import { CalendarPage } from "@/components/TaskCalendar";
 
 function ClientQuickPanel({ client }: { client: Client }) {
-  const { user, activeWorkspace } = useAuth();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState("client");
-  const [visiblePassword, setVisiblePassword] = useState<string | null>(null);
-  useEffect(() => {
-    if (!open || tab !== "system") setVisiblePassword(null);
-  }, [open, tab]);
-  const systems = useQuery({
-    queryKey: ["client-calendar-systems", activeWorkspace?.id, user?.id, client.id],
-    enabled: open && tab === "system",
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("client_system_accesses")
-        .select("*")
-        .eq("client_id", client.id)
-        .order("title");
-      if (error) throw error;
-      return (data ?? []) as ClientSystemAccess[];
-    },
-  });
   return (
     <>
       <div className="flex flex-wrap gap-2">
@@ -53,17 +33,7 @@ function ClientQuickPanel({ client }: { client: Client }) {
           <Building2 className="mr-1 h-3.5 w-3.5" />
           Cadastro
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setTab("system");
-            setOpen(true);
-          }}
-        >
-          <KeyRound className="mr-1 h-3.5 w-3.5" />
-          Sistemas e senhas
-        </Button>
+
         <Button
           variant="outline"
           size="sm"
@@ -83,9 +53,8 @@ function ClientQuickPanel({ client }: { client: Client }) {
             <SheetDescription>Informações do cliente, ao lado do calendário.</SheetDescription>
           </SheetHeader>
           <Tabs value={tab} onValueChange={setTab} className="mt-5">
-            <TabsList className="grid h-auto w-full grid-cols-3">
+            <TabsList className="grid h-auto w-full grid-cols-2">
               <TabsTrigger value="client">Cadastro</TabsTrigger>
-              <TabsTrigger value="system">Sistemas</TabsTrigger>
               <TabsTrigger value="references">Referências</TabsTrigger>
             </TabsList>
             <TabsContent value="client" className="space-y-4 pt-2">
@@ -113,58 +82,7 @@ function ClientQuickPanel({ client }: { client: Client }) {
                 </p>
               )}
             </TabsContent>
-            <TabsContent value="system" className="space-y-3 pt-2">
-              {systems.isLoading && (
-                <p className="text-sm text-muted-foreground">Carregando sistemas…</p>
-              )}
-              {systems.error && (
-                <p role="alert" className="text-sm text-destructive">
-                  Não foi possível carregar os sistemas. Verifique sua conexão e seu acesso.
-                </p>
-              )}
-              {!systems.isLoading && !systems.error && !systems.data?.length && (
-                <p className="rounded-lg border p-4 text-sm text-muted-foreground">
-                  Nenhum sistema cadastrado para este cliente.
-                </p>
-              )}
-              {systems.data?.map((system) => (
-                <article key={system.id} className="space-y-2 rounded-xl border p-4 text-sm">
-                  <h3 className="font-semibold">{system.title}</h3>
-                  <p className="break-words">
-                    <span className="text-muted-foreground">Login: </span>
-                    {system.login || "Não informado"}
-                  </p>
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="text-muted-foreground">Senha:</span>
-                    <span className="min-w-0 break-all font-mono">
-                      {visiblePassword === system.id
-                        ? system.password || "Não informada"
-                        : "••••••••"}
-                    </span>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 shrink-0"
-                      aria-label={visiblePassword === system.id ? "Ocultar senha" : "Mostrar senha"}
-                      onClick={() =>
-                        setVisiblePassword(visiblePassword === system.id ? null : system.id)
-                      }
-                    >
-                      {visiblePassword === system.id ? (
-                        <EyeOff className="h-3.5 w-3.5" />
-                      ) : (
-                        <Eye className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
-                  </div>
-                  {system.notes && (
-                    <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
-                      <LinkedText text={system.notes} />
-                    </p>
-                  )}
-                </article>
-              ))}
-            </TabsContent>
+
             <TabsContent value="references" className="pt-2">
               <ClientReferences clientId={client.id} />
             </TabsContent>
