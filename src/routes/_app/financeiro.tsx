@@ -166,6 +166,11 @@ function FinancePage({ userId }: { userId: string }) {
   const [clientFilter, setClientFilter] = useState("");
   const [dueFrom, setDueFrom] = useState("");
   const [dueTo, setDueTo] = useState("");
+  const monthEnd = (month: string) => {
+    const [year, number] = month.split("-").map(Number);
+    return `${month}-${String(new Date(year, number, 0).getDate()).padStart(2, "0")}`;
+  };
+  const selectedMonth = dueFrom.endsWith("-01") && dueTo === monthEnd(dueFrom.slice(0, 7)) ? dueFrom.slice(0, 7) : "";
   const [kind, setKind] = useState<FinanceKind>("income");
   const [quick, setQuick] = useState<QuickFilter>("all");
   const [openBank, setOpenBank] = useState(false);
@@ -372,7 +377,10 @@ function FinancePage({ userId }: { userId: string }) {
                 );
               })}
             </div>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <label className={fieldClass}>Mês de vencimento
+                <Input type="month" aria-label="Filtrar mês de vencimento" value={selectedMonth} onChange={event => { const month = event.target.value; setDueFrom(month ? `${month}-01` : ""); setDueTo(month ? monthEnd(month) : ""); }} />
+              </label>
               <div className={fieldClass}>
                 Cliente
                 <ClientPicker

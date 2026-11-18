@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-finance-month"
   | "magalhaes-finance-export"
   | "magalhaes-bank-reconciliation"
   | "magalhaes-finance-recurrence"
@@ -90,6 +91,7 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  { id: "magalhaes-finance-month-2026-11-18", title: "Lançamentos por mês", date: "2026-11-18", preview: "magalhaes-finance-month", audience: "admin", workspaces: ["consultoria"], details: ["Selecione o mês e o ano no filtro Mês de vencimento para consultar receitas e despesas do mês inteiro. As datas inicial e final são preenchidas automaticamente e continuam disponíveis para períodos personalizados.", "Os totais, a lista e as exportações acompanham o período selecionado. Limpar filtros retorna à consulta de todo o período."] },
   {
     id: "magalhaes-finance-export-2026-11-18",
     title: "Filtros financeiros, Excel e PDF",

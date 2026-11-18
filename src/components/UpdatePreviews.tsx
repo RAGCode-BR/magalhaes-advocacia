@@ -1650,6 +1650,7 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-finance-month": () => (<PreviewGrid label="Filtro financeiro por mês"><div className="rounded-xl border bg-background p-4 text-xs"><p className="font-semibold">Mês de vencimento</p><div className="my-3 rounded border p-2">Novembro de 2026 ▾</div><p>01/11/2026 → 30/11/2026</p><p className="mt-2 text-muted-foreground">Receitas e despesas do mês inteiro</p></div></PreviewGrid>),
   "magalhaes-finance-export": () => (
     <PreviewGrid label="Exportação financeira em Excel e PDF">
       <div className="rounded-xl border bg-background p-4 text-xs">
