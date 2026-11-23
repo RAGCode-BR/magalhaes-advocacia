@@ -1,5 +1,5 @@
 import type { Query } from "./db.ts";
-import { extractDocument } from "./documents.ts";
+import { readFile, type Content, type ReadOptions } from "./documents.ts";
 
 export type Ambiente = "marketing" | "consultoria";
 
@@ -169,10 +169,15 @@ export async function clientSummary(query: Query, { cliente }: { cliente: string
     [client.id],
   );
   const files = await query<{ id: string; file_name: string; title: string }>(
-    `select a.id, a.file_name, t.title from public.attachments a
-       join public.tasks t on t.id = a.task_id
-      where t.client_id = $1 and t.deleted_at is null
-      order by a.created_at desc limit 20`,
+    `select id, file_name, title from (
+       select a.id, a.file_name, 'card "' || t.title || '"' as title, a.created_at
+         from ${CARD_FILES} a join public.tasks t on t.id = a.task_id
+        where t.client_id = $1 and t.deleted_at is null
+       union all
+       select f.id, f.file_name, 'arquivos do cliente' as title, f.created_at
+         from public.client_files f
+        where f.client_id = $1 and f.source_attachment_id is null
+     ) arquivos order by created_at desc limit 30`,
     [client.id],
   );
   const open = cards.filter((c) => c.status !== "done");
@@ -203,7 +208,7 @@ export async function clientSummary(query: Query, { cliente }: { cliente: string
       .map((n) => `- ${formatDate(n.note_date)} · ${n.title || "Sem título"}: ${short(n.content)}`)
       .join("\n") || "Nenhuma anotação.",
     `## Arquivos anexados (use ler_anexo com o id)`,
-    files.map((f) => `- ${f.file_name} (card "${f.title}") · id ${f.id}`).join("\n") ||
+    files.map((f) => `- ${f.file_name} (${f.title}) · id ${f.id}`).join("\n") ||
       "Nenhum arquivo.",
     `Cliente id ${client.id}`,
   ].join("\n\n");
@@ -234,8 +239,8 @@ export async function cardDetails(query: Query, { card_id }: { card_id: string }
       where cm.task_id = $1 order by cm.created_at`,
     [card_id],
   );
-  const files = await query<{ id: string; file_name: string; mime_type: string | null }>(
-    "select id, file_name, mime_type from public.attachments where task_id = $1 order by created_at",
+  const files = await query<{ id: string; file_name: string; origin: string }>(
+    `select id, file_name, origin from ${CARD_FILES} a where task_id = $1 order by created_at`,
     [card_id],
   );
   const history = await query<{ action: string; who: string; created_at: Date }>(
@@ -269,7 +274,7 @@ export async function cardDetails(query: Query, { card_id }: { card_id: string }
       .map((c) => `- ${formatDate(c.created_at)} · ${c.author ?? "?"}: ${c.body}`)
       .join("\n") || "Nenhum comentário.",
     `## Arquivos (use ler_anexo com o id)`,
-    files.map((f) => `- ${f.file_name} · id ${f.id}`).join("\n") || "Nenhum.",
+    files.map((f) => `- ${f.file_name}${f.origin ? ` (${f.origin})` : ""} · id ${f.id}`).join("\n") || "Nenhum.",
     `## Histórico recente`,
     history
       .map((h) => `- ${formatDate(h.created_at)} · ${h.who ?? "?"} · ${h.action}`)
@@ -279,19 +284,27 @@ export async function cardDetails(query: Query, { card_id }: { card_id: string }
     .join("\n\n");
 }
 
-export const ATTACHMENT_LIMIT = 8 * 1024 * 1024;
-const TEXT_TYPES = /^(text\/|application\/(json|xml|csv))/;
+/** Files of a card wherever they were attached: the card, a subtask or a conversation message. */
+const CARD_FILES = `(
+  select id, task_id, file_name, storage_path, mime_type, created_at, null::text as origin from public.attachments
+  union all
+  select sa.id, sa.task_id, sa.file_name, sa.storage_path, sa.mime_type, sa.created_at,
+         'subtarefa "' || coalesce(st.title, '') || '"'
+    from public.subtask_attachments sa left join public.subtasks st on st.id = sa.subtask_id
+  union all
+  select id, task_id, file_name, storage_path, mime_type, created_at, 'conversa' from public.comment_attachments
+)`;
 
-type ToolContent =
-  | { type: "text"; text: string }
-  | { type: "image"; data: string; mimeType: string };
+/** Largest file read whole; bigger ones would not fit the connector's memory. */
+export const ATTACHMENT_LIMIT = 15 * 1024 * 1024;
 
-/** Returns an attachment in a form Claude can read: text (documents are extracted) or image. */
+/** Returns any attachment in a form Claude can read: text, images or transcripts. */
 export async function readAttachment(
   query: Query,
-  { anexo_id }: { anexo_id: string },
-): Promise<ToolContent[]> {
-  const text = (value: string): ToolContent[] => [{ type: "text", text: value }];
+  { anexo_id, a_partir_da_pagina }: { anexo_id: string; a_partir_da_pagina?: number },
+  options: Omit<ReadOptions, "fromPage"> = {},
+): Promise<Content[]> {
+  const text = (value: string): Content[] => [{ type: "text", text: value }];
   if (!UUID.test(anexo_id)) return text("Informe o id do anexo.");
   const [file] = await query<{
     file_name: string;
@@ -302,49 +315,24 @@ export async function readAttachment(
     `select a.file_name, coalesce(a.mime_type, o.metadata->>'mimetype') as mime_type,
             octet_length(o.payload) as size,
             case when octet_length(o.payload) <= $2 then o.payload end as payload
-       from public.attachments a
+       from (select id, file_name, storage_path, mime_type from ${CARD_FILES} files
+             union all
+             select id, file_name, storage_path, mime_type from public.client_files) a
        join storage.objects o on o.bucket_id = 'task-attachments' and o.name = a.storage_path
-      where a.id = $1`,
+      where a.id = $1
+      limit 1`,
     [anexo_id, ATTACHMENT_LIMIT],
   );
   if (!file) return text("Anexo não encontrado ou sem acesso.");
   if (!file.payload)
     return text(
-      `"${file.file_name}" tem ${Math.round((file.size ?? 0) / 1048576)} MB, acima do limite de 8 MB.`,
+      `"${file.file_name}" tem ${((file.size ?? 0) / 1048576).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB, acima do limite de 15 MB do conector.`,
     );
-  const mime = file.mime_type ?? "application/octet-stream";
-  if (TEXT_TYPES.test(mime) && !/html|xml/.test(mime) || /\.(txt|md|csv|json)$/i.test(file.file_name))
-    return text(`Conteúdo de "${file.file_name}":\n\n${file.payload.toString("utf8")}`);
-  const imageMime = mime.startsWith("image/")
-    ? mime
-    : IMAGE_EXTENSIONS[file.file_name.toLowerCase().match(/\.(\w+)$/)?.[1] ?? ""];
-  if (imageMime && /^image\/(png|jpeg|gif|webp)$/.test(imageMime))
-    return [
-      { type: "text", text: `Imagem "${file.file_name}":` },
-      { type: "image", data: file.payload.toString("base64"), mimeType: imageMime },
-    ];
-  // PDF, Word, Excel, PowerPoint, maps and others: Claude's apps cannot open these
-  // files from a connector, so their content goes as text.
-  try {
-    const document = await extractDocument(file.file_name, file.mime_type, new Uint8Array(file.payload));
-    if (document) return document;
-  } catch {
-    return text(
-      `Não foi possível ler "${file.file_name}": o arquivo parece danificado ou protegido por senha.`,
-    );
-  }
-  return text(
-    `"${file.file_name}" (${mime}) não pode ser lido pelo conector. Formatos aceitos: PDF, Word, Excel, PowerPoint, OpenDocument, KMZ/KML, RTF, HTML, e-mail, texto e imagens (JPG, PNG, GIF, WebP).`,
-  );
+  return readFile(file.file_name, file.mime_type, new Uint8Array(file.payload), {
+    ...options,
+    fromPage: a_partir_da_pagina,
+  });
 }
-
-const IMAGE_EXTENSIONS: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  gif: "image/gif",
-  webp: "image/webp",
-};
 
 const MAX_ROWS = 200;
 

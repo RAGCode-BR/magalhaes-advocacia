@@ -1527,6 +1527,57 @@ function MagalhaesCleanDocumentsPreview() {
 function MagalhaesProcessNavigationPreview() {
   return <PreviewGrid label="Prévia do menu Gestão de processos com o logo maior"><div className="rounded-xl bg-[#501618] p-3 text-[#ddbc70]"><BrandLogo className="mx-auto h-28 w-full max-w-60" /><p className="mt-3 rounded-full border border-current px-3 py-2 text-xs">Gestão de processos</p><p className="mt-2 px-3 text-xs">Clientes</p></div><div className="flex items-center justify-center rounded-xl bg-[#501618] p-4"><BrandLogo compact className="h-16 w-16" /></div></PreviewGrid>;
 }
+function ClaudeReadsScannedFilesPreview() {
+  const sources = ["Card", "Subtarefa", "Conversa", "Arquivos do cliente"];
+  return (
+    <PreviewGrid label="Prévia do Claude lendo um PDF escaneado e os anexos de subtarefas e da conversa">
+      <div className="rounded-xl border bg-background p-3 text-[10px]" data-claude-scanned-pdf>
+        <p className="flex items-center gap-1.5 font-semibold">
+          <FileText className="h-3.5 w-3.5 text-primary" />
+          Procuração de exemplo.pdf · 2 páginas
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {[1, 2].map((page) => (
+            <div key={page} className="rounded-md border bg-[#f6f3e8] p-1.5 shadow-sm">
+              <div className="space-y-1">
+                <span className="block h-1 w-2/3 rounded bg-[#4a3b36]/70" />
+                {[0, 1, 2, 3, 4].map((line) => (
+                  <span key={line} className="block h-0.5 rounded bg-[#4a3b36]/40" style={{ width: `${92 - line * 9}%` }} />
+                ))}
+              </div>
+              <p className="mt-1.5 flex items-center gap-1 text-[9px] text-muted-foreground">
+                <ImagePlus className="h-3 w-3" /> Página {page} · imagem
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-primary/5 p-2">
+          <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+          Claude: “É uma procuração de exemplo, lavrada em 1988, que nomeia um procurador para vender o lote 28.”
+        </p>
+      </div>
+      <div className="rounded-xl border bg-background p-3 text-[10px]" data-claude-attachment-sources>
+        <p className="font-semibold">Anexos que o Claude lê</p>
+        <div className="mt-2 space-y-1">
+          {sources.map((source) => (
+            <p key={source} className="flex items-center gap-1.5 rounded border px-2 py-1">
+              <Paperclip className="h-3 w-3 text-primary" />
+              {source}
+              <CheckCircle2 className="ml-auto h-3 w-3 text-primary" />
+            </p>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {["PDF escaneado", "ZIP", "até 15 MB"].map((label) => (
+            <span key={label} className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
+              {label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </PreviewGrid>
+  );
+}
 function ClaudeConnectDocumentsPreview() {
   const formats = ["PDF", "Word", "Excel", "JPG/PNG", "KMZ"];
   return <PreviewGrid label="Prévia do botão Conectar meu Claude e dos anexos lidos pelo Claude"><div className="rounded-xl bg-gradient-to-r from-[#601b22] to-[#3e0f15] p-4 text-[11px] text-[#f4e5cd] shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]" data-claude-connect-cta><p className="flex items-center gap-1.5 font-semibold"><Sparkles className="h-3.5 w-3.5 text-[#ddbc70]" />O seu Claude ainda não está conectado</p><p className="mt-1 opacity-75">Você entra com o seu próprio login do TaskFlow.</p><span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#ddbc70] px-3 py-1.5 font-semibold text-[#381012]"><Sparkles className="h-3 w-3" />Conectar meu Claude</span><p className="mt-3 rounded-lg bg-white/10 px-2 py-1.5">1. Adicionar conector personalizado · 2. Colar o endereço · 3. Permitir</p></div><div className="rounded-xl border bg-background p-4 text-[11px]" data-claude-reads-attachments><p className="font-semibold">Claude lendo os anexos do card</p><div className="mt-2 flex flex-wrap gap-1">{formats.map((format) => <span key={format} className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">{format}</span>)}</div><p className="mt-3 rounded-lg border p-2 text-muted-foreground">Mapa KMZ · Área de exemplo: polígono com 24 vértices, área aproximada de 60,50 ha.</p><p className="mt-2 rounded-lg border p-2 text-muted-foreground">PDF, 3 páginas · Memorando de exemplo: texto de todas as páginas.</p></div></PreviewGrid>;
@@ -1874,6 +1925,7 @@ const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
     </div>
   ),
   "claude-connect-documents": ClaudeConnectDocumentsPreview,
+  "claude-reads-scanned-files": ClaudeReadsScannedFilesPreview,
   "magalhaes-top-glass-nav": MagalhaesTopGlassNavPreview,
   "claude-connector": ClaudeConnectorPreview,
   "magalhaes-process-navigation": MagalhaesProcessNavigationPreview,

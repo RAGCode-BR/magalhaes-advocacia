@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "claude-reads-scanned-files"
   | "magalhaes-task-list-actions"
   | "magalhaes-client-tabs"
   | "magalhaes-client-directory"
@@ -95,6 +96,19 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "claude-le-pdf-escaneado-2026-11-23",
+    title: "O Claude lê PDFs escaneados",
+    date: "2026-11-23",
+    preview: "claude-reads-scanned-files",
+    audience: "all",
+    workspaces: ["consultoria", "marketing"],
+    details: [
+      "PDFs escaneados ou fotografados (scanner, WhatsApp) agora chegam ao Claude: cada página digitalizada vai como imagem, e ele lê o conteúdo, inclusive documentos datilografados. Páginas com texto continuam indo como texto, e PDFs longos são lidos em partes de 20 páginas.",
+      "O Claude também passa a ver os arquivos anexados nas subtarefas e na conversa do processo, além dos arquivos do cliente. Ele abre arquivos ZIP e lê o que há dentro, e o limite por arquivo subiu de 8 para 15 MB.",
+      "Em poucos casos o Claude ainda vai pedir um print ou JPG: plantas de CAD, páginas preto e branco de scanner gravadas em formato especial, fotos acima de 5 MB dentro do PDF e arquivos 7z.",
+    ],
+  },
   {id: "magalhaes-task-list-actions-2026-11-18", title: "Status, prioridade e arquivos na lista", date: "2026-11-18", preview: "magalhaes-task-list-actions", audience: "admin", workspaces: ["consultoria"], details: ["Altere o status/coluna e a prioridade diretamente na lista de processos. A conclusão mantém a conferência de subtarefas e a data de conclusão.", "Arquivos do cliente fica no topo da lista e do calendário. Administradores, incluindo Ana, veem todos os remetentes por padrão e podem filtrar por usuário."]},
   {id: "magalhaes-client-tabs-2026-11-18", title: "Ficha de clientes simplificada", date: "2026-11-18", preview: "magalhaes-client-tabs", audience: "admin", workspaces: ["consultoria"], details: ["As seções Sistemas, Outras unidades e Departamentos foram retiradas da ficha de clientes da Magalhães. O atalho Sistemas e senhas também foi removido do painel do calendário."]},
   {id: "magalhaes-client-directory-2026-11-18", title: "Clientes abre os cadastros", date: "2026-11-18", preview: "magalhaes-client-directory", audience: "admin", workspaces: ["consultoria"], details: ["O menu Clientes agora abre diretamente a lista de cadastros, com busca, filtros e ações de gerenciamento."]},

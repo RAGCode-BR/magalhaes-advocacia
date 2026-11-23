@@ -7,6 +7,7 @@ import { honoMcp, type McpAuthVariables } from "@neon/oauth/mcp/hono";
 import pg from "pg";
 import { newServer } from "./mcp-server.ts";
 import { neonServiceUrls } from "./neon-data.ts";
+import { geminiTranscriber } from "./transcribe.ts";
 
 type Env = {
   /** Neon Data API URL of the branch (same as the app's VITE_NEON_URL). */
@@ -16,6 +17,14 @@ type Env = {
   NEON_AUTH_BASE_URL?: string;
   /** Secret: login taskflow_mcp from neon/mcp-role.sql. */
   MCP_DATABASE_URL: string;
+  /** Optional secret: enables transcription of audio and video attachments. */
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
+  /**
+   * "true" converts PDF pages stored as black-and-white scans, CMYK or photos over
+   * 5 MB. Needs the Workers paid plan: on the free plan the CPU limit stops the call.
+   */
+  DECODE_PDF_IMAGES?: string;
 };
 
 let cachedAuth: { key: string; auth: McpAuth } | null = null;
@@ -42,7 +51,11 @@ app.post("/mcp", async (c) => {
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
-    await newServer(pool).connect(transport);
+    const transcribe = c.env.GEMINI_API_KEY
+      ? geminiTranscriber(c.env.GEMINI_API_KEY, c.env.GEMINI_MODEL || undefined)
+      : undefined;
+    const decodeImages = c.env.DECODE_PDF_IMAGES === "true";
+    await newServer(pool, { transcribe, decodeImages }).connect(transport);
     return await transport.handleRequest(c.req.raw, { authInfo: c.get("authInfo") });
   } finally {
     c.executionCtx.waitUntil(pool.end());

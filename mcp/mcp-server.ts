@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { addSubtask, commentCard, createCard, setSubtaskDone, updateCard } from "./actions.ts";
 import { asUser, type PoolLike, type Query } from "./db.ts";
+import type { Transcriber } from "./documents.ts";
 import {
   cardDetails,
   clientSummary,
@@ -26,8 +27,15 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "AAAA-MM-DD");
 const read = { readOnlyHint: true, openWorldHint: false };
 const write = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 
+export type ServerOptions = {
+  /** Speech-to-text for audio and video attachments (see transcribe.ts). */
+  transcribe?: Transcriber;
+  /** Convert PDF page images that cannot go as they are (default true). */
+  decodeImages?: boolean;
+};
+
 /** One server per request: every tool call runs as the verified caller, under the app's RLS. */
-export function newServer(pool: PoolLike) {
+export function newServer(pool: PoolLike, { transcribe, decodeImages }: ServerOptions = {}) {
   const server = new McpServer(
     { name: "taskflow", version: "0.2.0" },
     { instructions: INSTRUCTIONS },
@@ -111,12 +119,20 @@ export function newServer(pool: PoolLike) {
     {
       title: "Ler anexo",
       description:
-        "Abre um arquivo anexado a um card e devolve o conteúdo: PDF, Word, Excel, PowerPoint, OpenDocument, mapas KMZ/KML (pontos, vértices e área em hectares), RTF, HTML, e-mail, texto e imagens JPG/PNG/GIF/WebP (até 8 MB). Use os ids de anexo de detalhes_card ou resumo_cliente.",
-      inputSchema: { anexo_id: uuid },
+        "Abre qualquer arquivo anexado a um card (no próprio card, numa subtarefa ou na conversa) ou aos arquivos do cliente e devolve o conteúdo, até 15 MB. PDF com texto vem como texto; páginas de PDF digitalizado/escaneado vêm como imagens para você ler (até 20 por chamada; use a_partir_da_pagina para continuar). Também lê imagens JPG/PNG/GIF/WebP, Word, Excel, PowerPoint, OpenDocument, mapas KMZ/KML (pontos, vértices e área em hectares), RTF, HTML, e-mail, texto, arquivos ZIP (lê cada arquivo de dentro) e transcreve áudios e vídeos (inclusive áudios do WhatsApp) quando a transcrição estiver configurada. Use os ids de anexo de detalhes_card ou resumo_cliente.",
+      inputSchema: {
+        anexo_id: uuid,
+        a_partir_da_pagina: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Primeira página do PDF a devolver, para ler PDFs longos em partes."),
+      },
       annotations: read,
     },
     async (args, extra) => ({
-      content: await asUser(pool, caller(extra), (query) => readAttachment(query, args), {
+      content: await asUser(pool, caller(extra), (query) => readAttachment(query, args, { transcribe, decodeImages }), {
         readOnly: true,
       }),
     }),

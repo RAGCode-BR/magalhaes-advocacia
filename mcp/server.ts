@@ -6,6 +6,7 @@ import pg from "pg";
 import { connectorDrift } from "./db.ts";
 import { newServer } from "./mcp-server.ts";
 import { neonServiceUrls } from "./neon-data.ts";
+import { geminiTranscriber } from "./transcribe.ts";
 
 const required = (name: string) => {
   const value = process.env[name];
@@ -20,6 +21,11 @@ const auth = createMcpAuth({ baseUrl: issuer, resource });
 // Login taskflow_mcp only (neon/mcp-role.sql): it can act as one verified user, never as owner.
 const pool = new pg.Pool({ connectionString: required("MCP_DATABASE_URL"), max: 5 });
 
+// Optional: transcription of audio and video attachments.
+const transcribe = process.env.GEMINI_API_KEY
+  ? geminiTranscriber(process.env.GEMINI_API_KEY, process.env.GEMINI_MODEL || undefined)
+  : undefined;
+
 const missing = await connectorDrift(pool);
 if (missing)
   console.warn(
@@ -32,7 +38,7 @@ app.use(express.json({ limit: "1mb" }));
 app.post("/mcp", async (req, res) => {
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on("close", () => transport.close());
-  await newServer(pool).connect(transport);
+  await newServer(pool, { transcribe }).connect(transport);
   await transport.handleRequest(req, res, req.body);
 });
 // Stateless server: no SSE stream or session to resume or end.

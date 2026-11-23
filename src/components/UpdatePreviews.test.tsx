@@ -5,6 +5,16 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates scanned PDF pages and attachment sources read by Claude without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "claude-reads-scanned-files" }));
+    expect(html).toContain("data-claude-scanned-pdf");
+    expect(html).toContain("data-claude-attachment-sources");
+    expect(html).toContain("Página 2 · imagem");
+    expect(html).toContain("Subtarefa");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
+
   it("illustrates the CRM commercial report without real actions", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "crm-commercial-report" }));
     expect(html).toContain("data-crm-report-preview");
