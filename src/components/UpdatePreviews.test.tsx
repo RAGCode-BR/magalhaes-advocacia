@@ -5,6 +5,15 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates the fixed Financeiro header and the R and D shortcuts without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-finance-shortcuts" }));
+    expect(html).toContain("data-finance-sticky-header");
+    expect(html).toContain("data-finance-shortcut-keys");
+    expect(html).toContain("abre Nova receita");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
+
   it("illustrates scanned PDF pages and attachment sources read by Claude without real actions", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "claude-reads-scanned-files" }));
     expect(html).toContain("data-claude-scanned-pdf");

@@ -1,10 +1,12 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Plus, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useClients, useTasks } from "@/hooks/use-data";
+import { financeShortcut } from "@/lib/finance-shortcuts";
+import { OPEN_OVERLAY_SELECTOR } from "@/lib/keyboard-screen-nav";
 import { FinanceReconciliation } from "@/components/finance/FinanceReconciliation";
 import { FinanceAttachments } from "@/components/finance/FinanceAttachments";
 import { ClientPicker } from "@/components/ClientPicker";
@@ -233,12 +235,37 @@ function FinancePage({ userId }: { userId: string }) {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey });
 
+  // R = nova receita, D = nova despesa, from any tab (never while typing or with a dialog open).
+  const ready = !!ledger.data;
+  useEffect(() => {
+    if (!ready) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const kind = financeShortcut(event, document.querySelector(OPEN_OVERLAY_SELECTOR) != null);
+      if (!kind) return;
+      event.preventDefault();
+      setDraft((current) => current ?? { id: crypto.randomUUID(), kind });
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [ready]);
+
+  const shortcutHint = (key: string) => (
+    <kbd
+      aria-hidden
+      className="ml-0.5 hidden min-w-5 rounded border border-current/25 px-1 text-[11px] font-semibold leading-4 opacity-70 sm:inline-block"
+    >
+      {key}
+    </kbd>
+  );
+
   return (
     <section className="mx-auto w-full min-w-0 max-w-none space-y-5 p-3 md:p-5">
+      {/* Title, new-entry buttons and tabs stay on screen while long lists scroll. */}
+      <div className="glass-surface sticky top-0 z-30 -mx-3 -mt-3 space-y-3 px-3 pb-3 pt-3 md:-mx-5 md:-mt-5 md:px-5 md:pt-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="hidden text-sm text-muted-foreground sm:block">
             Receitas, despesas, contas bancárias e relatórios do escritório.
           </p>
         </div>
@@ -247,14 +274,18 @@ function FinancePage({ userId }: { userId: string }) {
             variant="outline"
             onClick={() => setDraft({ id: crypto.randomUUID(), kind: "expense" })}
             disabled={!ledger.data}
+            title="Nova despesa (atalho: D)"
+            aria-keyshortcuts="D"
           >
-            <Plus /> Nova despesa
+            <Plus /> Nova despesa {shortcutHint("D")}
           </Button>
           <Button
             onClick={() => setDraft({ id: crypto.randomUUID(), kind: "income" })}
             disabled={!ledger.data}
+            title="Nova receita (atalho: R)"
+            aria-keyshortcuts="R"
           >
-            <Plus /> Nova receita
+            <Plus /> Nova receita {shortcutHint("R")}
           </Button>
         </div>
       </header>
@@ -290,6 +321,7 @@ function FinancePage({ userId }: { userId: string }) {
           ))}
         </div>
       </nav>
+      </div>
       {ledger.data && <FinanceImportStatus userId={userId} ledger={ledger.data} />}
       {ledger.isPending && <p role="status">Carregando o financeiro…</p>}
       {ledger.isError && (

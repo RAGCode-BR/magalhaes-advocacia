@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-finance-shortcuts"
   | "claude-reads-scanned-files"
   | "magalhaes-task-list-actions"
   | "magalhaes-client-tabs"
@@ -96,6 +97,18 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-finance-shortcuts-2026-11-23",
+    title: "Nova receita e nova despesa sempre à mão",
+    date: "2026-11-23",
+    preview: "magalhaes-finance-shortcuts",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "No Financeiro, o título, os botões Nova despesa e Nova receita e as abas ficam fixos no topo enquanto você rola a lista de lançamentos. Não é mais preciso subir a página para lançar.",
+      "Atalhos de teclado: R abre Nova receita e D abre Nova despesa, em qualquer aba do Financeiro. Eles não funcionam enquanto você digita em um campo ou com uma janela aberta, para não atrapalhar.",
+    ],
+  },
   {
     id: "claude-le-pdf-escaneado-2026-11-23",
     title: "O Claude lê PDFs escaneados",

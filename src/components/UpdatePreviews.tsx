@@ -1527,6 +1527,47 @@ function MagalhaesCleanDocumentsPreview() {
 function MagalhaesProcessNavigationPreview() {
   return <PreviewGrid label="Prévia do menu Gestão de processos com o logo maior"><div className="rounded-xl bg-[#501618] p-3 text-[#ddbc70]"><BrandLogo className="mx-auto h-28 w-full max-w-60" /><p className="mt-3 rounded-full border border-current px-3 py-2 text-xs">Gestão de processos</p><p className="mt-2 px-3 text-xs">Clientes</p></div><div className="flex items-center justify-center rounded-xl bg-[#501618] p-4"><BrandLogo compact className="h-16 w-16" /></div></PreviewGrid>;
 }
+function MagalhaesFinanceShortcutsPreview() {
+  const key = (label: string) => (
+    <kbd className="inline-grid h-7 min-w-7 place-items-center rounded-md border border-b-[3px] bg-background px-1.5 text-xs font-semibold shadow-sm">
+      {label}
+    </kbd>
+  );
+  return (
+    <PreviewGrid label="Prévia do topo fixo do Financeiro e dos atalhos R e D">
+      <div className="overflow-hidden rounded-xl border bg-background text-[10px]" data-finance-sticky-header>
+        <div className="space-y-1.5 border-b bg-card/90 p-2 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">Financeiro</p>
+            <div className="flex gap-1">
+              <span className="rounded border px-1.5 py-1">+ Nova despesa <b className="opacity-60">D</b></span>
+              <span className="rounded bg-primary px-1.5 py-1 text-primary-foreground">+ Nova receita <b className="opacity-70">R</b></span>
+            </div>
+          </div>
+          <div className="flex gap-1 text-muted-foreground">
+            <span>Painel</span>
+            <span className="rounded bg-background px-1 font-semibold text-foreground shadow-sm">Lançamentos</span>
+            <span>Contas e extratos</span>
+          </div>
+        </div>
+        <div className="space-y-1 p-2 text-muted-foreground">
+          {["Honorários · Cliente de exemplo", "Aluguel do escritório", "Consultoria mensal · Exemplo", "Custas processuais"].map((row, index) => (
+            <p key={row} className="flex justify-between rounded border px-1.5 py-1">
+              <span>{row}</span>
+              <span className="tabular-nums">{["2.500,00", "3.200,00", "1.500,00", "480,00"][index]}</span>
+            </p>
+          ))}
+          <p className="text-center">↓ a lista rola, o topo fica</p>
+        </div>
+      </div>
+      <div className="flex flex-col justify-center gap-3 rounded-xl border bg-background p-4 text-[11px]" data-finance-shortcut-keys>
+        <p className="flex items-center gap-2">{key("R")} abre Nova receita</p>
+        <p className="flex items-center gap-2">{key("D")} abre Nova despesa</p>
+        <p className="text-muted-foreground">Em qualquer aba do Financeiro. Não dispara enquanto você digita ou com uma janela aberta.</p>
+      </div>
+    </PreviewGrid>
+  );
+}
 function ClaudeReadsScannedFilesPreview() {
   const sources = ["Card", "Subtarefa", "Conversa", "Arquivos do cliente"];
   return (
@@ -1926,6 +1967,7 @@ const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
   ),
   "claude-connect-documents": ClaudeConnectDocumentsPreview,
   "claude-reads-scanned-files": ClaudeReadsScannedFilesPreview,
+  "magalhaes-finance-shortcuts": MagalhaesFinanceShortcutsPreview,
   "magalhaes-top-glass-nav": MagalhaesTopGlassNavPreview,
   "claude-connector": ClaudeConnectorPreview,
   "magalhaes-process-navigation": MagalhaesProcessNavigationPreview,
