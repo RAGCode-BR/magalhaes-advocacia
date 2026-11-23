@@ -85,10 +85,13 @@ export function FinanceAgreements({
   agreements,
   kind,
   refresh,
+  embedded = false,
 }: {
   agreements: FinanceAgreement[];
   kind: "quote" | "recurring";
   refresh: () => Promise<void>;
+  /** Só os cartões, sem cabeçalho, resumo e busca (usado no lead do CRM). */
+  embedded?: boolean;
 }) {
   const { data: clients = [] } = useClients();
   const { data: tasks = [] } = useTasks();
@@ -147,65 +150,79 @@ export function FinanceAgreements({
   }
 
   return (
-    <Card className="min-w-0 space-y-5 p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <p className="text-sm text-muted-foreground">
-            {isQuote
-              ? "Monte a proposta de honorários, envie o PDF ao cliente e acompanhe o lead no CRM."
-              : "Gere as mensalidades do período contratado."}
-          </p>
-        </div>
-        <Button className="shrink-0" onClick={() => setDraftId(crypto.randomUUID())}>
-          <Plus /> {isQuote ? "Nova proposta" : "Novo contrato"}
-        </Button>
-      </div>
-
-      {isQuote && own.length > 0 && (
-        <dl className="grid grid-cols-3 divide-x rounded-lg border bg-muted/30">
-          {[
-            ["Aguardando resposta", String(waiting.length)],
-            ["Aprovadas", String(approved.length)],
-            ["Em negociação", currency(waiting.reduce((sum, item) => sum + item.amount_cents, 0))],
-          ].map(([label, value]) => (
-            <div key={label} className="min-w-0 px-3 py-2.5 sm:px-4">
-              <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-              <dd className="truncate text-base font-semibold tabular-nums sm:text-lg">{value}</dd>
+    <Card
+      className={cn(
+        "min-w-0 space-y-5",
+        embedded ? "border-0 bg-transparent p-0 shadow-none" : "p-4 sm:p-5",
+      )}
+    >
+      {!embedded && (
+        <>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold">{title}</h2>
+              <p className="text-sm text-muted-foreground">
+                {isQuote
+                  ? "Monte a proposta de honorários, envie o PDF ao cliente e acompanhe o lead no CRM."
+                  : "Gere as mensalidades do período contratado."}
+              </p>
             </div>
-          ))}
-        </dl>
-      )}
-
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          aria-label="Buscar proposta ou contrato"
-          className="pl-9"
-          placeholder="Buscar por descrição ou cliente"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      </div>
-
-      {!filtered.length && (
-        <div className="grid place-items-center gap-3 rounded-lg border border-dashed px-4 py-10 text-center">
-          <p className="max-w-sm text-sm text-muted-foreground">
-            {own.length
-              ? "Nenhum resultado para essa busca."
-              : isQuote
-                ? "Nenhuma proposta ainda. Ao criar a primeira, o PDF fica pronto e o lead entra em Novos Leads no CRM."
-                : "Nenhum contrato recorrente cadastrado."}
-          </p>
-          {!own.length && (
-            <Button variant="outline" onClick={() => setDraftId(crypto.randomUUID())}>
-              <Plus /> {isQuote ? "Criar proposta" : "Criar contrato"}
+            <Button className="shrink-0" onClick={() => setDraftId(crypto.randomUUID())}>
+              <Plus /> {isQuote ? "Nova proposta" : "Novo contrato"}
             </Button>
+          </div>
+
+          {isQuote && own.length > 0 && (
+            <dl className="grid grid-cols-3 divide-x rounded-lg border bg-muted/30">
+              {[
+                ["Aguardando resposta", String(waiting.length)],
+                ["Aprovadas", String(approved.length)],
+                [
+                  "Em negociação",
+                  currency(waiting.reduce((sum, item) => sum + item.amount_cents, 0)),
+                ],
+              ].map(([label, value]) => (
+                <div key={label} className="min-w-0 px-3 py-2.5 sm:px-4">
+                  <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+                  <dd className="truncate text-base font-semibold tabular-nums sm:text-lg">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           )}
-        </div>
+
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Buscar proposta ou contrato"
+              className="pl-9"
+              placeholder="Buscar por descrição ou cliente"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+
+          {!filtered.length && (
+            <div className="grid place-items-center gap-3 rounded-lg border border-dashed px-4 py-10 text-center">
+              <p className="max-w-sm text-sm text-muted-foreground">
+                {own.length
+                  ? "Nenhum resultado para essa busca."
+                  : isQuote
+                    ? "Nenhuma proposta ainda. Ao criar a primeira, o PDF fica pronto e o lead entra em Novos Leads no CRM."
+                    : "Nenhum contrato recorrente cadastrado."}
+              </p>
+              {!own.length && (
+                <Button variant="outline" onClick={() => setDraftId(crypto.randomUUID())}>
+                  <Plus /> {isQuote ? "Criar proposta" : "Criar contrato"}
+                </Button>
+              )}
+            </div>
+          )}
+        </>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={cn("grid gap-4", !embedded && "lg:grid-cols-2")}>
         {filtered.map((item) => {
           const status = statuses[item.status];
           return (
@@ -334,10 +351,10 @@ export function FinanceAgreements({
                       onClick={() =>
                         setAction({
                           title: "Excluir proposta",
-                          explanation: `A proposta “${item.description}” será excluída e o PDF deixará de aparecer no lead do CRM. O lead continua no CRM e a exclusão fica registrada no Histórico do financeiro. Esta ação não pode ser desfeita.`,
+                          explanation: `A proposta “${item.description}” vai para a Lixeira e o lead dela sai do CRM. Na Lixeira você pode restaurar os dois ou excluir de vez.`,
                           confirmLabel: "Excluir proposta",
                           destructive: true,
-                          successMessage: "Proposta excluída.",
+                          successMessage: "Proposta enviada para a Lixeira.",
                           run: () =>
                             financeRpc("office_finance_delete_proposal", { target: item.id }),
                         })

@@ -434,7 +434,7 @@ function ClientBattlePanel({ clients }: { clients: ClientPerformance[] }) {
               </div>
               <div className="mt-4 rounded-md border bg-muted/20 px-3 py-2">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Participação por consultor
+                  Participação por responsável
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {client.contributors.map((contributor) => (
@@ -596,14 +596,14 @@ function MonthlyBriefingPanel({
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h3 className="flex items-center gap-2 text-lg font-semibold">
-              <UsersRound className="h-5 w-5 text-[#167c80]" /> Leitura por consultor
+              <UsersRound className="h-5 w-5 text-[#167c80]" /> Leitura por responsável
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
               Quem entregou, onde existe acúmulo e qual é o principal ponto de atenção de cada
               pessoa.
             </p>
           </div>
-          <Badge variant="outline">{team.length} consultor(es) no período</Badge>
+          <Badge variant="outline">{team.length} responsável(is) no período</Badge>
         </div>
         {team.length ? (
           <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
@@ -623,7 +623,7 @@ function MonthlyBriefingPanel({
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{person.fullName}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {person.isAdmin ? "Administrador" : "Consultor"}
+                        {person.isAdmin ? "Administrador" : "Colaborador"}
                       </p>
                     </div>
                     <span className="rounded-full bg-[#167c80]/10 px-2.5 py-1 text-sm font-bold text-[#167c80]">
@@ -662,7 +662,7 @@ function MonthlyBriefingPanel({
           </div>
         ) : (
           <Card className="p-5 text-sm text-muted-foreground">
-            Não há dados de consultores neste período.
+            Não há dados de responsáveis neste período.
           </Card>
         )}
       </section>

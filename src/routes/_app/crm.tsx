@@ -1,5 +1,5 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
-import { useMemo, useState, type FormEvent } from "react";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -12,6 +12,7 @@ import {
   FileText,
   GripVertical,
   KanbanSquare,
+  Lock,
   Mail,
   MapPin,
   Pencil,
@@ -23,10 +24,19 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { CrmReport } from "@/components/crm/CrmReport";
+import { FinanceAgreements } from "@/components/finance/FinanceAgreements";
+import type { FinanceAgreement } from "@/lib/office-finance";
+import { financeRows, financeRpc } from "@/lib/office-finance-data";
+import {
+  FINAL_STAGE,
+  newStageId,
+  nextStagePosition,
+  orderStages,
+  type CrmStage,
+} from "@/lib/crm-stages";
 import { ProposalPdfViewer } from "@/components/finance/ProposalPdfViewer";
 import { useAuth } from "@/hooks/use-auth";
 import { useClients } from "@/hooks/use-data";
-import { ClientPicker } from "@/components/ClientPicker";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import {
@@ -37,7 +47,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -69,28 +78,7 @@ export const Route = createFileRoute("/_app/crm")({ component: CrmPage });
 type Opportunity = Database["public"]["Tables"]["crm_opportunities"]["Row"];
 type StageSetting = Database["public"]["Tables"]["crm_pipeline_stages"]["Row"];
 const EMPTY_OPPORTUNITIES: Opportunity[] = [];
-type Stage = "atendendo" | "novo" | "qualificado" | "proposta" | "negociacao" | "finalizado";
-const defaultStages: { id: Stage; label: string; color: string }[] = [
-  { id: "atendendo", label: "Atendendo", color: "#16a77e" },
-  { id: "novo", label: "Novos Leads", color: "#3278d4" },
-  { id: "qualificado", label: "Qualificados", color: "#5b45ad" },
-  { id: "proposta", label: "Proposta Enviada", color: "#f06e43" },
-  { id: "negociacao", label: "Em Negociação", color: "#e9a400" },
-  { id: "finalizado", label: "Finalizados", color: "#208b43" },
-];
-const initialForm = {
-  title: "",
-  company_mode: "name" as "name" | "registered",
-  client_id: "",
-  company_name: "",
-  contact_email: "",
-  contact_phone: "",
-  source: "",
-  stage: "novo" as Stage,
-  amount: "",
-  expected_close_date: "",
-  notes: "",
-};
+type Stage = string;
 // Leads criados por um orçamento do financeiro trazem a proposta completa.
 function leadProposal(lead: Opportunity | null): ProposalDocument | null {
   const doc = lead?.proposal as Partial<ProposalDocument> | null | undefined;
@@ -115,7 +103,7 @@ const normalize = (value: string) =>
     .toLowerCase();
 
 function CrmPage() {
-  const { activeWorkspace, hasPermission, isClient } = useAuth();
+  const { activeWorkspace, hasPermission, isClient, isAdmin, user } = useAuth();
   const clients = useClients();
   const queryClient = useQueryClient();
   const workspaceId = activeWorkspace?.id;
@@ -123,12 +111,13 @@ function CrmPage() {
   const stagesQueryKey = ["crm-pipeline-stages", workspaceId];
   const [tab, setTab] = useState<"pipeline" | "origins" | "report">("pipeline");
   const [search, setSearch] = useState("");
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editing, setEditing] = useState<Opportunity | null>(null);
-  const [deleting, setDeleting] = useState<Opportunity | null>(null);
-  const [form, setForm] = useState(initialForm);
-  const [editingStage, setEditingStage] = useState<Stage | null>(null);
+  // Lead aberto no painel da proposta (por id, para fechar sozinho se o lead sair do CRM).
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null);
+  // "new" abre o editor para criar uma coluna.
+  const [editingStage, setEditingStage] = useState<Stage | "new" | null>(null);
   const [stageForm, setStageForm] = useState({ label: "", color: "#3278d4" });
+  const [deletingStage, setDeletingStage] = useState<CrmStage | null>(null);
+  const [moveTo, setMoveTo] = useState("");
 
   const opportunities = useQuery({
     queryKey,
@@ -156,22 +145,11 @@ function CrmPage() {
       return (data ?? []) as StageSetting[];
     },
   });
-  const stages = useMemo(
-    () =>
-      defaultStages
-        .map((stage, index) => {
-          const saved = stageSettings.data?.find((item) => item.stage_id === stage.id);
-          const order = saved?.position ?? index;
-          return saved
-            ? { ...stage, label: saved.label, color: saved.color, order, index }
-            : { ...stage, order, index };
-        })
-        .sort((a, b) => a.order - b.order || a.index - b.index),
-    [stageSettings.data],
-  );
+  const stages = useMemo(() => orderStages(stageSettings.data ?? []), [stageSettings.data]);
+  const openStages = stages.filter((stage) => !stage.fixed);
   const [draggingStage, setDraggingStage] = useState<Stage | null>(null);
 
-  // Saves the full column order so every stage has an explicit position.
+  // Saves the order of the regular columns; the fixed closing column stays last.
   const reorderStages = useMutation({
     mutationFn: async (order: Stage[]) => {
       if (!workspaceId) throw new Error("Ambiente indisponível.");
@@ -193,8 +171,10 @@ function CrmPage() {
     onMutate: async (order) => {
       await queryClient.cancelQueries({ queryKey: stagesQueryKey });
       const previous = queryClient.getQueryData<StageSetting[]>(stagesQueryKey);
-      queryClient.setQueryData<StageSetting[]>(stagesQueryKey, () =>
-        order.map((id, position) => {
+      const fixed = previous?.filter((item) => item.stage_id === FINAL_STAGE) ?? [];
+      queryClient.setQueryData<StageSetting[]>(stagesQueryKey, () => [
+        ...fixed,
+        ...order.map((id, position) => {
           const stage = stages.find((item) => item.id === id)!;
           const saved = previous?.find((item) => item.stage_id === id);
           return {
@@ -206,7 +186,7 @@ function CrmPage() {
             updated_at: saved?.updated_at ?? new Date().toISOString(),
           };
         }),
-      );
+      ]);
       return { previous };
     },
     onError: (error, _order, context) => {
@@ -216,10 +196,11 @@ function CrmPage() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: stagesQueryKey }),
   });
   function placeStage(id: Stage, targetIndex: number) {
-    const order = stages.map((stage) => stage.id).filter((stageId) => stageId !== id);
+    if (id === FINAL_STAGE) return;
+    const order = openStages.map((stage) => stage.id).filter((stageId) => stageId !== id);
     const index = Math.max(0, Math.min(targetIndex, order.length));
     order.splice(index, 0, id);
-    if (order.some((stageId, i) => stageId !== stages[i].id)) reorderStages.mutate(order);
+    if (order.some((stageId, i) => stageId !== openStages[i].id)) reorderStages.mutate(order);
   }
 
   const saveStage = useMutation({
@@ -228,73 +209,31 @@ function CrmPage() {
       const label = stageForm.label.trim();
       if (!label || label.length > 60) throw new Error("O título deve ter de 1 a 60 caracteres.");
       if (!/^#[0-9a-fA-F]{6}$/.test(stageForm.color)) throw new Error("Escolha uma cor válida.");
-      const { error } = await supabase.from("crm_pipeline_stages").upsert(
-        {
-          workspace_id: workspaceId,
-          stage_id: editingStage,
-          label,
-          color: stageForm.color,
-        },
-        { onConflict: "workspace_id,stage_id" },
-      );
+      const { error } =
+        editingStage === "new"
+          ? await supabase.from("crm_pipeline_stages").insert({
+              workspace_id: workspaceId,
+              stage_id: newStageId(),
+              label,
+              color: stageForm.color,
+              position: nextStagePosition(stages),
+            })
+          : await supabase
+              .from("crm_pipeline_stages")
+              .update({ label, color: stageForm.color })
+              .eq("workspace_id", workspaceId)
+              .eq("stage_id", editingStage);
       if (error) throw error;
+      return editingStage === "new";
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: stagesQueryKey });
       setEditingStage(null);
-      toast.success("Coluna atualizada.");
+      toast.success(created ? "Coluna criada." : "Coluna atualizada.");
     },
     onError: (error) => toast.error(`Não foi possível atualizar a coluna: ${error.message}`),
   });
 
-  const save = useMutation({
-    mutationFn: async () => {
-      if (!workspaceId) throw new Error("Selecione um ambiente antes de salvar.");
-      const title = form.title.trim();
-      if (!title) throw new Error("Informe o nome do lead.");
-      const amount = form.amount.trim() ? Number(form.amount) : null;
-      if (amount !== null && (!Number.isFinite(amount) || amount < 0))
-        throw new Error("Informe um valor válido.");
-      const selectedClient =
-        form.company_mode === "registered"
-          ? clients.data?.find((client) => client.id === form.client_id)
-          : null;
-      if (form.company_mode === "registered" && !selectedClient)
-        throw new Error("Selecione uma empresa cadastrada neste ambiente.");
-      const payload = {
-        title,
-        client_id: selectedClient?.id ?? null,
-        company_name: (selectedClient?.name ?? form.company_name.trim()) || null,
-        contact_email: form.contact_email.trim() || null,
-        contact_phone: form.contact_phone.trim() || null,
-        source: form.source.trim() || null,
-        stage: form.stage,
-        amount,
-        expected_close_date: form.expected_close_date || null,
-        notes: form.notes.trim() || null,
-      };
-      const result = editing
-        ? await supabase
-            .from("crm_opportunities")
-            .update(payload)
-            .eq("id", editing.id)
-            .eq("workspace_id", workspaceId)
-            .select("id")
-            .single()
-        : await supabase
-            .from("crm_opportunities")
-            .insert({ ...payload, workspace_id: workspaceId })
-            .select("id")
-            .single();
-      if (result.error) throw result.error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey });
-      setEditorOpen(false);
-      toast.success(editing ? "Lead atualizado." : "Lead criado.");
-    },
-    onError: (error) => toast.error(`Não foi possível salvar o lead: ${error.message}`),
-  });
   const move = useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: Stage }) => {
       if (!workspaceId) throw new Error("Ambiente indisponível.");
@@ -311,29 +250,42 @@ function CrmPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey }),
     onError: (error) => toast.error(`Não foi possível mover o lead: ${error.message}`),
   });
-  const remove = useMutation({
-    mutationFn: async (id: string) => {
+  const deleteStage = useMutation({
+    mutationFn: async ({ stage, target }: { stage: CrmStage; target: string }) => {
       if (!workspaceId) throw new Error("Ambiente indisponível.");
-      const { data, error } = await supabase
-        .from("crm_opportunities")
-        .delete()
-        .eq("id", id)
-        .eq("workspace_id", workspaceId)
-        .select("id")
-        .single();
-      if (error) throw error;
-      return data;
+      await financeRpc("crm_delete_stage", {
+        target_workspace: workspaceId,
+        target_stage: stage.id,
+        move_to: target,
+      });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: stagesQueryKey });
       queryClient.invalidateQueries({ queryKey });
-      setDeleting(null);
-      setEditorOpen(false);
-      toast.success("Lead excluído.");
+      setDeletingStage(null);
+      setEditingStage(null);
+      toast.success("Coluna excluída.");
     },
-    onError: (error) => toast.error(`Não foi possível excluir o lead: ${error.message}`),
+    onError: (error) => toast.error(`Não foi possível excluir a coluna: ${error.message}`),
   });
 
   const all: Opportunity[] = opportunities.data ?? EMPTY_OPPORTUNITIES;
+  const editing = all.find((lead) => lead.id === openLeadId) ?? null;
+  // Administradores veem a proposta completa, com os mesmos botões de Propostas.
+  const agreements = useQuery({
+    queryKey: ["office-finance", user?.id, "quotes"],
+    enabled: !!user && isAdmin && !isClient,
+    queryFn: () => financeRows<FinanceAgreement>("office_finance_agreements"),
+  });
+  const editingAgreement = editing?.finance_agreement_id
+    ? agreements.data?.find((item) => item.id === editing.finance_agreement_id)
+    : undefined;
+  const refreshProposal = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["office-finance"] }),
+      queryClient.invalidateQueries({ queryKey }),
+    ]);
+  };
   const clientNames = useMemo(
     () => new Map((clients.data ?? []).map((client) => [client.id, client.name])),
     [clients.data],
@@ -356,9 +308,9 @@ function CrmPage() {
         );
   }, [all, search, clientNames]);
   const activeValue = all
-    .filter((lead) => lead.stage !== "finalizado")
+    .filter((lead) => lead.stage !== FINAL_STAGE)
     .reduce((sum, lead) => sum + (lead.amount ?? 0), 0);
-  const finalized = all.filter((lead) => lead.stage === "finalizado").length;
+  const finalized = all.filter((lead) => lead.stage === FINAL_STAGE).length;
   const completion = all.length ? Math.round((finalized / all.length) * 100) : 0;
   const origins = useMemo(() => {
     const counts = new Map<string, number>();
@@ -370,35 +322,20 @@ function CrmPage() {
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [filtered]);
 
-  function openNew(stage: Stage = "novo") {
-    setEditing(null);
-    setForm({ ...initialForm, stage });
-    setEditorOpen(true);
-  }
   function openEdit(lead: Opportunity) {
-    setEditing(lead);
-    setForm({
-      title: lead.title,
-      company_mode: lead.client_id ? "registered" : "name",
-      client_id: lead.client_id ?? "",
-      company_name: lead.company_name ?? "",
-      contact_email: lead.contact_email ?? "",
-      contact_phone: lead.contact_phone ?? "",
-      source: lead.source ?? "",
-      stage: lead.stage as Stage,
-      amount: lead.amount === null ? "" : String(lead.amount),
-      expected_close_date: lead.expected_close_date ?? "",
-      notes: lead.notes ?? "",
-    });
-    setEditorOpen(true);
+    setOpenLeadId(lead.id);
   }
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    save.mutate();
-  }
-  function openStageEditor(stage: { id: Stage; label: string; color: string }) {
+  function openStageEditor(stage: CrmStage) {
     setStageForm({ label: stage.label, color: stage.color });
     setEditingStage(stage.id);
+  }
+  function openNewStage() {
+    setStageForm({ label: "", color: "#3278d4" });
+    setEditingStage("new");
+  }
+  function askDeleteStage(stage: CrmStage) {
+    setMoveTo(openStages.find((item) => item.id !== stage.id)?.id ?? "");
+    setDeletingStage(stage);
   }
 
   if (isClient || !hasPermission("crm")) return <Navigate to="/dashboard" replace />;
@@ -411,9 +348,13 @@ function CrmPage() {
             Acompanhe seus leads e negociações em {activeWorkspace?.name ?? "seu ambiente"}.
           </p>
         </div>
-        <Button onClick={() => openNew()} className="gap-2">
-          <Plus className="h-4 w-4" /> Novo Lead
-        </Button>
+        {isAdmin && (
+          <Button asChild className="gap-2">
+            <Link to="/orcamentos">
+              <Plus className="h-4 w-4" /> Nova proposta
+            </Link>
+          </Button>
+        )}
       </header>
       <div className="flex gap-5 border-b text-sm font-medium">
         <button
@@ -447,7 +388,7 @@ function CrmPage() {
             Pipeline: <strong>{money(activeValue)}</strong>
           </span>
           <span className="rounded-lg border bg-card px-3 py-2">
-            {stages.find((stage) => stage.id === "finalizado")?.label}:{" "}
+            {stages.find((stage) => stage.id === FINAL_STAGE)?.label ?? "Contrato fechado"}:{" "}
             <strong>{completion}%</strong>
           </span>
         </div>
@@ -494,198 +435,213 @@ function CrmPage() {
             const leads = filtered.filter((lead) => lead.stage === stage.id);
             const value = leads.reduce((sum, lead) => sum + (lead.amount ?? 0), 0);
             return (
-              <section
-                key={stage.id}
-                className="flex w-[min(272px,calc(100vw-2rem))] min-w-[min(272px,calc(100vw-2rem))] snap-start flex-col rounded-xl border bg-muted/25 sm:w-[272px] sm:min-w-[272px]"
-                style={{ borderTop: `4px solid ${stage.color}` }}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  if (draggingStage) {
-                    placeStage(
-                      draggingStage,
-                      stages.findIndex((item) => item.id === stage.id),
-                    );
-                    setDraggingStage(null);
-                    return;
-                  }
-                  const id = event.dataTransfer.getData("text/plain");
-                  if (id && all.some((lead) => lead.id === id && lead.stage !== stage.id))
-                    move.mutate({ id, stage: stage.id });
-                }}
-              >
-                <div
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.effectAllowed = "move";
-                    event.dataTransfer.setData("application/x-crm-stage", stage.id);
-                    setDraggingStage(stage.id);
+              <Fragment key={stage.id}>
+                {stage.fixed && (
+                  <button
+                    type="button"
+                    onClick={openNewStage}
+                    className="flex w-[min(180px,calc(100vw-2rem))] min-w-[min(180px,calc(100vw-2rem))] snap-start flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                  >
+                    <Plus className="h-5 w-5" /> Nova coluna
+                  </button>
+                )}
+                <section
+                  className="flex w-[min(272px,calc(100vw-2rem))] min-w-[min(272px,calc(100vw-2rem))] snap-start flex-col rounded-xl border bg-muted/25 sm:w-[272px] sm:min-w-[272px]"
+                  style={{ borderTop: `4px solid ${stage.color}` }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    if (draggingStage) {
+                      placeStage(
+                        draggingStage,
+                        stages.findIndex((item) => item.id === stage.id),
+                      );
+                      setDraggingStage(null);
+                      return;
+                    }
+                    const id = event.dataTransfer.getData("text/plain");
+                    if (id && all.some((lead) => lead.id === id && lead.stage !== stage.id))
+                      move.mutate({ id, stage: stage.id });
                   }}
-                  onDragEnd={() => setDraggingStage(null)}
-                  title="Arraste para mudar a ordem da coluna"
-                  className={`flex cursor-grab items-start justify-between gap-2 px-3 py-3 active:cursor-grabbing ${draggingStage === stage.id ? "opacity-50" : ""}`}
                 >
-                  <div className="flex min-w-0 items-start gap-1">
-                    <GripVertical
-                      aria-hidden="true"
-                      className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60"
-                    />
-                    <div className="min-w-0">
-                      <h2 className="text-sm font-semibold">
-                        {stage.label}{" "}
-                        <span className="ml-1 text-xs font-normal text-muted-foreground">
-                          {leads.length}
-                        </span>
-                      </h2>
-                      <p className="mt-1 text-xs text-muted-foreground">{money(value)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-0.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title={`Editar título, cor e posição de ${stage.label}`}
-                      aria-label={`Editar título, cor e posição de ${stage.label}`}
-                      onClick={() => openStageEditor(stage)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title={`Novo lead em ${stage.label}`}
-                      onClick={() => openNew(stage.id)}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex flex-1 flex-col gap-2 px-2 pb-3">
-                  {leads.length ? (
-                    leads.map((lead) => (
-                      <article
-                        key={lead.id}
-                        draggable
-                        onDragStart={(event) => event.dataTransfer.setData("text/plain", lead.id)}
-                        className="rounded-xl border bg-card p-3 shadow-sm"
-                        style={{ borderLeft: `3px solid ${stage.color}` }}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex min-w-0 flex-1 items-center gap-3">
-                            <span
-                              aria-hidden="true"
-                              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white"
-                              style={{ backgroundColor: stage.color }}
-                            >
-                              {lead.title
-                                .trim()
-                                .split(/\s+/)
-                                .slice(0, 2)
-                                .map((part) => part[0])
-                                .join("")
-                                .toUpperCase()}
-                            </span>
-                            <div className="min-w-0">
-                              <button
-                                type="button"
-                                className="text-left text-sm font-semibold hover:text-primary hover:underline"
-                                onClick={() => openEdit(lead)}
-                              >
-                                {lead.title}
-                              </button>
-                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                <Building2 className="mr-1 inline h-3 w-3" />
-                                {(lead.client_id && clientNames.get(lead.client_id)) ||
-                                  lead.company_name ||
-                                  "Sem empresa"}
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 shrink-0"
-                            title="Editar lead"
-                            onClick={() => openEdit(lead)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                        {lead.contact_phone && (
-                          <p className="mt-3 truncate text-xs text-muted-foreground">
-                            <Phone className="mr-1 inline h-3 w-3" />
-                            {lead.contact_phone}
-                          </p>
-                        )}
-                        {lead.contact_email && (
-                          <p className="mt-1 truncate text-xs text-muted-foreground">
-                            <Mail className="mr-1 inline h-3 w-3" />
-                            {lead.contact_email}
-                          </p>
-                        )}
-                        <p className="mt-3 text-sm font-semibold">{money(lead.amount ?? 0)}</p>
-                        {lead.expected_close_date && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            <CalendarDays className="mr-1 inline h-3 w-3" />
-                            Previsão: {lead.expected_close_date.split("-").reverse().join("/")}
-                          </p>
-                        )}
-                        {(lead.source || leadProposal(lead)) && (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {leadProposal(lead) && (
-                              <button
-                                type="button"
-                                onClick={() => openEdit(lead)}
-                                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/15"
-                              >
-                                <FileText className="h-3 w-3" /> Proposta nº{" "}
-                                {leadProposal(lead)!.number}
-                              </button>
-                            )}
-                            {lead.source && (
-                              <span className="inline-block max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] text-muted-foreground">
-                                {lead.source}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        <div className="mt-3 border-t pt-2">
-                          <Select
-                            value={lead.stage}
-                            onValueChange={(stageValue) =>
-                              move.mutate({ id: lead.id, stage: stageValue as Stage })
-                            }
-                            disabled={move.isPending}
-                          >
-                            <SelectTrigger
-                              className="h-8 text-xs"
-                              aria-label={`Etapa de ${lead.title}`}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {stages.map((option) => (
-                                <SelectItem key={option.id} value={option.id}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </article>
-                    ))
-                  ) : (
-                    <div className="grid flex-1 place-items-center py-12 text-center text-xs text-muted-foreground">
-                      <div>
-                        <Users className="mx-auto mb-2 h-5 w-5" />
-                        Sem leads neste estágio
+                  <div
+                    draggable={!stage.fixed}
+                    onDragStart={(event) => {
+                      if (stage.fixed) return;
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("application/x-crm-stage", stage.id);
+                      setDraggingStage(stage.id);
+                    }}
+                    onDragEnd={() => setDraggingStage(null)}
+                    title={
+                      stage.fixed
+                        ? "Coluna fixa: fica sempre no fim e conta como contrato fechado"
+                        : "Arraste para mudar a ordem da coluna"
+                    }
+                    className={`flex items-start justify-between gap-2 px-3 py-3 ${stage.fixed ? "" : "cursor-grab active:cursor-grabbing"} ${draggingStage === stage.id ? "opacity-50" : ""}`}
+                  >
+                    <div className="flex min-w-0 items-start gap-1">
+                      {stage.fixed ? (
+                        <Lock
+                          aria-label="Coluna fixa"
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
+                        />
+                      ) : (
+                        <GripVertical
+                          aria-hidden="true"
+                          className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <h2 className="text-sm font-semibold">
+                          {stage.label}{" "}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            {leads.length}
+                          </span>
+                        </h2>
+                        <p className="mt-1 text-xs text-muted-foreground">{money(value)}</p>
                       </div>
                     </div>
-                  )}
-                </div>
-              </section>
+                    <div className="flex items-center gap-0.5">
+                      {!stage.fixed && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title={`Editar, mover ou excluir a coluna ${stage.label}`}
+                          aria-label={`Editar, mover ou excluir a coluna ${stage.label}`}
+                          onClick={() => openStageEditor(stage)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2 px-2 pb-3">
+                    {leads.length ? (
+                      leads.map((lead) => (
+                        <article
+                          key={lead.id}
+                          draggable
+                          onDragStart={(event) => event.dataTransfer.setData("text/plain", lead.id)}
+                          className="rounded-xl border bg-card p-3 shadow-sm"
+                          style={{ borderLeft: `3px solid ${stage.color}` }}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                              <span
+                                aria-hidden="true"
+                                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white"
+                                style={{ backgroundColor: stage.color }}
+                              >
+                                {lead.title
+                                  .trim()
+                                  .split(/\s+/)
+                                  .slice(0, 2)
+                                  .map((part) => part[0])
+                                  .join("")
+                                  .toUpperCase()}
+                              </span>
+                              <div className="min-w-0">
+                                <button
+                                  type="button"
+                                  className="text-left text-sm font-semibold hover:text-primary hover:underline"
+                                  onClick={() => openEdit(lead)}
+                                >
+                                  {lead.title}
+                                </button>
+                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                  <Building2 className="mr-1 inline h-3 w-3" />
+                                  {(lead.client_id && clientNames.get(lead.client_id)) ||
+                                    lead.company_name ||
+                                    "Sem empresa"}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0"
+                              title="Editar lead"
+                              onClick={() => openEdit(lead)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          {lead.contact_phone && (
+                            <p className="mt-3 truncate text-xs text-muted-foreground">
+                              <Phone className="mr-1 inline h-3 w-3" />
+                              {lead.contact_phone}
+                            </p>
+                          )}
+                          {lead.contact_email && (
+                            <p className="mt-1 truncate text-xs text-muted-foreground">
+                              <Mail className="mr-1 inline h-3 w-3" />
+                              {lead.contact_email}
+                            </p>
+                          )}
+                          <p className="mt-3 text-sm font-semibold">{money(lead.amount ?? 0)}</p>
+                          {lead.expected_close_date && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              <CalendarDays className="mr-1 inline h-3 w-3" />
+                              Previsão: {lead.expected_close_date.split("-").reverse().join("/")}
+                            </p>
+                          )}
+                          {(lead.source || leadProposal(lead)) && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {leadProposal(lead) && (
+                                <button
+                                  type="button"
+                                  onClick={() => openEdit(lead)}
+                                  className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/15"
+                                >
+                                  <FileText className="h-3 w-3" /> Proposta nº{" "}
+                                  {leadProposal(lead)!.number}
+                                </button>
+                              )}
+                              {lead.source && (
+                                <span className="inline-block max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] text-muted-foreground">
+                                  {lead.source}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <div className="mt-3 border-t pt-2">
+                            <Select
+                              value={lead.stage}
+                              onValueChange={(stageValue) =>
+                                move.mutate({ id: lead.id, stage: stageValue as Stage })
+                              }
+                              disabled={move.isPending}
+                            >
+                              <SelectTrigger
+                                className="h-8 text-xs"
+                                aria-label={`Etapa de ${lead.title}`}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {stages.map((option) => (
+                                  <SelectItem key={option.id} value={option.id}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="grid flex-1 place-items-center py-12 text-center text-xs text-muted-foreground">
+                        <div>
+                          <Users className="mx-auto mb-2 h-5 w-5" />
+                          Sem leads neste estágio
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </Fragment>
             );
           })}
         </div>
@@ -741,9 +697,11 @@ function CrmPage() {
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Editar coluna</DialogTitle>
+            <DialogTitle>{editingStage === "new" ? "Nova coluna" : "Editar coluna"}</DialogTitle>
             <DialogDescription>
-              O título, a cor e a posição valem para todos neste ambiente.
+              {editingStage === "new"
+                ? "A coluna entra antes de “Contrato fechado” e vale para todos neste ambiente."
+                : "O título, a cor e a posição valem para todos neste ambiente."}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -779,8 +737,9 @@ function CrmPage() {
               </div>
             </div>
             {editingStage &&
+              editingStage !== "new" &&
               (() => {
-                const index = stages.findIndex((stage) => stage.id === editingStage);
+                const index = openStages.findIndex((stage) => stage.id === editingStage);
                 return (
                   <div className="space-y-1.5">
                     <Label>Posição no funil</Label>
@@ -795,13 +754,13 @@ function CrmPage() {
                         <ChevronLeft className="h-4 w-4" /> Esquerda
                       </Button>
                       <span className="min-w-14 text-center text-sm tabular-nums text-muted-foreground">
-                        {index + 1} de {stages.length}
+                        {index + 1} de {openStages.length}
                       </span>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={index >= stages.length - 1 || reorderStages.isPending}
+                        disabled={index >= openStages.length - 1 || reorderStages.isPending}
                         onClick={() => placeStage(editingStage, index + 1)}
                       >
                         Direita <ChevronRight className="h-4 w-4" />
@@ -813,198 +772,22 @@ function CrmPage() {
                   </div>
                 );
               })()}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditingStage(null)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={saveStage.isPending}>
-                {saveStage.isPending ? "Salvando…" : "Salvar coluna"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Editar lead" : "Novo lead"}</DialogTitle>
-            <DialogDescription>
-              Registre a oportunidade e acompanhe sua etapa no pipeline.
-            </DialogDescription>
-          </DialogHeader>
-          {leadProposal(editing) && <ProposalPanel doc={leadProposal(editing)!} />}
-          <form className="space-y-4" onSubmit={submit}>
-            <div className="space-y-1.5">
-              <Label htmlFor="crm-title">Nome do lead *</Label>
-              <Input
-                id="crm-title"
-                required
-                maxLength={180}
-                value={form.title}
-                onChange={(event) => setForm({ ...form, title: event.target.value })}
-                placeholder="Ex.: Projeto de consultoria"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Empresa</Label>
-              <div
-                role="group"
-                aria-label="Forma de informar a empresa"
-                className="flex flex-wrap gap-2"
-              >
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={form.company_mode === "registered" ? "default" : "outline"}
-                  aria-pressed={form.company_mode === "registered"}
-                  onClick={() => setForm({ ...form, company_mode: "registered", client_id: "" })}
-                >
-                  Empresa cadastrada
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={form.company_mode === "name" ? "default" : "outline"}
-                  aria-pressed={form.company_mode === "name"}
-                  onClick={() => setForm({ ...form, company_mode: "name", client_id: "" })}
-                >
-                  Sem cadastro
-                </Button>
-              </div>
-              {form.company_mode === "registered" ? (
-                <div className="space-y-1.5">
-                  <Label htmlFor="crm-client">Selecionar cliente cadastrado</Label>
-                  <ClientPicker
-                    id="crm-client"
-                    clients={clients.data ?? []}
-                    value={form.client_id}
-                    placeholder="Digite o nome da empresa cadastrada"
-                    disabled={clients.isLoading || clients.isError}
-                    onChange={(clientId, selected) =>
-                      setForm({
-                        ...form,
-                        client_id: clientId,
-                        company_name: selected?.name ?? form.company_name,
-                      })
-                    }
-                  />
-                  {clients.isLoading && (
-                    <p className="text-xs text-muted-foreground">Carregando empresas…</p>
-                  )}
-                  {clients.isError && (
-                    <p className="text-xs text-destructive">
-                      Não foi possível carregar as empresas cadastradas. Tente novamente.
-                    </p>
-                  )}
-                  {!clients.isLoading && !clients.isError && !clients.data?.length && (
-                    <p className="text-xs text-muted-foreground">
-                      Nenhuma empresa cadastrada neste ambiente. Use “Sem cadastro”.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <Label htmlFor="crm-company">Nome da empresa</Label>
-                  <Input
-                    id="crm-company"
-                    maxLength={180}
-                    value={form.company_name}
-                    onChange={(event) => setForm({ ...form, company_name: event.target.value })}
-                    placeholder="Digite o nome, sem criar um cadastro"
-                  />
-                </div>
-              )}
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="crm-email">E-mail</Label>
-                <Input
-                  id="crm-email"
-                  type="email"
-                  value={form.contact_email}
-                  onChange={(event) => setForm({ ...form, contact_email: event.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="crm-phone">Telefone</Label>
-                <Input
-                  id="crm-phone"
-                  type="tel"
-                  value={form.contact_phone}
-                  onChange={(event) => setForm({ ...form, contact_phone: event.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="crm-source">Origem do lead</Label>
-                <Input
-                  id="crm-source"
-                  value={form.source}
-                  onChange={(event) => setForm({ ...form, source: event.target.value })}
-                  placeholder="Ex.: Indicação"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="crm-stage">Etapa</Label>
-                <Select
-                  value={form.stage}
-                  onValueChange={(value) => setForm({ ...form, stage: value as Stage })}
-                >
-                  <SelectTrigger id="crm-stage">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stages.map((stage) => (
-                      <SelectItem key={stage.id} value={stage.id}>
-                        {stage.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="crm-amount">Valor previsto (R$)</Label>
-                <Input
-                  id="crm-amount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.amount}
-                  onChange={(event) => setForm({ ...form, amount: event.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="crm-date">Previsão de fechamento</Label>
-                <Input
-                  id="crm-date"
-                  type="date"
-                  value={form.expected_close_date}
-                  onChange={(event) =>
-                    setForm({ ...form, expected_close_date: event.target.value })
-                  }
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="crm-notes">Observações</Label>
-              <Textarea
-                id="crm-notes"
-                rows={4}
-                value={form.notes}
-                onChange={(event) => setForm({ ...form, notes: event.target.value })}
-              />
-            </div>
             <DialogFooter className="flex-row justify-between sm:justify-between">
-              {editing ? (
+              {editingStage && editingStage !== "new" ? (
                 <Button
                   type="button"
                   variant="ghost"
                   className="text-destructive"
-                  onClick={() => setDeleting(editing)}
+                  disabled={openStages.length <= 1}
+                  title={
+                    openStages.length <= 1
+                      ? "Mantenha ao menos uma coluna além de Contrato fechado"
+                      : undefined
+                  }
+                  onClick={() => {
+                    const stage = openStages.find((item) => item.id === editingStage);
+                    if (stage) askDeleteStage(stage);
+                  }}
                 >
                   <Trash2 className="mr-2 h-4 w-4" /> Excluir
                 </Button>
@@ -1012,40 +795,118 @@ function CrmPage() {
                 <span />
               )}
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setEditorOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setEditingStage(null)}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={save.isPending}>
-                  {save.isPending ? "Salvando…" : "Salvar lead"}
+                <Button type="submit" disabled={saveStage.isPending}>
+                  {saveStage.isPending
+                    ? "Salvando…"
+                    : editingStage === "new"
+                      ? "Criar coluna"
+                      : "Salvar coluna"}
                 </Button>
               </div>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-      <AlertDialog
-        open={!!deleting}
+
+      <Dialog
+        open={!!editing}
         onOpenChange={(open) => {
-          if (!open) setDeleting(null);
+          if (!open) setOpenLeadId(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{editing?.title}</DialogTitle>
+            <DialogDescription>
+              {(editing?.client_id && clientNames.get(editing.client_id)) ||
+                editing?.company_name ||
+                "Sem empresa"}
+              . O lead vem da proposta: para aprovar, gerar o financeiro ou excluir, use os botões
+              da proposta.
+            </DialogDescription>
+          </DialogHeader>
+          {editing &&
+            (editingAgreement ? (
+              <FinanceAgreements
+                embedded
+                agreements={[editingAgreement]}
+                kind="quote"
+                refresh={refreshProposal}
+              />
+            ) : leadProposal(editing) ? (
+              <ProposalPanel doc={leadProposal(editing)!} />
+            ) : (
+              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                Este lead não tem proposta vinculada.
+              </p>
+            ))}
+          {editing && (
+            <div className="space-y-1.5">
+              <Label htmlFor="crm-lead-stage">Coluna no funil</Label>
+              <Select
+                value={editing.stage}
+                onValueChange={(stageValue) => move.mutate({ id: editing.id, stage: stageValue })}
+                disabled={move.isPending}
+              >
+                <SelectTrigger id="crm-lead-stage">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {stages.map((stage) => (
+                    <SelectItem key={stage.id} value={stage.id}>
+                      {stage.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      <AlertDialog
+        open={!!deletingStage}
+        onOpenChange={(open) => {
+          if (!open) setDeletingStage(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir este lead?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir a coluna “{deletingStage?.label}”?</AlertDialogTitle>
             <AlertDialogDescription>
-              O lead “{deleting?.title}” será removido do CRM. Esta ação não pode ser desfeita.
+              Os leads desta coluna vão para a coluna escolhida abaixo. Nenhum lead é excluído.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="crm-stage-move-to">Mover os leads para</Label>
+            <Select value={moveTo} onValueChange={setMoveTo}>
+              <SelectTrigger id="crm-stage-move-to">
+                <SelectValue placeholder="Escolha a coluna" />
+              </SelectTrigger>
+              <SelectContent>
+                {stages
+                  .filter((stage) => stage.id !== deletingStage?.id)
+                  .map((stage) => (
+                    <SelectItem key={stage.id} value={stage.id}>
+                      {stage.label}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              disabled={remove.isPending}
+              disabled={!moveTo || deleteStage.isPending}
               onClick={(event) => {
                 event.preventDefault();
-                if (deleting) remove.mutate(deleting.id);
+                if (deletingStage && moveTo)
+                  deleteStage.mutate({ stage: deletingStage, target: moveTo });
               }}
             >
-              Excluir lead
+              {deleteStage.isPending ? "Excluindo…" : "Excluir coluna"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

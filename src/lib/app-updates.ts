@@ -1,5 +1,7 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-proposal-trash"
+  | "crm-free-columns"
   | "magalhaes-finance-plan-filter"
   | "magalhaes-finance-shortcuts"
   | "claude-reads-scanned-files"
@@ -98,6 +100,33 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-lixeira-propostas-2026-11-23",
+    title: "Lixeira de propostas ligada ao CRM",
+    date: "2026-11-23",
+    preview: "magalhaes-proposal-trash",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "Excluir uma proposta agora manda ela para a Lixeira, na nova aba Propostas, e tira o lead dela do CRM. Excluir o lead no CRM também manda a proposta para a Lixeira.",
+      "Na Lixeira, Restaurar traz a proposta e o lead de volta, na mesma coluna do CRM. Excluir de vez apaga os dois.",
+      "Proposta que já gerou Contas a receber continua sem poder ser excluída, nem por Propostas nem pelo lead no CRM.",
+    ],
+  },
+  {
+    id: "crm-colunas-livres-2026-11-23",
+    title: "CRM com colunas livres e leads vindos das propostas",
+    date: "2026-11-23",
+    preview: "crm-free-columns",
+    audience: "all",
+    workspaces: ["consultoria", "marketing"],
+    details: [
+      "O botão Nova coluna cria uma etapa com nome e cor. No lápis de cada coluna dá para renomear, mudar a posição ou excluir.",
+      "Ao excluir uma coluna com leads, você escolhe para qual coluna eles vão. Nenhum lead é apagado.",
+      "Contrato fechado é a coluna fixa do fim do funil: não pode ser renomeada, movida nem excluída, e é ela que o relatório conta como contrato fechado.",
+      "O lead não é mais cadastrado à mão: ele nasce da proposta criada em Propostas. Clicar no lead abre a proposta, com os mesmos botões de Propostas para administradores, e a coluna do lead.",
+    ],
+  },
   {
     id: "magalhaes-filtro-plano-de-contas-2026-11-23",
     title: "Filtro por plano de contas e centro de custo",

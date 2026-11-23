@@ -25,6 +25,7 @@ import {
   Pin,
   Pencil,
   Eye,
+  Lock,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -353,7 +354,7 @@ function CompactEnvironmentsMobilePreview() {
       <strong className="mt-1 block text-center text-[12px]">Escolha onde trabalhar</strong>
       <div className="mt-2 space-y-2">
         <div className="rounded-lg border border-primary/40 bg-primary/[0.025] p-2">
-          <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className="h-3 w-3" /> Consultoria</p>
+          <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className="h-3 w-3" /> Magalhães Advocacia</p>
           <p className="mt-1 text-muted-foreground">Ambiente ativo</p>
           <span className="mt-1 block rounded-full border px-2 py-0.5 text-center">Abrir painel</span>
         </div>
@@ -1527,6 +1528,77 @@ function MagalhaesCleanDocumentsPreview() {
 function MagalhaesProcessNavigationPreview() {
   return <PreviewGrid label="Prévia do menu Gestão de processos com o logo maior"><div className="rounded-xl bg-[#501618] p-3 text-[#ddbc70]"><BrandLogo className="mx-auto h-28 w-full max-w-60" /><p className="mt-3 rounded-full border border-current px-3 py-2 text-xs">Gestão de processos</p><p className="mt-2 px-3 text-xs">Clientes</p></div><div className="flex items-center justify-center rounded-xl bg-[#501618] p-4"><BrandLogo compact className="h-16 w-16" /></div></PreviewGrid>;
 }
+function CrmFreeColumnsPreview() {
+  const columns = [
+    ["Novos Leads", "#3278d4"],
+    ["Triagem", "#0e9aa7"],
+  ] as const;
+  return (
+    <PreviewGrid label="Prévia das colunas livres do CRM com Contrato fechado fixa no fim">
+      <div className="rounded-xl border bg-background p-3 text-[10px]" data-crm-free-columns>
+        <div className="grid grid-cols-4 gap-1.5">
+          {columns.map(([label, color]) => (
+            <div key={label} className="rounded-lg border bg-muted/30 p-1.5" style={{ borderTop: `3px solid ${color}` }}>
+              <p className="flex items-center gap-0.5 font-semibold">
+                <GripVertical className="h-3 w-3 text-muted-foreground" />
+                {label}
+              </p>
+              <p className="mt-1 rounded bg-card px-1 py-1 shadow-sm">Lead de exemplo</p>
+            </div>
+          ))}
+          <div className="grid place-items-center rounded-lg border-2 border-dashed p-1.5 text-center text-muted-foreground">
+            <span className="flex items-center gap-0.5"><Plus className="h-3 w-3" /> Nova coluna</span>
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-1.5" style={{ borderTop: "3px solid #208b43" }}>
+            <p className="flex items-center gap-0.5 font-semibold">
+              <Lock className="h-3 w-3 text-muted-foreground" />
+              Contrato fechado
+            </p>
+            <p className="mt-1 text-muted-foreground">Fixa no fim</p>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-xl border bg-background p-3 text-[10px]" data-crm-delete-column>
+        <p className="font-semibold">Excluir a coluna “Triagem”?</p>
+        <p className="mt-1 text-muted-foreground">Mover os leads para</p>
+        <p className="mt-1 rounded border px-1.5 py-1">Novos Leads ▾</p>
+        <p className="mt-2 text-muted-foreground">Nenhum lead é excluído.</p>
+      </div>
+      <div className="rounded-xl border bg-background p-3 text-[10px]" data-crm-lead-from-proposal>
+        <p className="font-semibold">Lead de exemplo</p>
+        <p className="mt-1 rounded border px-1.5 py-1">Proposta nº 12 · Visualizar · Aprovar · Gerar financeiro</p>
+        <p className="mt-1 text-muted-foreground">Coluna no funil: Novos Leads ▾</p>
+        <p className="mt-2 text-muted-foreground">O lead nasce da proposta.</p>
+      </div>
+    </PreviewGrid>
+  );
+}
+function MagalhaesProposalTrashPreview() {
+  return (
+    <PreviewGrid label="Prévia da Lixeira de propostas ligada ao CRM">
+      <div className="space-y-2 rounded-xl border bg-background p-3 text-[10px]" data-proposal-trash-flow>
+        <p className="font-semibold">Excluir proposta ou lead</p>
+        <p className="rounded border px-1.5 py-1">Proposta nº 12 · Cliente de exemplo</p>
+        <p className="text-muted-foreground">↓ a proposta vai para a Lixeira e o lead sai do CRM</p>
+        <p className="rounded border border-dashed px-1.5 py-1 text-muted-foreground">CRM · lead fora do funil</p>
+      </div>
+      <div className="space-y-2 rounded-xl border bg-background p-3 text-[10px]" data-proposal-trash-tab>
+        <p className="flex gap-3 border-b pb-1 text-muted-foreground">
+          <span>Tarefas</span>
+          <span className="font-semibold text-primary">Propostas</span>
+        </p>
+        <div className="flex items-center justify-between gap-2 rounded border px-1.5 py-1">
+          <span>Honorários de exemplo · R$ 2.500,00</span>
+          <span className="flex items-center gap-1">
+            <span className="inline-flex items-center gap-0.5 rounded border px-1 py-0.5"><RotateCcw className="h-3 w-3" /> Restaurar</span>
+            <Trash2 className="h-3 w-3 text-destructive" />
+          </span>
+        </div>
+        <p className="text-muted-foreground">Restaurar traz a proposta e o lead de volta.</p>
+      </div>
+    </PreviewGrid>
+  );
+}
 function MagalhaesFinancePlanFilterPreview() {
   return (
     <PreviewGrid label="Prévia dos filtros de plano de contas e centro de custo em Lançamentos">
@@ -1578,7 +1650,7 @@ function MagalhaesFinanceShortcutsPreview() {
           </div>
         </div>
         <div className="space-y-1 p-2 text-muted-foreground">
-          {["Honorários · Cliente de exemplo", "Aluguel do escritório", "Consultoria mensal · Exemplo", "Custas processuais"].map((row, index) => (
+          {["Honorários · Cliente de exemplo", "Aluguel do escritório", "Assessoria mensal · Exemplo", "Custas processuais"].map((row, index) => (
             <p key={row} className="flex justify-between rounded border px-1.5 py-1">
               <span>{row}</span>
               <span className="tabular-nums">{["2.500,00", "3.200,00", "1.500,00", "480,00"][index]}</span>
@@ -1966,7 +2038,7 @@ const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
     <PreviewGrid label="Prévia de serviços e compras com geração de parcelas">
       <div className="space-y-3 rounded-xl border bg-background p-4 text-xs">
         <strong>Ordem de serviço · Exemplo</strong>
-        <p className="rounded bg-muted p-2">Consultoria · 2 × R$ 150,00</p>
+        <p className="rounded bg-muted p-2">Parecer jurídico · 2 × R$ 150,00</p>
         <p>Desconto R$ 30,00 · Total R$ 270,00</p>
         <p className="text-primary">Rascunho → Em andamento → Concluído</p>
       </div>
@@ -1995,6 +2067,8 @@ const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
   "claude-connect-documents": ClaudeConnectDocumentsPreview,
   "claude-reads-scanned-files": ClaudeReadsScannedFilesPreview,
   "magalhaes-finance-shortcuts": MagalhaesFinanceShortcutsPreview,
+  "magalhaes-proposal-trash": MagalhaesProposalTrashPreview,
+  "crm-free-columns": CrmFreeColumnsPreview,
   "magalhaes-finance-plan-filter": MagalhaesFinancePlanFilterPreview,
   "magalhaes-top-glass-nav": MagalhaesTopGlassNavPreview,
   "claude-connector": ClaudeConnectorPreview,

@@ -9,6 +9,8 @@ import { useClients, useProfiles } from "@/hooks/use-data";
 import { useWorkspaceDeletedTasks } from "@/hooks/use-workspace-tasks";
 import { useAuth } from "@/hooks/use-auth";
 import { enqueueOfflineOperation, isOffline } from "@/lib/offline-sync";
+import { ProposalTrash } from "@/components/finance/ProposalTrash";
+import { useState } from "react";
 
 export const Route = createFileRoute("/_app/trash")({
   component: TrashPage,
@@ -19,15 +21,24 @@ function TrashPage() {
   const { data: tasks = [], isLoading } = useWorkspaceDeletedTasks();
   const { data: clients = [] } = useClients();
   const { data: profiles = [] } = useProfiles();
-  const { user, isAdmin } = useAuth();
-  const canDeleteTask = (task: (typeof tasks)[number]) =>
-    !!isAdmin || task.created_by === user?.id;
+  const { user, isAdmin, isClient } = useAuth();
+  const showProposals = !!isAdmin && !isClient;
+  const [tab, setTab] = useState<"tasks" | "proposals">("tasks");
+  const canDeleteTask = (task: (typeof tasks)[number]) => !!isAdmin || task.created_by === user?.id;
   const deletableTasks = tasks.filter(canDeleteTask);
 
   const restore = async (id: string) => {
     if (user && isOffline()) {
-      await enqueueOfflineOperation({ userId: user.id, entity: "task", action: "update", entityId: id, payload: { patch: { deleted_at: null, deleted_by: null } } });
-      qc.setQueryData<any[]>(["tasks", "deleted"], (current = []) => current.filter((task) => task.id !== id));
+      await enqueueOfflineOperation({
+        userId: user.id,
+        entity: "task",
+        action: "update",
+        entityId: id,
+        payload: { patch: { deleted_at: null, deleted_by: null } },
+      });
+      qc.setQueryData<any[]>(["tasks", "deleted"], (current = []) =>
+        current.filter((task) => task.id !== id),
+      );
       toast.success("RestauraÃ§Ã£o salva neste aparelho. SerÃ¡ sincronizada ao reconectar.");
       return;
     }
@@ -64,17 +75,44 @@ function TrashPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Lixeira</h1>
           <p className="text-sm text-muted-foreground">
-            Tarefas excluídas. Restaure ou apague permanentemente.
+            {tab === "proposals"
+              ? "Propostas excluídas, com o lead do CRM. Restaure ou apague permanentemente."
+              : "Tarefas excluídas. Restaure ou apague permanentemente."}
           </p>
         </div>
-        {deletableTasks.length > 0 && (
+        {tab === "tasks" && deletableTasks.length > 0 && (
           <Button variant="destructive" onClick={purgeAll}>
-            <Trash2 className="mr-2 h-4 w-4" />Esvaziar lixeira
+            <Trash2 className="mr-2 h-4 w-4" />
+            Esvaziar lixeira
           </Button>
         )}
       </header>
 
-      {isLoading ? (
+      {showProposals && (
+        <div className="mb-4 flex gap-5 border-b text-sm font-medium" role="tablist">
+          {(
+            [
+              ["tasks", "Tarefas"],
+              ["proposals", "Propostas"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={`border-b-2 px-1 pb-3 ${tab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tab === "proposals" && showProposals ? (
+        <ProposalTrash />
+      ) : isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
       ) : tasks.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center text-sm text-muted-foreground">
@@ -100,7 +138,9 @@ function TrashPage() {
                   <tr key={t.id} className="border-t">
                     <td className="px-3 py-2 font-medium">{t.title}</td>
                     <td className="px-3 py-2 text-muted-foreground">{c?.name ?? "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{a?.full_name ?? a?.email ?? "—"}</td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {a?.full_name ?? a?.email ?? "—"}
+                    </td>
                     <td className="px-3 py-2 text-muted-foreground">
                       {t.deleted_at ? format(new Date(t.deleted_at), "dd/MM/yyyy HH:mm") : "—"}
                     </td>
@@ -109,9 +149,15 @@ function TrashPage() {
                         {canDeleteTask(t) && (
                           <>
                             <Button size="sm" variant="outline" onClick={() => restore(t.id)}>
-                              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />Restaurar
+                              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                              Restaurar
                             </Button>
-                            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => purge(t.id)}>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive"
+                              onClick={() => purge(t.id)}
+                            >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </>

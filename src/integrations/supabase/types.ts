@@ -74,6 +74,7 @@ export type Database = {
           expected_close_date: string | null
           notes: string | null
           created_by: string | null
+          deleted_at: string | null
           created_at: string
           updated_at: string
           finance_agreement_id: string | null
@@ -94,6 +95,7 @@ export type Database = {
           expected_close_date?: string | null
           notes?: string | null
           created_by?: string | null
+          deleted_at?: string | null
           created_at?: string
           updated_at?: string
           finance_agreement_id?: string | null
@@ -114,6 +116,7 @@ export type Database = {
           expected_close_date?: string | null
           notes?: string | null
           created_by?: string | null
+          deleted_at?: string | null
           created_at?: string
           updated_at?: string
           finance_agreement_id?: string | null

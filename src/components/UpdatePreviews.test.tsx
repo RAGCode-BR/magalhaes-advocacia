@@ -5,6 +5,25 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates free CRM columns with the fixed closing column, without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "crm-free-columns" }));
+    expect(html).toContain("data-crm-free-columns");
+    expect(html).toContain("data-crm-delete-column");
+    expect(html).toContain("data-crm-lead-from-proposal");
+    expect(html).toContain("Contrato fechado");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
+
+  it("illustrates the proposal trash linked to the CRM, without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-proposal-trash" }));
+    expect(html).toContain("data-proposal-trash-flow");
+    expect(html).toContain("data-proposal-trash-tab");
+    expect(html).toContain("Restaurar");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
+
   it("illustrates the plan and cost center filters without real actions", () => {
     const html = renderToStaticMarkup(
       createElement(AppUpdatePreview, { kind: "magalhaes-finance-plan-filter" }),
@@ -81,7 +100,7 @@ describe("release thumbnails", () => {
   });
   it("illustrates orders, discounts and installments without performing financial actions", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-finance-orders" }));
-    expect(html).toContain("Consultoria");
+    expect(html).toContain("Parecer jurídico");
     expect(html).toContain("Contas a pagar");
     expect(html).toContain("3 parcelas");
     expect(html).not.toContain("<button");
@@ -254,7 +273,7 @@ describe("release thumbnails", () => {
     const html = renderToStaticMarkup(
       createElement(AppUpdatePreview, { kind: "compact-environments-mobile" }),
     );
-    expect(html).toContain("Consultoria");
+    expect(html).toContain("Magalhães Advocacia");
     expect(html).toContain("Marketing");
     expect(html).toContain("Abrir painel");
     expect(html).toContain("Acessar");
