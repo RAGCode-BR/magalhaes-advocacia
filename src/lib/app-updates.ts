@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-finance-plan-filter"
   | "magalhaes-finance-shortcuts"
   | "claude-reads-scanned-files"
   | "magalhaes-task-list-actions"
@@ -97,6 +98,18 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-filtro-plano-de-contas-2026-11-23",
+    title: "Filtro por plano de contas e centro de custo",
+    date: "2026-11-23",
+    preview: "magalhaes-finance-plan-filter",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "Em Lançamentos, o filtro Categoria virou Plano de contas e mostra todas as contas, separadas em Receitas e Despesas. Ao escolher uma conta de despesa estando em Contas a receber, a lista passa sozinha para Contas a pagar, e vice-versa.",
+      "O filtro Centro de custo mostra todos os centros cadastrados, não só os usados no tipo de lançamento aberto. A busca continua encontrando lançamentos pela conta do plano e pelo centro de custo.",
+    ],
+  },
   {
     id: "magalhaes-finance-shortcuts-2026-11-23",
     title: "Nova receita e nova despesa sempre à mão",

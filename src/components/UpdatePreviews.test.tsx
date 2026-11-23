@@ -5,6 +5,17 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates the plan and cost center filters without real actions", () => {
+    const html = renderToStaticMarkup(
+      createElement(AppUpdatePreview, { kind: "magalhaes-finance-plan-filter" }),
+    );
+    expect(html).toContain("data-finance-plan-filter");
+    expect(html).toContain("data-finance-center-filter");
+    expect(html).toContain("Despesas");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
+
   it("illustrates the fixed Financeiro header and the R and D shortcuts without real actions", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-finance-shortcuts" }));
     expect(html).toContain("data-finance-sticky-header");

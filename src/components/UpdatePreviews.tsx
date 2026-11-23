@@ -1527,6 +1527,33 @@ function MagalhaesCleanDocumentsPreview() {
 function MagalhaesProcessNavigationPreview() {
   return <PreviewGrid label="Prévia do menu Gestão de processos com o logo maior"><div className="rounded-xl bg-[#501618] p-3 text-[#ddbc70]"><BrandLogo className="mx-auto h-28 w-full max-w-60" /><p className="mt-3 rounded-full border border-current px-3 py-2 text-xs">Gestão de processos</p><p className="mt-2 px-3 text-xs">Clientes</p></div><div className="flex items-center justify-center rounded-xl bg-[#501618] p-4"><BrandLogo compact className="h-16 w-16" /></div></PreviewGrid>;
 }
+function MagalhaesFinancePlanFilterPreview() {
+  return (
+    <PreviewGrid label="Prévia dos filtros de plano de contas e centro de custo em Lançamentos">
+      <div className="space-y-2 rounded-xl border bg-background p-3 text-[10px]" data-finance-plan-filter>
+        <p className="font-semibold">Plano de contas</p>
+        <div className="rounded-lg border p-2">
+          <p className="text-muted-foreground">Receitas</p>
+          <p className="pl-2">Receitas de Serviços</p>
+          <p className="pl-2">Receitas de Vendas</p>
+          <p className="mt-1 text-muted-foreground">Despesas</p>
+          <p className="rounded bg-primary/10 pl-2 font-semibold text-primary">Aluguel ✓</p>
+          <p className="pl-2">Energia Elétrica</p>
+        </div>
+        <p className="text-muted-foreground">Contas a receber → Contas a pagar</p>
+      </div>
+      <div className="space-y-2 rounded-xl border bg-background p-3 text-[10px]" data-finance-center-filter>
+        <p className="font-semibold">Centro de custo</p>
+        <div className="space-y-0.5 rounded-lg border p-2">
+          <p>Todos os centros</p>
+          <p>Centro de exemplo A</p>
+          <p>Centro de exemplo B</p>
+        </div>
+        <p className="rounded border px-1.5 py-1 text-muted-foreground">Buscar lançamento, cliente ou processo</p>
+      </div>
+    </PreviewGrid>
+  );
+}
 function MagalhaesFinanceShortcutsPreview() {
   const key = (label: string) => (
     <kbd className="inline-grid h-7 min-w-7 place-items-center rounded-md border border-b-[3px] bg-background px-1.5 text-xs font-semibold shadow-sm">
@@ -1968,6 +1995,7 @@ const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
   "claude-connect-documents": ClaudeConnectDocumentsPreview,
   "claude-reads-scanned-files": ClaudeReadsScannedFilesPreview,
   "magalhaes-finance-shortcuts": MagalhaesFinanceShortcutsPreview,
+  "magalhaes-finance-plan-filter": MagalhaesFinancePlanFilterPreview,
   "magalhaes-top-glass-nav": MagalhaesTopGlassNavPreview,
   "claude-connector": ClaudeConnectorPreview,
   "magalhaes-process-navigation": MagalhaesProcessNavigationPreview,

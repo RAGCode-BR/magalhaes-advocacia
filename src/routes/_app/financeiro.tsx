@@ -38,6 +38,7 @@ import {
   financeCsv,
   financePlanDepth,
   financePlanOptions,
+  financePlanSort,
 } from "@/lib/office-finance";
 
 export const Route = createFileRoute("/_app/financeiro")({ component: FinanceRoute });
@@ -199,6 +200,42 @@ function FinancePage({ userId }: { userId: string }) {
       .map((item) => [item.name, item.code ?? ""]),
   );
   const processNames = new Map(tasks.map((task) => [task.id, task.title]));
+  // Filters list every plan account and every cost center, registered or used by an
+  // entry, so nothing is hidden by the Contas a receber / Contas a pagar choice.
+  const registers = ledger.data?.registers ?? [];
+  const used = (field: "category" | "cost_center") =>
+    entries.map((entry) => entry[field]).filter((value): value is string => !!value);
+  const planAccounts = registers.filter((item) => item.kind === "category").sort(financePlanSort);
+  const planNature = (name: string) =>
+    planAccounts.find((item) => item.name === name)?.nature ??
+    (entries.some((e) => e.category === name && e.kind === "income")
+      ? entries.some((e) => e.category === name && e.kind === "expense")
+        ? null
+        : "income"
+      : entries.some((e) => e.category === name)
+        ? "expense"
+        : null);
+  const planNames = [
+    ...new Set([...planAccounts.map((item) => item.name), ...used("category")]),
+  ];
+  const planGroups = (
+    [
+      ["Receitas", "income"],
+      ["Despesas", "expense"],
+      ["Receitas e despesas", null],
+    ] as const
+  )
+    .map(([label, nature]) => ({
+      label,
+      names: planNames.filter((name) => (planNature(name) ?? null) === nature),
+    }))
+    .filter((group) => group.names.length);
+  const centerNames = [
+    ...new Set([
+      ...registers.filter((item) => item.kind === "cost_center").map((item) => item.name),
+      ...used("cost_center"),
+    ]),
+  ].sort((a, b) => a.localeCompare(b, "pt-BR"));
   const filteredEntries = kindEntries
     .filter((entry) => {
       if (clientFilter && entry.client_id !== clientFilter) return false;
@@ -354,6 +391,9 @@ function FinancePage({ userId }: { userId: string }) {
                     onClick={() => {
                       setKind(value);
                       setQuick("all");
+                      // A plan account of the other type would leave the list empty.
+                      const nature = planNature(categoryFilter);
+                      if (nature && nature !== value) setCategoryFilter("");
                     }}
                     className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                       kind === value
@@ -442,8 +482,53 @@ function FinancePage({ userId }: { userId: string }) {
               </label>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <label className={fieldClass}>Categoria<select className="h-10 rounded-md border bg-background px-3" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}><option value="">Todas as categorias</option>{[...new Set(kindEntries.map(e => e.category).filter(Boolean))].sort().map(value => <option key={value!} value={value!}>{value}</option>)}</select></label>
-              <label className={fieldClass}>Centro de custo<select className="h-10 rounded-md border bg-background px-3" value={centerFilter} onChange={e => setCenterFilter(e.target.value)}><option value="">Todos os centros</option>{[...new Set(kindEntries.map(e => e.cost_center).filter(Boolean))].sort().map(value => <option key={value!} value={value!}>{value}</option>)}</select></label>
+              <label className={fieldClass}>
+                Plano de contas
+                <select
+                  className="h-10 rounded-md border bg-background px-3"
+                  value={categoryFilter}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setCategoryFilter(name);
+                    // Choosing a despesa while on Contas a receber (or the opposite) switches the list.
+                    const nature = planNature(name);
+                    if (nature && nature !== kind) {
+                      setKind(nature);
+                      setQuick("all");
+                    }
+                  }}
+                >
+                  <option value="">Todas as contas</option>
+                  {planGroups.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.names.map((name) => {
+                        const code = planCodes.get(name);
+                        return (
+                          <option key={name} value={name}>
+                            {code ? `${code} ` : ""}
+                            {name}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+              <label className={fieldClass}>
+                Centro de custo
+                <select
+                  className="h-10 rounded-md border bg-background px-3"
+                  value={centerFilter}
+                  onChange={(e) => setCenterFilter(e.target.value)}
+                >
+                  <option value="">Todos os centros</option>
+                  {centerNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className={fieldClass}>Valor mínimo (R$)<Input type="number" min="0" step="0.01" value={minValue} onChange={e => setMinValue(e.target.value)} /></label>
               <label className={fieldClass}>Valor máximo (R$)<Input type="number" min={minValue || "0"} step="0.01" value={maxValue} onChange={e => setMaxValue(e.target.value)} /></label>
             </div>

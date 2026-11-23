@@ -3,7 +3,7 @@ import { APP_UPDATES, formatAppUpdateDate, getVisibleAppUpdates } from "./app-up
 
 describe("application release catalogue", () => {
   it("requires a unique version, date, explanation and preview for every release", () => {
-    expect(APP_UPDATES).toHaveLength(53);
+    expect(APP_UPDATES).toHaveLength(54);
     expect(new Set(APP_UPDATES.map((update) => update.id)).size).toBe(APP_UPDATES.length);
     for (const update of APP_UPDATES) {
       expect(update.id.trim()).not.toBe("");
@@ -44,7 +44,7 @@ describe("application release catalogue", () => {
       expect(updates[0].preview).toBe("claude-reads-scanned-files");
       expect(getVisibleAppUpdates(true, workspace)[0].id).toBe(
         workspace === "consultoria"
-          ? "magalhaes-finance-shortcuts-2026-11-23"
+          ? "magalhaes-filtro-plano-de-contas-2026-11-23"
           : "claude-le-pdf-escaneado-2026-11-23",
       );
       expect(getVisibleAppUpdates(true, workspace).map((update) => update.id)).toContain(
