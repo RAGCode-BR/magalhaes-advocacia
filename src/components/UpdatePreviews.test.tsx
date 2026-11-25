@@ -9,6 +9,8 @@ describe("release thumbnails", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-finance-scroll-fix" }));
     expect(html).toContain("data-finance-scroll-before");
     expect(html).toContain("data-finance-scroll-after");
+    expect(html).toContain("data-finance-long-client");
+    expect(html).toContain("data-finance-supplier-suggest");
     expect(html).not.toContain("<button");
     expect(html).not.toMatch(/<a[\s>]/);
   });

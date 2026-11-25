@@ -103,13 +103,15 @@ export type AppUpdate = {
 export const APP_UPDATES: readonly AppUpdate[] = [
   {
     id: "magalhaes-financeiro-rolagem-2026-11-25",
-    title: "Financeiro sem áreas em branco ao rolar",
+    title: "Financeiro sem áreas em branco e campos mais fáceis de preencher",
     date: "2026-11-25",
     preview: "magalhaes-finance-scroll-fix",
     audience: "admin",
     workspaces: ["consultoria"],
     details: [
-      "Ao descer até o fim do Painel do Financeiro e voltar a subir, partes da tela às vezes ficavam em branco. O topo fixo (título, botões Nova despesa e Nova receita e abas) agora tem fundo sólido, e a página é desenhada por inteiro durante a rolagem.",
+      "Ao descer até o fim do Painel do Financeiro e voltar a subir, partes da tela às vezes ficavam em branco. O topo fixo do Financeiro e o botão do Claude no canto da tela agora têm fundo sólido, sem o efeito de vidro que fazia o navegador deixar de desenhar a página durante a rolagem.",
+      "Na proposta de honorários e nos demais campos de cliente do Financeiro, um nome longo não invade mais o campo Processo ao lado: ele aparece cortado com reticências e completo na lista de busca.",
+      "Fornecedor, Categoria e Centro de custo mostram uma lista curta no visual do sistema, filtrada pelo que você digita, no lugar da lista enorme do navegador. Dá para escolher com o mouse ou com as setas e Enter, e um nome novo pode ser digitado normalmente.",
     ],
   },
   {

@@ -1,3 +1,4 @@
+import { SuggestInput } from "@/components/SuggestInput";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -88,9 +89,11 @@ export function FinanceEntryEditor({
             </label>
             <label className={fieldClass}>
               Categoria
-              <Input
+              <SuggestInput
                 name="category"
-                list="edit-categories"
+                options={registers
+                  .filter((item) => item.kind === "category" && item.active)
+                  .map((item) => item.name)}
                 required
                 maxLength={100}
                 defaultValue={entry.category}
@@ -106,9 +109,11 @@ export function FinanceEntryEditor({
             </label>
             <label className={fieldClass}>
               Centro de custo
-              <Input
+              <SuggestInput
                 name="cost_center"
-                list="edit-centers"
+                options={registers
+                  .filter((item) => item.kind === "cost_center" && item.active)
+                  .map((item) => item.name)}
                 maxLength={160}
                 defaultValue={entry.cost_center ?? ""}
               />
@@ -116,9 +121,11 @@ export function FinanceEntryEditor({
             {entry.kind === "expense" && (
               <label className={fieldClass}>
                 Fornecedor
-                <Input
+                <SuggestInput
                   name="supplier"
-                  list="edit-suppliers"
+                  options={registers
+                    .filter((item) => item.kind === "supplier" && item.active)
+                    .map((item) => item.name)}
                   maxLength={160}
                   defaultValue={entry.supplier ?? ""}
                 />
@@ -129,24 +136,6 @@ export function FinanceEntryEditor({
             Observações
             <Textarea name="notes" maxLength={4000} defaultValue={entry.notes ?? ""} />
           </label>
-          {(["category", "cost_center", "supplier"] as const).map((kind) => (
-            <datalist
-              key={kind}
-              id={
-                kind === "category"
-                  ? "edit-categories"
-                  : kind === "cost_center"
-                    ? "edit-centers"
-                    : "edit-suppliers"
-              }
-            >
-              {registers
-                .filter((item) => item.kind === kind && item.active)
-                .map((item) => (
-                  <option key={item.id} value={item.name} />
-                ))}
-            </datalist>
-          ))}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" disabled={mutation.isPending} onClick={close}>
               Cancelar

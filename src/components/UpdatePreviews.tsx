@@ -1628,7 +1628,7 @@ function MagalhaesFinancePlanFilterPreview() {
 }
 function MagalhaesFinanceScrollFixPreview() {
   return (
-    <PreviewGrid label="Prévia do Painel do Financeiro desenhado por inteiro ao voltar a rolagem">
+    <PreviewGrid label="Prévia do Financeiro desenhado por inteiro ao rolar, do nome longo de cliente cortado e da lista curta de fornecedores">
       <div className="space-y-1.5 rounded-xl border bg-background p-2 text-[10px] text-muted-foreground" data-finance-scroll-before>
         <p className="font-semibold text-foreground">Antes</p>
         <div className="flex h-12 items-end gap-1 rounded border p-1.5">
@@ -1651,6 +1651,25 @@ function MagalhaesFinanceScrollFixPreview() {
         <div className="grid grid-cols-2 gap-1">
           <p className="rounded border p-1">A receber<br /><b className="tabular-nums">R$ 12.400,00</b></p>
           <p className="rounded border p-1">A pagar<br /><b className="tabular-nums">R$ 3.680,00</b></p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5 rounded-xl border bg-background p-2 text-[10px] col-[1/-1]" data-finance-long-client>
+        <p className="min-w-0">
+          Cliente
+          <span className="mt-0.5 block truncate rounded border px-1.5 py-1">CLIENTE DE EXEMPLO COM NOME MUITO LONGO E SÓCIOS LTDA</span>
+        </p>
+        <p className="min-w-0">
+          Processo
+          <span className="mt-0.5 block truncate rounded border px-1.5 py-1 text-muted-foreground">Sem processo vinculado</span>
+        </p>
+      </div>
+      <div className="rounded-xl border bg-background p-2 text-[10px] col-[1/-1]" data-finance-supplier-suggest>
+        <p>Fornecedor</p>
+        <p className="mt-0.5 rounded-full border px-2 py-1">tri</p>
+        <div className="mt-1 rounded-md border bg-popover p-1 shadow-md">
+          {["Tribunal de exemplo", "Distribuidora Triunfo"].map((name, index) => (
+            <p key={name} className={`rounded px-1.5 py-1 ${index === 0 ? "bg-muted" : ""}`}>{name}</p>
+          ))}
         </div>
       </div>
     </PreviewGrid>

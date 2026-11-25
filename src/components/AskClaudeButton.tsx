@@ -90,7 +90,7 @@ export function AskClaudeButton() {
           onClick={() => (docked ? setDocked(false) : setOpen(true))}
           aria-label={docked ? "Mostrar o botão Pedir ao Claude" : "Pedir ao Claude"}
           title={docked ? "Mostrar o botão Pedir ao Claude" : "Pedir ao Claude (Ctrl/⌘ + J)"}
-          className="glass-wine flex h-10 items-center rounded-full px-[11px] text-sm font-medium outline-none ring-sidebar-ring transition-[box-shadow,transform] duration-200 hover:shadow-[0_0_0_1px_rgba(221,188,112,0.6),0_10px_24px_-10px_rgba(59,16,20,0.8)] focus-visible:ring-2 active:scale-95"
+          className="solid-wine flex h-10 items-center rounded-full px-[11px] text-sm font-medium outline-none ring-sidebar-ring transition-[box-shadow,transform] duration-200 hover:shadow-[0_0_0_1px_rgba(221,188,112,0.6),0_10px_24px_-10px_rgba(59,16,20,0.8)] focus-visible:ring-2 active:scale-95"
         >
           <Sparkles className="h-[18px] w-[18px] shrink-0 text-sidebar-primary" />
           <span

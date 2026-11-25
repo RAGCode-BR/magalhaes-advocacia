@@ -71,7 +71,7 @@ export function ClientPicker({
         if (!next) setQuery("");
       }}
     >
-      <div className={cn("relative", className)}>
+      <div className={cn("relative min-w-0", className)}>
         <PopoverTrigger asChild>
           <button
             id={id}
@@ -80,9 +80,9 @@ export function ClientPicker({
             aria-label={ariaLabel}
             aria-haspopup="listbox"
             aria-expanded={open}
-            className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <span className={cn("truncate", !selected && "text-muted-foreground")}>
+            <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
               {selected
                 ? `${selected.name}${selected.is_active === false ? " (inativo)" : ""}`
                 : value === "" && emptyLabel

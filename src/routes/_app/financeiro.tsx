@@ -10,6 +10,7 @@ import { OPEN_OVERLAY_SELECTOR } from "@/lib/keyboard-screen-nav";
 import { FinanceReconciliation } from "@/components/finance/FinanceReconciliation";
 import { FinanceAttachments } from "@/components/finance/FinanceAttachments";
 import { ClientPicker } from "@/components/ClientPicker";
+import { SuggestInput } from "@/components/SuggestInput";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -930,9 +931,9 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
                   ))}
                 </select>
               ) : (
-                <Input
+                <SuggestInput
                   name="category"
-                  list="finance-categories"
+                  options={registers.filter((item) => item.kind === "category" && item.active).map((item) => item.name)}
                   required
                   maxLength={100}
                   defaultValue={income ? "Honorários" : ""}
@@ -942,7 +943,7 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
             {!income && (
               <label className={fieldClass}>
                 Fornecedor
-                <Input name="supplier" list="finance-suppliers" maxLength={160} />
+                <SuggestInput name="supplier" options={registers.filter((item) => item.kind === "supplier" && item.active).map((item) => item.name)} maxLength={160} />
               </label>
             )}
             {income && (
@@ -1039,30 +1040,9 @@ function EntryDialog({ draft, clients, tasks, registers, today, close, refresh }
                 ))}
               </select>
             ) : (
-              <Input name="cost_center" maxLength={160} list="finance-centers" />
+              <SuggestInput name="cost_center" maxLength={160} options={registers.filter((item) => item.kind === "cost_center" && item.active).map((item) => item.name)} />
             )}
           </label>
-          <datalist id="finance-categories">
-            {registers
-              .filter((item) => item.kind === "category" && item.active)
-              .map((item) => (
-                <option key={item.id} value={item.name} />
-              ))}
-          </datalist>
-          <datalist id="finance-suppliers">
-            {registers
-              .filter((item) => item.kind === "supplier" && item.active)
-              .map((item) => (
-                <option key={item.id} value={item.name} />
-              ))}
-          </datalist>
-          <datalist id="finance-centers">
-            {registers
-              .filter((item) => item.kind === "cost_center" && item.active)
-              .map((item) => (
-                <option key={item.id} value={item.name} />
-              ))}
-          </datalist>
           <label className={fieldClass}>
             Observações
             <Textarea name="notes" maxLength={4000} />

@@ -17,7 +17,7 @@ export const isoToday = () =>
 export const currency = (cents: number) => money.format(cents / 100);
 export const displayDate = (value: string) => value.split("-").reverse().join("/");
 export const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
-export const fieldClass = "grid gap-1.5 text-sm font-medium";
+export const fieldClass = "grid min-w-0 gap-1.5 text-sm font-medium";
 export type DocumentInfo = { id: string; entry_id: string; filename: string };
 export type FinanceHistory = {
   id: string;

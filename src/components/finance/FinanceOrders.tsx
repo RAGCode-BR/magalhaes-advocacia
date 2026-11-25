@@ -1,3 +1,4 @@
+import { SuggestInput } from "@/components/SuggestInput";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -597,20 +598,15 @@ function OrderEditor({
               {order.kind === "purchase" && (
                 <label className={fieldClass}>
                   Fornecedor
-                  <Input
+                  <SuggestInput
                     name="supplier"
                     required
                     maxLength={160}
-                    list="order-suppliers"
+                    options={registers
+                      .filter((r) => r.kind === "supplier" && r.active)
+                      .map((r) => r.name)}
                     defaultValue={order.supplier ?? ""}
                   />
-                  <datalist id="order-suppliers">
-                    {registers
-                      .filter((r) => r.kind === "supplier" && r.active)
-                      .map((r) => (
-                        <option key={r.id} value={r.name} />
-                      ))}
-                  </datalist>
                 </label>
               )}
               <label className={fieldClass}>
@@ -759,36 +755,26 @@ function OrderEditor({
               </label>
               <label className={fieldClass}>
                 Categoria
-                <Input
+                <SuggestInput
                   name="category"
                   required
                   maxLength={100}
                   defaultValue={order.category}
-                  list="order-categories"
-                />
-                <datalist id="order-categories">
-                  {registers
+                  options={registers
                     .filter((r) => r.kind === "category" && r.active)
-                    .map((r) => (
-                      <option key={r.id} value={r.name} />
-                    ))}
-                </datalist>
+                    .map((r) => r.name)}
+                />
               </label>
               <label className={fieldClass}>
                 Centro de custo
-                <Input
+                <SuggestInput
                   name="cost_center"
                   maxLength={160}
                   defaultValue={order.cost_center ?? ""}
-                  list="order-cost-centers"
-                />
-                <datalist id="order-cost-centers">
-                  {registers
+                  options={registers
                     .filter((r) => r.kind === "cost_center" && r.active)
-                    .map((r) => (
-                      <option key={r.id} value={r.name} />
-                    ))}
-                </datalist>
+                    .map((r) => r.name)}
+                />
               </label>
             </div>
             <label className={fieldClass}>
