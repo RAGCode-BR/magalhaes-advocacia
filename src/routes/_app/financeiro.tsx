@@ -297,8 +297,11 @@ function FinancePage({ userId }: { userId: string }) {
 
   return (
     <section className="mx-auto w-full min-w-0 max-w-none space-y-5 p-3 md:p-5">
-      {/* Title, new-entry buttons and tabs stay on screen while long lists scroll. */}
-      <div className="glass-surface sticky top-0 z-30 -mx-3 -mt-3 space-y-3 px-3 pb-3 pt-3 md:-mx-5 md:-mt-5 md:px-5 md:pt-5">
+      {/* Title, new-entry buttons and tabs stay on screen while long lists scroll.
+          Solid background on purpose: a backdrop-filter on a sticky header inside the
+          scrolling <main> makes Chrome/Safari skip repainting parts of the long
+          dashboard after scrolling to the bottom and back up (blank areas). */}
+      <div className="sticky top-0 z-30 border-b border-border/75 bg-background -mx-3 -mt-3 space-y-3 px-3 pb-3 pt-3 md:-mx-5 md:-mt-5 md:px-5 md:pt-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>

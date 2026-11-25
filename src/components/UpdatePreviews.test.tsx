@@ -5,6 +5,14 @@ import { APP_UPDATES } from "@/lib/app-updates";
 import { AppUpdatePreview } from "./UpdatePreviews";
 
 describe("release thumbnails", () => {
+  it("illustrates the Financeiro dashboard drawn completely after scrolling, without real actions", () => {
+    const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "magalhaes-finance-scroll-fix" }));
+    expect(html).toContain("data-finance-scroll-before");
+    expect(html).toContain("data-finance-scroll-after");
+    expect(html).not.toContain("<button");
+    expect(html).not.toMatch(/<a[\s>]/);
+  });
+
   it("illustrates free CRM columns with the fixed closing column, without real actions", () => {
     const html = renderToStaticMarkup(createElement(AppUpdatePreview, { kind: "crm-free-columns" }));
     expect(html).toContain("data-crm-free-columns");

@@ -1,5 +1,6 @@
 export type UpdateWorkspace = "marketing" | "consultoria";
 export type UpdatePreviewKind =
+  | "magalhaes-finance-scroll-fix"
   | "magalhaes-proposal-trash"
   | "crm-free-columns"
   | "magalhaes-finance-plan-filter"
@@ -100,6 +101,17 @@ export type AppUpdate = {
 // Keep newest first. The first visible entry determines the update notice and
 // acknowledgement key, so a release is registered once, not in several screens.
 export const APP_UPDATES: readonly AppUpdate[] = [
+  {
+    id: "magalhaes-financeiro-rolagem-2026-11-25",
+    title: "Financeiro sem áreas em branco ao rolar",
+    date: "2026-11-25",
+    preview: "magalhaes-finance-scroll-fix",
+    audience: "admin",
+    workspaces: ["consultoria"],
+    details: [
+      "Ao descer até o fim do Painel do Financeiro e voltar a subir, partes da tela às vezes ficavam em branco. O topo fixo (título, botões Nova despesa e Nova receita e abas) agora tem fundo sólido, e a página é desenhada por inteiro durante a rolagem.",
+    ],
+  },
   {
     id: "magalhaes-lixeira-propostas-2026-11-23",
     title: "Lixeira de propostas ligada ao CRM",

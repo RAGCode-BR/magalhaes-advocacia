@@ -1626,6 +1626,36 @@ function MagalhaesFinancePlanFilterPreview() {
     </PreviewGrid>
   );
 }
+function MagalhaesFinanceScrollFixPreview() {
+  return (
+    <PreviewGrid label="Prévia do Painel do Financeiro desenhado por inteiro ao voltar a rolagem">
+      <div className="space-y-1.5 rounded-xl border bg-background p-2 text-[10px] text-muted-foreground" data-finance-scroll-before>
+        <p className="font-semibold text-foreground">Antes</p>
+        <div className="flex h-12 items-end gap-1 rounded border p-1.5">
+          {[70, 30, 45, 50, 85, 55].map((h, i) => (
+            <span key={i} className="w-2 rounded-sm bg-emerald-600/80" style={{ height: `${h}%` }} />
+          ))}
+        </div>
+        <div className="grid h-16 place-items-center rounded border border-dashed">área em branco</div>
+      </div>
+      <div className="space-y-1.5 rounded-xl border bg-background p-2 text-[10px]" data-finance-scroll-after>
+        <div className="flex items-center justify-between border-b bg-background pb-1">
+          <p className="font-semibold">Financeiro</p>
+          <span className="rounded bg-primary px-1.5 py-0.5 text-primary-foreground">+ Nova receita</span>
+        </div>
+        <div className="flex h-12 items-end gap-1 rounded border p-1.5">
+          {[70, 30, 45, 50, 85, 55].map((h, i) => (
+            <span key={i} className="w-2 rounded-sm bg-emerald-600/80" style={{ height: `${h}%` }} />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-1">
+          <p className="rounded border p-1">A receber<br /><b className="tabular-nums">R$ 12.400,00</b></p>
+          <p className="rounded border p-1">A pagar<br /><b className="tabular-nums">R$ 3.680,00</b></p>
+        </div>
+      </div>
+    </PreviewGrid>
+  );
+}
 function MagalhaesFinanceShortcutsPreview() {
   const key = (label: string) => (
     <kbd className="inline-grid h-7 min-w-7 place-items-center rounded-md border border-b-[3px] bg-background px-1.5 text-xs font-semibold shadow-sm">
@@ -1841,6 +1871,7 @@ function MagalhaesQuoteProposalCrmPreview() {
   );
 }
 const UPDATE_PREVIEWS: Record<UpdatePreviewKind, () => ReactNode> = {
+  "magalhaes-finance-scroll-fix": MagalhaesFinanceScrollFixPreview,
   "magalhaes-task-list-actions": () => (<PreviewGrid label="Ações na lista e arquivos dos clientes"><div className="rounded-xl border bg-background p-4 text-xs"><p className="mb-3 rounded border p-2">Arquivos do cliente</p><div className="grid grid-cols-3 gap-2"><strong>Processo de exemplo</strong><span className="rounded border p-2">Em andamento ▾</span><span className="rounded border p-2">Alta ▾</span></div><p className="mt-3">Anexos · Todos os remetentes</p></div></PreviewGrid>),
   "magalhaes-client-tabs": () => (<PreviewGrid label="Ficha simplificada de clientes"><div className="rounded-xl border bg-background p-4 text-xs"><p className="font-semibold">Dados do cliente</p><div className="mt-3 grid grid-cols-2 gap-2">{["Cadastro", "Datas importantes", "Referências", "Anotações", "Anexos", "Tarefas arquivadas"].map(name => <span key={name} className="rounded border p-2">{name}</span>)}</div></div></PreviewGrid>),
   "magalhaes-client-directory": () => (<PreviewGrid label="Lista de cadastros dos clientes"><div className="rounded-xl border bg-background p-4 text-xs"><p className="font-semibold">Clientes</p><p className="my-3 rounded border p-2">Buscar cliente…</p>{["Cliente de exemplo A", "Cliente de exemplo B"].map(name => <div key={name} className="flex justify-between border-t py-3"><span>{name}</span><span>Editar cadastro</span></div>)}</div></PreviewGrid>),
