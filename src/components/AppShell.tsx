@@ -653,7 +653,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <RecurringMeetingReminderPopup />
-        <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pt-14 md:pt-0">
+        {/* overscroll-y-none: no elastic bounce past the end. On macOS the bounce of
+            this inner scroller left bands of long pages (Financeiro) unpainted. */}
+        <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-none pt-14 md:pt-0">
           {children}
         </main>
         <AssignmentPopup />
